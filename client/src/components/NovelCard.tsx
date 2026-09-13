@@ -46,7 +46,7 @@ export function NovelCard({ novel, compact = false }: { novel: Novel; compact?: 
   return (
     <article ref={cardRef} onPointerMove={handlePointerMove} onPointerLeave={handlePointerLeave} className={`novel-card group relative ${compact ? 'min-w-[178px] max-w-[178px]' : ''}`}>
       <div className="novel-card__visual relative overflow-hidden rounded-[18px] bg-slate-200 dark:bg-slate-800">
-        <Link href={`/books/${novel.slug}`} className="block" aria-label={`استكشف رواية ${novel.title}`}>
+        <Link href={`/books/${novel.id}`} className="block" aria-label={`استكشف رواية ${novel.title}`}>
           <div className={`relative overflow-hidden ${compact ? 'aspect-[3/4.3]' : 'aspect-[3/4.35]'}`}>
             <img src={novel.cover} alt={`غلاف رواية ${novel.title}`} loading="lazy" className="h-full w-full object-cover transition duration-500 ease-out group-hover:scale-[1.06]" onError={(event) => { event.currentTarget.style.display = 'none'; }} />
             <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-black/0 to-transparent opacity-80" />
@@ -60,7 +60,7 @@ export function NovelCard({ novel, compact = false }: { novel: Novel; compact?: 
       </div>
       <div className="pt-3">
         <div className="mb-1 flex items-center justify-between gap-2">
-          <Link href={`/books/${novel.slug}`} className="line-clamp-1 text-[15px] font-extrabold tracking-[-.03em] hover:text-[#675de8]">{novel.title}</Link>
+          <Link href={`/books/${novel.id}`} className="line-clamp-1 text-[15px] font-extrabold tracking-[-.03em] hover:text-[#675de8]">{novel.title}</Link>
           <span className="flex shrink-0 items-center gap-1 text-[11px] font-bold text-[#bc7a25]"><Star size={12} fill="currentColor" />{novel.rating}</span>
         </div>
         <Link href={`/authors/${novel.authorSlug}`} className="block text-xs text-muted-foreground hover:text-[#675de8]">{novel.author}</Link>
@@ -71,7 +71,7 @@ export function NovelCard({ novel, compact = false }: { novel: Novel; compact?: 
 }
 
 export function NovelListRow({ novel }: { novel: Novel }) {
-  return <Link href={`/books/${novel.slug}`} className="interactive group flex items-center gap-4 rounded-[18px] border border-border/80 bg-card p-3 shadow-[0_10px_28px_-24px_rgba(20,28,60,.5)]">
+  return <Link href={`/books/${novel.id}`} className="interactive group flex items-center gap-4 rounded-[18px] border border-border/80 bg-card p-3 shadow-[0_10px_28px_-24px_rgba(20,28,60,.5)]">
     <img src={novel.cover} alt={`غلاف ${novel.title}`} className="h-28 w-20 rounded-xl object-cover" />
     <div className="min-w-0 flex-1">
       <div className="flex items-start justify-between gap-3"><h3 className="text-base font-extrabold">{novel.title}</h3><span className="flex shrink-0 items-center gap-1 text-xs font-bold text-[#bf7b22]"><Star size={13} fill="currentColor" />{novel.rating}</span></div>

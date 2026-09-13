@@ -85,6 +85,15 @@ async function supabaseWrite<T>(table: string, method: 'POST' | 'PATCH' | 'DELET
 
 async function getNovelBySlugFromRest(slug: string) {
   const decoded = decodeURIComponent(slug).trim();
+  if (/^\d+$/.test(decoded)) {
+    const numericRows = await supabaseRest<any[]>('novels', `select=*&id=eq.${decoded}&limit=1`);
+    if (numericRows[0]) {
+      const row = numericRows[0];
+      const authorsRows = await supabaseRest<any[]>('authors', `select=name,slug&id=eq.${row.authorId}&limit=1`);
+      const author = authorsRows[0];
+      return { id: row.id, slug: normalizeNovelSlug(row.slug, row.title), title: row.title, coverUrl: row.coverUrl, description: row.description, rating: row.rating, ratingCount: row.ratingCount, parts: row.parts, status: row.status, publicationYear: row.publicationYear, language: row.language, author: author?.name ?? 'مؤلف غير معروف', authorSlug: author?.slug ?? '', authorId: row.authorId };
+    }
+  }
   const candidates = Array.from(new Set([slug, decoded, normalizeNovelSlug(decoded)])).filter(Boolean);
   const rows = await supabaseRest<any[]>('novels', `select=*&or=(${candidates.map((value) => `slug.eq.${encodeURIComponent(value)}`).join(',')})&limit=1`);
   const row = rows[0] ?? (await supabaseRest<any[]>('novels', 'select=*&limit=1000')).find((item) => normalizeNovelSlug(item.slug, item.title) === normalizeNovelSlug(decoded));
@@ -323,7 +332,7 @@ export async function getNovelBySlug(slug: string) {
     author: authors.name,
     authorSlug: authors.slug,
     authorId: authors.id,
-  }).from(novels).innerJoin(authors, eq(novels.authorId, authors.id)).where(or(eq(novels.slug, slug), eq(novels.slug, decodedSlug), eq(novels.slug, normalizedSlug))).limit(1);
+  }).from(novels).innerJoin(authors, eq(novels.authorId, authors.id)).where(or(/^\d+$/.test(decodedSlug) ? eq(novels.id, Number(decodedSlug)) : eq(novels.slug, slug), eq(novels.slug, decodedSlug), eq(novels.slug, normalizedSlug))).limit(1);
   if (result[0]) return { ...result[0], slug: normalizeNovelSlug(result[0].slug, result[0].title) };
   return getNovelBySlugFromRest(slug);
   } catch (error) {

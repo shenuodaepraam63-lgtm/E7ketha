@@ -17,7 +17,7 @@ export default function NovelPage() {
   const slug = booksParams?.slug ?? novelParams?.slug ?? novelsParams?.slug ?? decodeURIComponent(location.split('/').pop() ?? '');
   const query = trpc.novels.bySlug.useQuery({ slug }, { enabled: Boolean(slug) });
   const novel = query.data ? toNovel(query.data) : null;
-  useEffect(() => { if (query.data?.slug && slug !== query.data.slug) navigate(`/books/${query.data.slug}`, { replace: true }); }, [navigate, query.data?.slug, slug]);
+  useEffect(() => { if (query.data?.id && slug !== String(query.data.id)) navigate(`/books/${query.data.id}`, { replace: true }); }, [navigate, query.data?.id, slug]);
   const utils = trpc.useUtils();
   const listQuery = trpc.readingList.list.useQuery(undefined, { enabled: Boolean(novel) });
   const add = trpc.readingList.add.useMutation({ onSuccess: () => { toast.success('أُضيفت إلى قائمة قراءتك'); void utils.readingList.list.invalidate(); }, onError: () => toast.error('سجّل الدخول أولًا لحفظ الروايات') });
