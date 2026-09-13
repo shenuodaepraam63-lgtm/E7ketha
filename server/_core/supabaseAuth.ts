@@ -12,7 +12,7 @@ export async function authenticateSupabaseToken(token: string): Promise<User | n
   const authUser = data.user;
   const openId = `supabase:${authUser.id}`;
   const email = authUser.email ?? null;
-  const adminEmails = new Set((ENV.supabaseAdminEmails ?? '').split(',').map((value) => value.trim().toLowerCase()).filter(Boolean));
+  const adminEmails = new Set((ENV.supabaseAdminEmails ?? '').split(/[\s,;]+/).map((value) => value.trim().toLowerCase()).filter(Boolean));
   const role = email && (adminEmails.has(email.toLowerCase()) || authUser.app_metadata?.role === 'admin') ? 'admin' as const : undefined;
   try {
     await upsertUser({ openId, name: authUser.user_metadata?.full_name ?? authUser.user_metadata?.name ?? email?.split('@')[0] ?? null, email, loginMethod: 'supabase', role, lastSignedIn: new Date() });
@@ -25,7 +25,7 @@ export async function authenticateSupabaseToken(token: string): Promise<User | n
   } catch (dbError) {
     console.warn('[Auth] Local user lookup skipped:', dbError instanceof Error ? dbError.message : dbError);
   }
-  if (localUser) return localUser;
+  if (localUser) return role === 'admin' && localUser.role !== 'admin' ? { ...localUser, role: 'admin' } : localUser;
   // Keep Supabase authentication usable even when the optional local PostgreSQL
   // connection has not been configured yet. Database-backed features will still
   // require the database connection, but the user remains signed in.

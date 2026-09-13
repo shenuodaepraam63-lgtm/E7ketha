@@ -1914,7 +1914,7 @@ async function authenticateSupabaseToken(token) {
   const authUser = data.user;
   const openId = `supabase:${authUser.id}`;
   const email = authUser.email ?? null;
-  const adminEmails = new Set((ENV.supabaseAdminEmails ?? "").split(",").map((value) => value.trim().toLowerCase()).filter(Boolean));
+  const adminEmails = new Set((ENV.supabaseAdminEmails ?? "").split(/[\s,;]+/).map((value) => value.trim().toLowerCase()).filter(Boolean));
   const role = email && (adminEmails.has(email.toLowerCase()) || authUser.app_metadata?.role === "admin") ? "admin" : void 0;
   try {
     await upsertUser({ openId, name: authUser.user_metadata?.full_name ?? authUser.user_metadata?.name ?? email?.split("@")[0] ?? null, email, loginMethod: "supabase", role, lastSignedIn: /* @__PURE__ */ new Date() });
@@ -1927,7 +1927,7 @@ async function authenticateSupabaseToken(token) {
   } catch (dbError) {
     console.warn("[Auth] Local user lookup skipped:", dbError instanceof Error ? dbError.message : dbError);
   }
-  if (localUser) return localUser;
+  if (localUser) return role === "admin" && localUser.role !== "admin" ? { ...localUser, role: "admin" } : localUser;
   return {
     id: 0,
     openId,
