@@ -1,17 +1,35 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { Route, Switch, useLocation } from 'wouter';
 import { Toaster } from 'sonner';
 import { SiteShell } from '@/components/SiteShell';
-import Home from '@/pages/Home';
-import { ExplorePage, SearchPage } from '@/pages/ExplorePages';
-import NovelPage from '@/pages/NovelPage';
-import { AuthorPage, GenrePage, SeriesPage } from '@/pages/ProfilePages';
-import DiscoverPage from '@/pages/DiscoverPage';
-import { AuthCallbackPage, AuthPage, PasswordResetPage, ProfilePage, ReadingListPage } from '@/pages/AccountPages';
-import AdminPage from '@/pages/AdminPage';
-import NotFound from '@/pages/NotFound';
-import QuotesPage, { QuotePage } from '@/pages/QuotesPage';
-import { AboutPage, ContactPage, FaqPage, HowItWorksPage, PrivacyPage, ReportPage, TermsPage } from '@/pages/InfoPages';
+import { BookLoader } from '@/components/BookLoader';
+
+const Home = lazy(() => import('@/pages/Home'));
+const ExplorePage = lazy(() => import('@/pages/ExplorePages').then((module) => ({ default: module.ExplorePage })));
+const SearchPage = lazy(() => import('@/pages/ExplorePages').then((module) => ({ default: module.SearchPage })));
+const NovelPage = lazy(() => import('@/pages/NovelPage'));
+const AuthorPage = lazy(() => import('@/pages/ProfilePages').then((module) => ({ default: module.AuthorPage })));
+const GenrePage = lazy(() => import('@/pages/ProfilePages').then((module) => ({ default: module.GenrePage })));
+const SeriesPage = lazy(() => import('@/pages/ProfilePages').then((module) => ({ default: module.SeriesPage })));
+const DiscoverPage = lazy(() => import('@/pages/DiscoverPage'));
+const AuthCallbackPage = lazy(() => import('@/pages/AccountPages').then((module) => ({ default: module.AuthCallbackPage })));
+const AuthPage = lazy(() => import('@/pages/AccountPages').then((module) => ({ default: module.AuthPage })));
+const PasswordResetPage = lazy(() => import('@/pages/AccountPages').then((module) => ({ default: module.PasswordResetPage })));
+const ProfilePage = lazy(() => import('@/pages/AccountPages').then((module) => ({ default: module.ProfilePage })));
+const ReadingListPage = lazy(() => import('@/pages/AccountPages').then((module) => ({ default: module.ReadingListPage })));
+const AdminPage = lazy(() => import('@/pages/AdminPage'));
+const NotFound = lazy(() => import('@/pages/NotFound'));
+const QuotesPage = lazy(() => import('@/pages/QuotesPage'));
+const QuotePage = lazy(() => import('@/pages/QuotesPage').then((module) => ({ default: module.QuotePage })));
+const AboutPage = lazy(() => import('@/pages/InfoPages').then((module) => ({ default: module.AboutPage })));
+const ContactPage = lazy(() => import('@/pages/InfoPages').then((module) => ({ default: module.ContactPage })));
+const FaqPage = lazy(() => import('@/pages/InfoPages').then((module) => ({ default: module.FaqPage })));
+const HowItWorksPage = lazy(() => import('@/pages/InfoPages').then((module) => ({ default: module.HowItWorksPage })));
+const PrivacyPage = lazy(() => import('@/pages/InfoPages').then((module) => ({ default: module.PrivacyPage })));
+const ReportPage = lazy(() => import('@/pages/InfoPages').then((module) => ({ default: module.ReportPage })));
+const TermsPage = lazy(() => import('@/pages/InfoPages').then((module) => ({ default: module.TermsPage })));
+
+function LoadingPage() { return <div className="grid min-h-[45vh] place-items-center"><BookLoader label="نجهز الصفحة" /></div>; }
 
 const SITE_URL = 'https://e7ketha.vercel.app';
 const DEFAULT_DESCRIPTION = 'رِواية — منصة اكتشاف الروايات العربية. ابحث عن روايتك القادمة واستكشف المؤلفين والتصنيفات والاقتباسات.';
@@ -47,16 +65,16 @@ function SeoManager({ location }: { location: string }) {
 }
 
 function PublicRoutes({ theme, onThemeToggle }: { theme: 'light' | 'dark'; onThemeToggle: () => void }) {
-  return <SiteShell theme={theme} onThemeToggle={onThemeToggle}><Switch>
+  return <SiteShell theme={theme} onThemeToggle={onThemeToggle}><Suspense fallback={<LoadingPage />}><Switch>
     <Route path="/" component={Home} /><Route path="/explore" component={ExplorePage} /><Route path="/search" component={SearchPage} />
     <Route path="/quotes" component={QuotesPage} /><Route path="/quotes/:id" component={QuotePage} /><Route path="/books/:slug" component={NovelPage} /><Route path="/novel/:slug" component={NovelPage} /><Route path="/novels/:slug" component={NovelPage} />
     <Route path="/authors/:slug" component={AuthorPage} /><Route path="/genres/:slug" component={GenrePage} /><Route path="/series/:slug" component={SeriesPage} />
     <Route path="/discover" component={DiscoverPage} /><Route path="/my-list" component={ReadingListPage} /><Route path="/profile" component={ProfilePage} />
-    <Route path="/login"><AuthPage /></Route><Route path="/register"><AuthPage register /></Route><Route path="/auth/callback" component={AuthCallbackPage} /><Route path="/reset-password" component={PasswordResetPage} />
+    <Route path="/login">{() => <AuthPage />}</Route><Route path="/register">{() => <AuthPage register />}</Route><Route path="/auth/callback" component={AuthCallbackPage} /><Route path="/reset-password" component={PasswordResetPage} />
     <Route path="/about" component={AboutPage} /><Route path="/how-it-works" component={HowItWorksPage} /><Route path="/privacy" component={PrivacyPage} /><Route path="/terms" component={TermsPage} />
     <Route path="/contact" component={ContactPage} /><Route path="/report" component={ReportPage} /><Route path="/faq" component={FaqPage} />
     <Route component={NotFound} />
-  </Switch></SiteShell>;
+  </Switch></Suspense></SiteShell>;
 }
 
 export default function App() {
@@ -64,6 +82,6 @@ export default function App() {
   const [theme, setTheme] = useState<'light' | 'dark'>(() => (localStorage.getItem('riwaya-theme') as 'light' | 'dark') || 'light');
   useEffect(() => { document.documentElement.classList.toggle('dark', theme === 'dark'); localStorage.setItem('riwaya-theme', theme); }, [theme]);
   const toggleTheme = () => setTheme((current) => current === 'dark' ? 'light' : 'dark');
-  if (location.startsWith('/admin')) return <><SeoManager location={location} /><AdminPage /><Toaster position="bottom-left" /></>;
+  if (location.startsWith('/admin')) return <><SeoManager location={location} /><Suspense fallback={<LoadingPage />}><AdminPage /></Suspense><Toaster position="bottom-left" /></>;
   return <><SeoManager location={location} /><PublicRoutes theme={theme} onThemeToggle={toggleTheme} /><Toaster position="bottom-left" /></>;
 }

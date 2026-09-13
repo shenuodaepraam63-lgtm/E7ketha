@@ -2421,9 +2421,9 @@ function createApp() {
     try {
       const [novels2, authors2, genres2, seriesList, quotes] = await Promise.all([listNovels(1e4), listAuthors(), listGenres(), listSeries(), listQuotes(true)]);
       const staticPaths = ["/", "/explore", "/quotes", "/discover", "/about", "/how-it-works", "/faq", "/contact", "/privacy", "/terms"];
-      const urls = [...staticPaths, ...novels2.map((item) => `/books/${item.id}`), ...authors2.map((item) => `/authors/${item.slug}`), ...genres2.map((item) => `/genres/${item.slug}`), ...seriesList.map((item) => `/series/${item.slug}`), ...quotes.map((item) => `/quotes/${item.id}`)];
+      const urls = [...staticPaths, ...novels2.map((item) => `/books/${item.slug}`), ...authors2.map((item) => `/authors/${item.slug}`), ...genres2.map((item) => `/genres/${item.slug}`), ...seriesList.map((item) => `/series/${item.slug}`), ...quotes.map((item) => `/quotes/${item.id}`)];
       const resource = String(_req.query.resource ?? "");
-      const sitemap = resource === "index" || resource === "sitemap" ? renderSitemapIndex() : resource === "novels" ? renderUrlset(novels2.map((item) => `/books/${item.id}`)) : resource === "authors" ? renderUrlset(authors2.map((item) => `/authors/${item.slug}`)) : resource === "genres" ? renderUrlset(genres2.map((item) => `/genres/${item.slug}`)) : resource === "series" ? renderUrlset(seriesList.map((item) => `/series/${item.slug}`)) : resource === "quotes" ? renderUrlset(quotes.map((item) => `/quotes/${item.id}`)) : renderUrlset(urls);
+      const sitemap = resource === "index" || resource === "sitemap" ? renderSitemapIndex() : resource === "novels" ? renderUrlset(novels2.map((item) => `/books/${item.slug}`)) : resource === "authors" ? renderUrlset(authors2.map((item) => `/authors/${item.slug}`)) : resource === "genres" ? renderUrlset(genres2.map((item) => `/genres/${item.slug}`)) : resource === "series" ? renderUrlset(seriesList.map((item) => `/series/${item.slug}`)) : resource === "quotes" ? renderUrlset(quotes.map((item) => `/quotes/${item.id}`)) : renderUrlset(urls);
       res.type("application/xml").set("Cache-Control", "public, max-age=0, s-maxage=0, must-revalidate").send(sitemap);
     } catch (error) {
       console.error("[SEO] sitemap generation failed", error);
