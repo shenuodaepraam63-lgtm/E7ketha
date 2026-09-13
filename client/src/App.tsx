@@ -13,6 +13,39 @@ import NotFound from '@/pages/NotFound';
 import QuotesPage, { QuotePage } from '@/pages/QuotesPage';
 import { AboutPage, ContactPage, FaqPage, HowItWorksPage, PrivacyPage, ReportPage, TermsPage } from '@/pages/InfoPages';
 
+const SITE_URL = 'https://e7ketha.vercel.app';
+const DEFAULT_DESCRIPTION = 'رِواية — منصة اكتشاف الروايات العربية. ابحث عن روايتك القادمة واستكشف المؤلفين والتصنيفات والاقتباسات.';
+
+function SeoManager({ location }: { location: string }) {
+  useEffect(() => {
+    const pathname = location.split('?')[0] || '/';
+    const isPrivate = /^\/(admin|login|register|auth|reset-password|my-list|profile)(\/|$)/.test(pathname);
+    const titles: Record<string, string> = {
+      '/': 'رِواية — اكتشف روايتك القادمة', '/explore': 'استكشف الروايات العربية | رِواية', '/quotes': 'اقتباسات ملهمة من الروايات | رِواية',
+      '/discover': 'اكتشف قراءتك القادمة | رِواية', '/about': 'عن رِواية | منصة اكتشاف الروايات العربية', '/how-it-works': 'كيف تعمل رِواية؟',
+      '/faq': 'الأسئلة الشائعة | رِواية', '/contact': 'تواصل معنا | رِواية', '/privacy': 'سياسة الخصوصية | رِواية', '/terms': 'شروط الاستخدام | رِواية',
+    };
+    const title = titles[pathname] ?? (pathname.startsWith('/books/') || pathname.startsWith('/novel/') || pathname.startsWith('/novels/') ? 'تفاصيل الرواية | رِواية' : pathname.startsWith('/authors/') ? 'المؤلفون العرب | رِواية' : pathname.startsWith('/genres/') ? 'تصنيفات الروايات | رِواية' : pathname.startsWith('/series/') ? 'سلاسل روائية | رِواية' : 'رِواية — اكتشف روايتك القادمة');
+    const description = isPrivate ? 'هذه الصفحة مخصصة للمستخدمين المسجلين في رِواية.' : DEFAULT_DESCRIPTION;
+    const canonical = `${SITE_URL}${pathname === '/' ? '/' : pathname.replace(/\/$/, '')}`;
+    document.title = title;
+    const setMeta = (selector: string, attributes: Record<string, string>, content: string) => {
+      let element = document.head.querySelector(selector) as HTMLMetaElement | null;
+      if (!element) { element = document.createElement('meta'); document.head.appendChild(element); }
+      Object.entries(attributes).forEach(([key, value]) => element!.setAttribute(key, value)); element.setAttribute('content', content);
+    };
+    setMeta('meta[name="description"]', { name: 'description' }, description); setMeta('meta[property="og:title"]', { property: 'og:title' }, title);
+    setMeta('meta[property="og:description"]', { property: 'og:description' }, description); setMeta('meta[property="og:url"]', { property: 'og:url' }, canonical);
+    setMeta('meta[name="robots"]', { name: 'robots' }, isPrivate ? 'noindex,nofollow' : 'index,follow');
+    let link = document.head.querySelector('link[rel="canonical"]') as HTMLLinkElement | null;
+    if (!link) { link = document.createElement('link'); link.rel = 'canonical'; document.head.appendChild(link); } link.href = canonical;
+    let jsonLd = document.head.querySelector('#site-structured-data') as HTMLScriptElement | null;
+    if (!jsonLd) { jsonLd = document.createElement('script'); jsonLd.id = 'site-structured-data'; jsonLd.type = 'application/ld+json'; document.head.appendChild(jsonLd); }
+    jsonLd.textContent = JSON.stringify({ '@context': 'https://schema.org', '@type': 'WebSite', name: 'رِواية', url: SITE_URL, description: DEFAULT_DESCRIPTION, inLanguage: 'ar' });
+  }, [location]);
+  return null;
+}
+
 function PublicRoutes({ theme, onThemeToggle }: { theme: 'light' | 'dark'; onThemeToggle: () => void }) {
   return <SiteShell theme={theme} onThemeToggle={onThemeToggle}><Switch>
     <Route path="/" component={Home} /><Route path="/explore" component={ExplorePage} /><Route path="/search" component={SearchPage} />
@@ -31,6 +64,6 @@ export default function App() {
   const [theme, setTheme] = useState<'light' | 'dark'>(() => (localStorage.getItem('riwaya-theme') as 'light' | 'dark') || 'light');
   useEffect(() => { document.documentElement.classList.toggle('dark', theme === 'dark'); localStorage.setItem('riwaya-theme', theme); }, [theme]);
   const toggleTheme = () => setTheme((current) => current === 'dark' ? 'light' : 'dark');
-  if (location.startsWith('/admin')) return <><AdminPage /><Toaster position="bottom-left" /></>;
-  return <><PublicRoutes theme={theme} onThemeToggle={toggleTheme} /><Toaster position="bottom-left" /></>;
+  if (location.startsWith('/admin')) return <><SeoManager location={location} /><AdminPage /><Toaster position="bottom-left" /></>;
+  return <><SeoManager location={location} /><PublicRoutes theme={theme} onThemeToggle={toggleTheme} /><Toaster position="bottom-left" /></>;
 }

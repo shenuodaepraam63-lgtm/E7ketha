@@ -6,4 +6,7 @@ Disallow: /profile
 Disallow: /my-list
 Disallow: /login
 Disallow: /register
+Disallow: /auth/
+Disallow: /reset-password
+Disallow: /search
 Sitemap: https://e7ketha.vercel.app/sitemap.xml
