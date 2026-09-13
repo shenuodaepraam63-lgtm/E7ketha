@@ -181,7 +181,8 @@ var ENV = {
   ownerOpenId: process.env.OWNER_OPEN_ID ?? "",
   isProduction: process.env.NODE_ENV === "production",
   forgeApiUrl: process.env.BUILT_IN_FORGE_API_URL ?? "",
-  forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? ""
+  forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? "",
+  geminiApiKey: process.env.GEMINI_API_KEY ?? process.env.GOOGLE_AI_API_KEY ?? ""
 };
 
 // server/db.ts
@@ -2154,11 +2155,21 @@ async function deleteQuote(id) {
   return { success: true };
 }
 async function improveQuote(input) {
+  const prompt = `\u062D\u0633\u0651\u0646 \u0647\u0630\u0627 \u0627\u0644\u0627\u0642\u062A\u0628\u0627\u0633 \u062F\u0648\u0646 \u062A\u063A\u064A\u064A\u0631 \u0645\u0639\u0646\u0627\u0647\u060C \u0648\u0627\u0642\u062A\u0631\u062D \u062A\u0635\u0646\u064A\u0641\u064B\u0627 \u0645\u0646\u0627\u0633\u0628\u064B\u0627. \u0644\u0627 \u062A\u062E\u062A\u0631\u0639 \u0627\u0644\u0642\u0627\u0626\u0644 \u0623\u0648 \u0627\u0644\u0643\u062A\u0627\u0628 \u0625\u0630\u0627 \u0644\u0645 \u064A\u0630\u0643\u0631\u0647\u0645\u0627 \u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645. \u0623\u062E\u0631\u062C JSON \u0641\u0642\u0637 \u0628\u0627\u0644\u0645\u0641\u0627\u062A\u064A\u062D quote, speaker, book, category, note.
+\u0627\u0644\u0646\u0635: ${input.quote}
+\u0627\u0644\u0642\u0627\u0626\u0644 \u0625\u0646 \u0648\u062C\u062F: ${input.speaker ?? ""}
+\u0627\u0644\u0643\u062A\u0627\u0628 \u0625\u0646 \u0648\u062C\u062F: ${input.book ?? ""}`;
+  if (ENV.geminiApiKey) {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(ENV.geminiApiKey)}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ systemInstruction: { parts: [{ text: "\u0623\u0646\u062A \u0645\u062D\u0631\u0631 \u0645\u062D\u062A\u0648\u0649 \u0639\u0631\u0628\u064A \u062F\u0642\u064A\u0642 \u0644\u0645\u0646\u0635\u0629 \u0631\u0648\u0627\u064A\u0627\u062A. \u0644\u0627 \u062A\u0646\u0633\u0628 \u0642\u0648\u0644\u064B\u0627 \u062F\u0648\u0646 \u0645\u0635\u062F\u0631." }] }, contents: [{ role: "user", parts: [{ text: prompt }] }], generationConfig: { temperature: 0.2, responseMimeType: "application/json" } }) });
+    if (!response.ok) throw new Error(`Gemini API ${response.status}: ${await response.text()}`);
+    const payload = await response.json();
+    const content2 = payload.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!content2) throw new Error("\u0644\u0645 \u062A\u064F\u0631\u062C\u0639 Gemini \u0646\u062A\u064A\u062C\u0629 \u0635\u0627\u0644\u062D\u0629");
+    return JSON.parse(content2);
+  }
   const result = await invokeLLM({ model: "gpt-5-mini", maxTokens: 500, messages: [
     { role: "system", content: "\u0623\u0646\u062A \u0645\u062D\u0631\u0631 \u0645\u062D\u062A\u0648\u0649 \u0639\u0631\u0628\u064A. \u0633\u0627\u0639\u062F \u0645\u062F\u064A\u0631 \u0645\u0646\u0635\u0629 \u0631\u0648\u0627\u064A\u0627\u062A \u0639\u0644\u0649 \u062A\u062C\u0647\u064A\u0632 \u0627\u0642\u062A\u0628\u0627\u0633 \u0644\u0644\u0646\u0634\u0631. \u0644\u0627 \u062A\u0646\u0633\u0628 \u0642\u0648\u0644\u064B\u0627 \u0644\u0634\u062E\u0635 \u0623\u0648 \u0643\u062A\u0627\u0628 \u062F\u0648\u0646 \u062F\u0644\u064A\u0644\u061B \u0625\u0630\u0627 \u0644\u0645 \u064A\u0630\u0643\u0631 \u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645 \u0627\u0644\u0645\u0635\u062F\u0631 \u0627\u062A\u0631\u0643\u0647 \u0641\u0627\u0631\u063A\u064B\u0627. \u0623\u062E\u0631\u062C JSON \u0641\u0642\u0637." },
-    { role: "user", content: `\u062D\u0633\u0651\u0646 \u0647\u0630\u0627 \u0627\u0644\u0627\u0642\u062A\u0628\u0627\u0633 \u062F\u0648\u0646 \u062A\u063A\u064A\u064A\u0631 \u0645\u0639\u0646\u0627\u0647\u060C \u0648\u0627\u0642\u062A\u0631\u062D \u062A\u0635\u0646\u064A\u0641\u064B\u0627 \u0645\u0646\u0627\u0633\u0628\u064B\u0627. \u0627\u0644\u0646\u0635: ${input.quote}
-\u0627\u0644\u0642\u0627\u0626\u0644 \u0625\u0646 \u0648\u062C\u062F: ${input.speaker ?? ""}
-\u0627\u0644\u0643\u062A\u0627\u0628 \u0625\u0646 \u0648\u062C\u062F: ${input.book ?? ""}` }
+    { role: "user", content: prompt }
   ], responseFormat: { type: "json_schema", json_schema: { name: "quote_editor", strict: true, schema: { type: "object", properties: { quote: { type: "string" }, speaker: { type: "string" }, book: { type: "string" }, category: { type: "string" }, note: { type: "string" } }, required: ["quote", "speaker", "book", "category", "note"], additionalProperties: false } } } });
   const content = result.choices[0]?.message.content;
   if (!content || typeof content !== "string") throw new Error("\u0644\u0645 \u062A\u064F\u0631\u062C\u0639 \u062E\u062F\u0645\u0629 AI \u0646\u062A\u064A\u062C\u0629 \u0635\u0627\u0644\u062D\u0629");
