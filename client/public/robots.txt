@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /api/
+Disallow: /profile
+Disallow: /my-list
+Disallow: /login
+Disallow: /register
+Sitemap: https://e7ketha.vercel.app/sitemap.xml
