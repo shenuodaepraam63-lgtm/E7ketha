@@ -169,8 +169,8 @@ var ENV = {
   appId: process.env.VITE_APP_ID ?? "",
   cookieSecret: process.env.JWT_SECRET ?? "",
   databaseUrl: process.env.SUPABASE_DATABASE_URL ?? process.env.SUPABASE_DB_URL ?? process.env.DATABASE_URL ?? "",
-  supabaseUrl: process.env.SUPABASE_URL ?? "",
-  supabasePublishableKey: process.env.SUPABASE_PUBLISHABLE_KEY ?? "",
+  supabaseUrl: process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL ?? "",
+  supabasePublishableKey: process.env.SUPABASE_PUBLISHABLE_KEY ?? process.env.VITE_SUPABASE_PUBLISHABLE_KEY ?? "",
   supabaseSecretKey: process.env.SUPABASE_SECRET_KEY ?? "",
   supabaseJwksUrl: process.env.SUPABASE_JWKS_URL ?? "",
   supabaseAdminEmails: process.env.SUPABASE_ADMIN_EMAILS ?? "",
@@ -1916,8 +1916,29 @@ async function authenticateSupabaseToken(token) {
   const email = authUser.email ?? null;
   const adminEmails = new Set((ENV.supabaseAdminEmails ?? "").split(",").map((value) => value.trim().toLowerCase()).filter(Boolean));
   const role = email && adminEmails.has(email.toLowerCase()) ? "admin" : void 0;
-  await upsertUser({ openId, name: authUser.user_metadata?.full_name ?? authUser.user_metadata?.name ?? email?.split("@")[0] ?? null, email, loginMethod: "supabase", role, lastSignedIn: /* @__PURE__ */ new Date() });
-  return await getUserByOpenId(openId) ?? null;
+  try {
+    await upsertUser({ openId, name: authUser.user_metadata?.full_name ?? authUser.user_metadata?.name ?? email?.split("@")[0] ?? null, email, loginMethod: "supabase", role, lastSignedIn: /* @__PURE__ */ new Date() });
+  } catch (dbError) {
+    console.warn("[Auth] Local user sync skipped:", dbError instanceof Error ? dbError.message : dbError);
+  }
+  let localUser = null;
+  try {
+    localUser = await getUserByOpenId(openId) ?? null;
+  } catch (dbError) {
+    console.warn("[Auth] Local user lookup skipped:", dbError instanceof Error ? dbError.message : dbError);
+  }
+  if (localUser) return localUser;
+  return {
+    id: 0,
+    openId,
+    name: authUser.user_metadata?.full_name ?? authUser.user_metadata?.name ?? email?.split("@")[0] ?? null,
+    email,
+    loginMethod: "supabase",
+    role: role ?? "user",
+    createdAt: new Date(authUser.created_at ?? Date.now()),
+    updatedAt: /* @__PURE__ */ new Date(),
+    lastSignedIn: /* @__PURE__ */ new Date()
+  };
 }
 
 // server/_core/context.ts
@@ -1925,10 +1946,11 @@ async function createContext(opts) {
   let user = null;
   try {
     const authorization = opts.req.headers.authorization;
-    if (typeof authorization === "string" && authorization.startsWith("Bearer ")) {
+    const hasBearerToken = typeof authorization === "string" && authorization.startsWith("Bearer ");
+    if (hasBearerToken) {
       user = await authenticateSupabaseToken(authorization.slice(7));
     }
-    if (!user) user = await sdk.authenticateRequest(opts.req);
+    if (!user && !hasBearerToken) user = await sdk.authenticateRequest(opts.req);
   } catch (error) {
     user = null;
   }
@@ -1956,16 +1978,14 @@ function createApp() {
   return app2;
 }
 
-// api/index.ts
+// scripts/vercel-api-entry.ts
 var app = createApp();
 function handler(req, res) {
   try {
     return app(req, res);
   } catch (error) {
     console.error("[Vercel API] handler failed", error);
-    if (!res.headersSent) {
-      res.status(500).json({ error: "API handler failed" });
-    }
+    if (!res.headersSent) res.status(500).json({ error: "API handler failed" });
   }
 }
 export {
