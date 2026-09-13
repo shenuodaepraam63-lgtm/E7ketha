@@ -2,7 +2,7 @@ import { invokeLLM } from './_core/llm';
 import { ENV } from './_core/env';
 import { isIP } from 'node:net';
 
-export type QuoteRecord = { id: number; quote_text: string; speaker: string | null; book_title: string | null; novel_id: number | null; category: string | null; status: 'draft' | 'published'; source_url?: string | null; import_id?: number | null; position?: number; created_at: string; updated_at: string };
+export type QuoteRecord = { id: number; quote_text: string; speaker: string | null; book_title: string | null; author_id?: number | null; novel_id: number | null; category: string | null; status: 'draft' | 'published'; source_url?: string | null; import_id?: number | null; position?: number; created_at: string; updated_at: string };
 
 async function request<T>(path: string, init: RequestInit = {}) {
   if (!ENV.supabaseUrl || !ENV.supabaseSecretKey) throw new Error('Supabase admin REST is not configured');
@@ -12,18 +12,21 @@ async function request<T>(path: string, init: RequestInit = {}) {
 }
 
 export async function listQuotes(publicOnly = false) {
-  return request<QuoteRecord[]>(`quotes?select=*&${publicOnly ? 'status=eq.published&' : ''}order=created_at.desc&limit=200`);
+  const rows = await request<QuoteRecord[]>(`quotes?select=*&${publicOnly ? 'status=eq.published&' : ''}order=created_at.desc&limit=200`); return enrichQuotes(rows);
 }
 export async function getQuote(id: number) {
   const rows = await request<QuoteRecord[]>(`quotes?id=eq.${id}&status=eq.published&select=*&limit=1`);
-  return rows[0] ?? null;
+  return (await enrichQuotes(rows))[0] ?? null;
 }
+async function enrichQuotes(rows: QuoteRecord[]) { const [authors, books] = await Promise.all([listQuoteAuthors(), listQuoteBooks()]); return rows.map((row) => { const author = authors.find((item) => item.id === row.author_id) ?? matchEntity(row.speaker, authors); const book = books.find((item) => item.id === row.novel_id) ?? matchEntity(row.book_title, books); return { ...row, author_id: author?.id ?? row.author_id ?? null, author_name: author?.name ?? row.speaker, author_slug: author?.slug ?? null, book_id: book?.id ?? row.novel_id ?? null, book_title: book?.title ?? row.book_title, book_slug: book?.slug ?? null }; }); }
 export async function createQuote(input: Omit<QuoteRecord, 'id' | 'created_at' | 'updated_at'>) { return (await request<QuoteRecord[]>('quotes', { method: 'POST', body: JSON.stringify(input) }))[0]; }
 export async function updateQuote(id: number, input: Partial<Omit<QuoteRecord, 'id' | 'created_at' | 'updated_at'>>) { return (await request<QuoteRecord[]>(`quotes?id=eq.${id}`, { method: 'PATCH', body: JSON.stringify({ ...input, updated_at: new Date().toISOString() }) }))[0]; }
 export async function deleteQuote(id: number) { await request(`quotes?id=eq.${id}`, { method: 'DELETE' }); return { success: true } as const; }
 export async function createQuoteImport(input: { source_url: string; author?: string; book?: string; instructions?: string; quote_count: number }) { return (await request<Array<{ id: number }>>('quote_imports', { method: 'POST', body: JSON.stringify(input) }))[0]; }
 export async function listQuoteImports() { return request<Array<{ id: number; source_url: string; author: string | null; book: string | null; instructions: string | null; quote_count: number; created_at: string }>>('quote_imports?select=*&order=created_at.desc&limit=50'); }
 export async function existingQuoteTexts() { return request<Array<{ quote_text: string }>>('quotes?select=quote_text&limit=5000'); }
+export async function listQuoteAuthors() { return request<Array<{ id: number; name: string; slug: string }>>('authors?select=id,name,slug&limit=2000'); }
+export async function listQuoteBooks() { return request<Array<{ id: number; title: string; slug: string; authorId: number }>>('novels?select=id,title,slug,authorId&limit=5000'); }
 
 function decodeHtml(value: string) { return value.replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&').replace(/&quot;/gi, '"').replace(/&#39;|&apos;/gi, "'").replace(/&ldquo;|&rdquo;|&laquo;|&raquo;/gi, '"').replace(/&lsquo;|&rsquo;|&sbquo;/gi, "'").replace(/&mdash;|&ndash;/gi, '—').replace(/&hellip;/gi, '…').replace(/&lt;/gi, '<').replace(/&gt;/gi, '>').replace(/&#x([0-9a-f]+);/gi, (_, hex) => String.fromCodePoint(parseInt(hex, 16))).replace(/&#(\d+);/g, (_, dec) => String.fromCodePoint(Number(dec))); }
 function cleanText(value: string) { return decodeHtml(value.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()).replace(/^\s*[“"«]|[”"»]\s*$/g, '').trim(); }
@@ -31,6 +34,7 @@ function cleanImportedQuote(value: string) { const text = cleanText(value).repla
 function comparable(value: string) { return cleanImportedQuote(value).toLowerCase().replace(/[ًٌٍَُِّْـ]/g, '').replace(/[^\u0600-\u06ff\w\d]+/g, ''); }
 function filterByLanguage(value: string, language: 'ar' | 'en' | 'both') { const text = cleanImportedQuote(value); if (language === 'both') return text; const letters = text.match(/[A-Za-z\u0600-\u06ff]/g) ?? []; if (letters.length < 3) return ''; const wanted = language === 'ar' ? /[\u0600-\u06ff]/ : /[A-Za-z]/; const matching = letters.filter((letter) => wanted.test(letter)).length; if (matching / letters.length < 0.55) return ''; return text.replace(language === 'ar' ? /[A-Za-z]+/g : /[\u0600-\u06ff]+/g, '').replace(/\s{2,}/g, ' ').trim(); }
 function keepGroundedQuotes(quotes: string[], source: string) { const sourceText = comparable(source); return quotes.filter((quote) => { const normalized = comparable(quote); return normalized.length >= 30 && (sourceText.includes(normalized) || sourceText.includes(normalized.slice(0, Math.min(100, normalized.length)))); }); }
+export function matchEntity<T extends { name?: string; title?: string }>(value: string | null | undefined, entities: T[]) { const wanted = comparable(value ?? ''); if (!wanted) return null; return entities.find((entity) => comparable(entity.name ?? entity.title ?? '') === wanted) ?? null; }
 function meta(html: string, key: string) { const direct = new RegExp(`<meta[^>]+(?:property|name)=["']${key}["'][^>]+content=["']([^"']+)["'][^>]*>`, 'i'); const reverse = new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]+(?:property|name)=["']${key}["'][^>]*>`, 'i'); return decodeHtml(direct.exec(html)?.[1] ?? reverse.exec(html)?.[1] ?? '').trim(); }
 function jsonLdValue(html: string, key: string) { const pattern = /<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi; let match: RegExpExecArray | null; while ((match = pattern.exec(html))) { try { const parsed = JSON.parse(match[1]); const item = Array.isArray(parsed) ? parsed[0] : parsed; const value = item?.[key]?.name ?? item?.[key]; if (typeof value === 'string') return value; } catch { /* ignore invalid JSON-LD */ } } return ''; }
 function extractElements(html: string) { const pattern = /<(blockquote|p|li|div|article|section)[^>]*(?:class|id)=["'][^"']*(?:quote|اقتباس|quotation|excerpt)[^"']*["'][^>]*>([\s\S]*?)<\/\1>/gi; const result: string[] = []; let match: RegExpExecArray | null; while ((match = pattern.exec(html))) { const text = cleanImportedQuote(match[2]); if (text.length >= 12 && text.length <= 2000 && !/^tags\s*:/i.test(text)) result.push(text); } return result; }
