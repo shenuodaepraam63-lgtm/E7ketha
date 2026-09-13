@@ -2415,7 +2415,7 @@ function createApp() {
       const urls = [...staticPaths, ...novels2.map((item) => `/books/${item.id}`), ...authors2.map((item) => `/authors/${item.slug}`), ...genres2.map((item) => `/genres/${item.slug}`), ...seriesList.map((item) => `/series/${item.slug}`), ...quotes.map((item) => `/quotes/${item.id}`)];
       const uniqueUrls = Array.from(new Set(urls));
       const body = uniqueUrls.map((path) => `<url><loc>${xmlEscape(`${SITE_URL}${path}`)}</loc><changefreq>${path === "/" ? "daily" : "weekly"}</changefreq><priority>${path === "/" ? "1.0" : staticPaths.includes(path) ? "0.8" : "0.7"}</priority></url>`).join("");
-      res.type("application/xml").set("Cache-Control", "public, max-age=300, s-maxage=300").send(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${body}</urlset>`);
+      res.type("application/xml").set("Cache-Control", "public, max-age=0, s-maxage=0, must-revalidate").send(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${body}</urlset>`);
     } catch (error) {
       console.error("[SEO] sitemap generation failed", error);
       res.status(503).type("application/xml").send(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>${SITE_URL}/</loc></url></urlset>`);
