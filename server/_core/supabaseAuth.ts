@@ -15,5 +15,20 @@ export async function authenticateSupabaseToken(token: string): Promise<User | n
   const adminEmails = new Set((ENV.supabaseAdminEmails ?? '').split(',').map((value) => value.trim().toLowerCase()).filter(Boolean));
   const role = email && adminEmails.has(email.toLowerCase()) ? 'admin' as const : undefined;
   await upsertUser({ openId, name: authUser.user_metadata?.full_name ?? authUser.user_metadata?.name ?? email?.split('@')[0] ?? null, email, loginMethod: 'supabase', role, lastSignedIn: new Date() });
-  return (await getUserByOpenId(openId)) ?? null;
+  const localUser = await getUserByOpenId(openId);
+  if (localUser) return localUser;
+  // Keep Supabase authentication usable even when the optional local PostgreSQL
+  // connection has not been configured yet. Database-backed features will still
+  // require the database connection, but the user remains signed in.
+  return {
+    id: 0,
+    openId,
+    name: authUser.user_metadata?.full_name ?? authUser.user_metadata?.name ?? email?.split('@')[0] ?? null,
+    email,
+    loginMethod: 'supabase',
+    role: role ?? 'user',
+    createdAt: new Date(authUser.created_at ?? Date.now()),
+    updatedAt: new Date(),
+    lastSignedIn: new Date(),
+  } as User;
 }
