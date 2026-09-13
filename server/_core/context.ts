@@ -16,10 +16,11 @@ export async function createContext(
 
   try {
     const authorization = opts.req.headers.authorization;
-    if (typeof authorization === "string" && authorization.startsWith("Bearer ")) {
+    const hasBearerToken = typeof authorization === "string" && authorization.startsWith("Bearer ");
+    if (hasBearerToken) {
       user = await authenticateSupabaseToken(authorization.slice(7));
     }
-    if (!user) user = await sdk.authenticateRequest(opts.req);
+    if (!user && !hasBearerToken) user = await sdk.authenticateRequest(opts.req);
   } catch (error) {
     // Authentication is optional for public procedures.
     user = null;
