@@ -11,14 +11,14 @@ export function GlobalSearch({ hero = false }: { hero?: boolean }) {
   const quickSearch = trpc.novels.search.useQuery(searchInput, { enabled: value.trim().length > 1, staleTime: 30_000 });
   const results = value.trim() ? (quickSearch.data ?? []) : [];
   const submit = (term = value) => { if (term.trim()) navigate(`/search?q=${encodeURIComponent(term.trim())}`); };
-  return <div className={`relative ${hero ? 'w-full' : 'w-full max-w-[310px]'}`}>
+  return <div className={`relative z-[60] ${hero ? 'w-full' : 'w-full max-w-[310px]'}`}>
     <form onSubmit={(event) => { event.preventDefault(); submit(); }} className={`relative flex items-center gap-3 rounded-[15px] border transition-all ${hero ? 'h-[62px] border-white/15 bg-white/[.08] px-5 text-white backdrop-blur-md focus-within:border-[#a9a1ff]/70 focus-within:bg-white/[.12]' : 'h-11 border-border bg-card px-3 focus-within:border-[#8279ee]'} ${focused ? 'ring-4 ring-[#8f86f3]/10' : ''}`}>
       <Search size={hero ? 20 : 17} className={hero ? 'text-[#c7c3ff]' : 'text-muted-foreground'} />
       <input value={value} onChange={(event) => setValue(event.target.value)} onFocus={() => setFocused(true)} onBlur={() => window.setTimeout(() => setFocused(false), 160)} className={`min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-current ${hero ? 'placeholder:text-white/45' : 'placeholder:text-muted-foreground'}`} placeholder={hero ? 'ابحث عن رواية، مؤلف، تصنيف أو موضوع...' : 'ابحث عن رواية أو مؤلف...'} aria-label="ابحث في رِواية" />
       {value && <button type="button" onClick={() => setValue('')} className="text-current/60 hover:text-current" aria-label="مسح البحث"><X size={16} /></button>}
       {hero && <kbd className="hidden rounded-md border border-white/15 bg-white/10 px-2 py-1 text-[10px] text-white/50 md:block">⌘ K</kbd>}
     </form>
-    {focused && <div className="absolute inset-x-0 top-[calc(100%+10px)] z-30 overflow-hidden rounded-[18px] border border-border bg-card p-2 text-foreground shadow-[0_20px_50px_-20px_rgba(17,25,65,.35)]">
+    {focused && <div className="absolute inset-x-0 top-[calc(100%+10px)] z-[70] max-h-[min(360px,calc(100vh-180px))] overflow-y-auto overscroll-contain rounded-[18px] border border-border bg-card p-2 text-foreground shadow-[0_20px_50px_-20px_rgba(17,25,65,.35)]">
       {results.length > 0 ? <div><div className="px-3 pb-2 pt-1 text-[10px] font-bold uppercase tracking-[.13em] text-muted-foreground">نتائج من قاعدة البيانات</div>{results.map((novel) => <button key={novel.id} onMouseDown={() => navigate(`/books/${novel.slug}`)} className="flex w-full items-center gap-3 rounded-xl p-2 text-right hover:bg-muted"><img src={novel.coverUrl ?? '/favicon.ico'} className="size-9 rounded-lg object-cover" alt="" /><span className="min-w-0 flex-1"><strong className="block truncate text-xs">{novel.title}</strong><span className="block truncate text-[10px] text-muted-foreground">{novel.author}</span></span><ArrowUpLeft size={14} className="text-muted-foreground" /></button>)}</div> : value.trim() && <div className="px-3 py-3 text-xs text-muted-foreground">لا توجد نتائج مطابقة في قاعدة البيانات.</div>}
     </div>}
   </div>;
