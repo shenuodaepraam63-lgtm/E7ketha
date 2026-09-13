@@ -8,7 +8,7 @@ import { commerceRouter } from './routers/commerce';
 import { confirmSupabaseUserEmail, listSupabaseUsers, toManagedUser, updateSupabaseUserRole } from './_core/supabaseAdmin';
 import { uploadNovelCover } from './cloudinary';
 import { audit, createAd, createNotification, deleteAd, getAdminReports, listActiveAds, listAds, listAuditLogs, listMessagesForUser, listNotifications, listTrash, markNotificationRead, purgeTrash, recordAdEvent, restoreTrash, sendAdminMessage, updateAd } from './management';
-import { createQuote, deleteQuote, getQuote, improveQuote, listQuotes, updateQuote } from './quotes';
+import { createQuote, deleteQuote, getQuote, improveQuote, listQuotes, previewQuotesFromUrl, updateQuote } from './quotes';
 
 const novelSlugInput = z.object({ slug: z.string().min(1).max(160) });
 const ratingInput = z.object({ slug: z.string().min(1).max(160), rating: z.number().int().min(1).max(5) });
@@ -158,6 +158,8 @@ export const appRouter = router({
     update: adminProcedure.input(z.object({ id: z.number().int().positive(), data: z.object({ quote_text: z.string().min(3).max(2000).optional(), speaker: z.string().max(255).nullable().optional(), book_title: z.string().max(255).nullable().optional(), novel_id: z.number().int().positive().nullable().optional(), category: z.string().max(80).nullable().optional(), status: z.enum(['draft', 'published']).optional() }) })).mutation(({ input }) => updateQuote(input.id, input.data)),
     delete: adminProcedure.input(z.object({ id: z.number().int().positive() })).mutation(({ input }) => deleteQuote(input.id)),
     improve: adminProcedure.input(z.object({ quote: z.string().min(3).max(2000), speaker: z.string().max(255).optional(), book: z.string().max(255).optional() })).mutation(({ input }) => improveQuote(input)),
+    previewImport: adminProcedure.input(z.object({ url: z.string().url().max(2000), author: z.string().max(255).optional(), book: z.string().max(255).optional(), instructions: z.string().max(2000).optional() })).mutation(({ input }) => previewQuotesFromUrl(input)),
+    bulkCreate: adminProcedure.input(z.object({ quotes: z.array(z.object({ quote_text: z.string().min(3).max(2000), speaker: z.string().max(255).nullable().optional(), book_title: z.string().max(255).nullable().optional(), category: z.string().max(80).nullable().optional(), status: z.enum(['draft', 'published']) })).min(1).max(500) })).mutation(async ({ input }) => { const created = []; for (const quote of input.quotes) created.push(await createQuote({ ...quote, speaker: quote.speaker ?? null, book_title: quote.book_title ?? null, novel_id: null, category: quote.category ?? null })); return { count: created.length }; }),
   }),
 });
 

@@ -1,5 +1,6 @@
 import { invokeLLM } from './_core/llm';
 import { ENV } from './_core/env';
+import { isIP } from 'node:net';
 
 export type QuoteRecord = { id: number; quote_text: string; speaker: string | null; book_title: string | null; novel_id: number | null; category: string | null; status: 'draft' | 'published'; created_at: string; updated_at: string };
 
@@ -20,6 +21,23 @@ export async function getQuote(id: number) {
 export async function createQuote(input: Omit<QuoteRecord, 'id' | 'created_at' | 'updated_at'>) { return (await request<QuoteRecord[]>('quotes', { method: 'POST', body: JSON.stringify(input) }))[0]; }
 export async function updateQuote(id: number, input: Partial<Omit<QuoteRecord, 'id' | 'created_at' | 'updated_at'>>) { return (await request<QuoteRecord[]>(`quotes?id=eq.${id}`, { method: 'PATCH', body: JSON.stringify({ ...input, updated_at: new Date().toISOString() }) }))[0]; }
 export async function deleteQuote(id: number) { await request(`quotes?id=eq.${id}`, { method: 'DELETE' }); return { success: true } as const; }
+
+function decodeHtml(value: string) { return value.replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&').replace(/&quot;/gi, '"').replace(/&#39;|&apos;/gi, "'").replace(/&lt;/gi, '<').replace(/&gt;/gi, '>'); }
+function cleanText(value: string) { return decodeHtml(value.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()).replace(/^\s*[“"«]|[”"»]\s*$/g, '').trim(); }
+function meta(html: string, key: string) { const direct = new RegExp(`<meta[^>]+(?:property|name)=["']${key}["'][^>]+content=["']([^"']+)["'][^>]*>`, 'i'); const reverse = new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]+(?:property|name)=["']${key}["'][^>]*>`, 'i'); return decodeHtml(direct.exec(html)?.[1] ?? reverse.exec(html)?.[1] ?? '').trim(); }
+function jsonLdValue(html: string, key: string) { const pattern = /<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi; let match: RegExpExecArray | null; while ((match = pattern.exec(html))) { try { const parsed = JSON.parse(match[1]); const item = Array.isArray(parsed) ? parsed[0] : parsed; const value = item?.[key]?.name ?? item?.[key]; if (typeof value === 'string') return value; } catch { /* ignore invalid JSON-LD */ } } return ''; }
+function extractElements(html: string) { const pattern = /<(blockquote|p|li|div|article|section)[^>]*(?:class|id)=["'][^"']*(?:quote|اقتباس|quotation|excerpt)[^"']*["'][^>]*>([\s\S]*?)<\/\1>/gi; const result: string[] = []; let match: RegExpExecArray | null; while ((match = pattern.exec(html))) { const text = cleanText(match[2]); if (text.length >= 12 && text.length <= 2000) result.push(text); } return result; }
+export type QuoteImportPreview = { sourceUrl: string; author: string; book: string; quotes: Array<{ quote_text: string; speaker: string; book_title: string; category: string; status: 'draft' | 'published' }> };
+export async function previewQuotesFromUrl(input: { url: string; author?: string; book?: string; instructions?: string }): Promise<QuoteImportPreview> {
+  const parsedUrl = new URL(input.url); if (!['http:', 'https:'].includes(parsedUrl.protocol)) throw new Error('الرابط يجب أن يبدأ بـ http أو https');
+  const host = parsedUrl.hostname.replace(/^\[|\]$/g, ''); const privateIpv4 = /^(10\.|127\.|169\.254\.|192\.168\.|172\.(1[6-9]|2\d|3[0-1])\.)/.test(host); const privateIpv6 = host === '::1' || host.startsWith('fc') || host.startsWith('fd') || host.startsWith('fe80:');
+  if (['localhost', '0.0.0.0'].includes(host) || host.endsWith('.local') || (isIP(host) === 4 && privateIpv4) || (isIP(host) === 6 && privateIpv6)) throw new Error('لا يمكن فحص هذا النطاق');
+  const response = await fetch(parsedUrl, { headers: { 'User-Agent': 'RiwayaQuoteImporter/1.0 (+https://e7ketha.vercel.app)' }, signal: AbortSignal.timeout(15_000) }); if (!response.ok) throw new Error(`تعذر فتح الرابط (${response.status})`);
+  const html = (await response.text()).slice(0, 3_000_000); const author = input.author?.trim() || meta(html, 'author') || jsonLdValue(html, 'author'); const book = input.book?.trim() || meta(html, 'book') || meta(html, 'og:title') || jsonLdValue(html, 'isPartOf') || ''; const instruction = (input.instructions ?? '').toLowerCase();
+  let extracted = extractElements(html); if (!extracted.length || instruction.includes('كل سطر')) { const visible = cleanText(html.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>|<nav[\s\S]*?<\/nav>|<header[\s\S]*?<\/header>|<footer[\s\S]*?<\/footer>/gi, '\n')); const lines = visible.split(/(?:\n|\r)+/).map((line) => cleanText(line)).filter((line) => line.length >= 25 && line.length <= 2000); extracted = extracted.length && !instruction.includes('كل سطر') ? extracted : lines; }
+  const unique = Array.from(new Set(extracted)).slice(0, 500); if (!unique.length) throw new Error('لم أجد اقتباسات واضحة. جرّب إضافة تعليمات مثل: كل اقتباس داخل blockquote أو كل سطر اقتباس مستقل.');
+  return { sourceUrl: input.url, author, book, quotes: unique.map((quote_text) => ({ quote_text, speaker: author, book_title: book, category: '', status: 'draft' as const })) };
+}
 
 export async function improveQuote(input: { quote: string; speaker?: string; book?: string }) {
   const prompt = `حسّن هذا الاقتباس دون تغيير معناه، واقترح تصنيفًا مناسبًا. لا تخترع القائل أو الكتاب إذا لم يذكرهما المستخدم. أخرج JSON فقط بالمفاتيح quote, speaker, book, category, note.\nالنص: ${input.quote}\nالقائل إن وجد: ${input.speaker ?? ''}\nالكتاب إن وجد: ${input.book ?? ''}`;
