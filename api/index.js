@@ -342,7 +342,7 @@ async function searchNovels(filters = {}) {
     if (filters.minRating) params.set("rating", `gte.${Math.round(filters.minRating * 100)}`);
     if (query3) params.set("or", `(title.ilike.*${query3}*,description.ilike.*${query3}*)`);
     const rows = await supabaseRest("novels", params.toString());
-    return rows.map((row) => ({ ...row, slug: normalizeNovelSlug(row.slug, row.title), author: "", authorSlug: "" }));
+    return rankSearchRows(rows.map((row) => ({ ...row, slug: normalizeNovelSlug(row.slug, row.title), author: "", authorSlug: "" })), query3 ?? "");
   }
   const conditions = [];
   const query2 = filters.q?.trim();
@@ -591,6 +591,50 @@ function normalizeNovelSlug(value, fallbackTitle) {
   const trimmed = value.trim();
   if (/^https?:\/\//i.test(trimmed) || trimmed.includes("/")) return normalizeNovelSlug(fallbackTitle || "novel");
   return trimmed.replace(/^\/+|\/+$/g, "").replace(/\s+/g, "-").replace(/[?#%]/g, "").slice(0, 160) || normalizeNovelSlug(fallbackTitle || "novel");
+}
+function normalizeSearchText(value) {
+  return value.toLowerCase().normalize("NFKD").replace(/[\u064B-\u065F\u0670]/g, "").replace(/[إأآٱ]/g, "\u0627").replace(/ى/g, "\u064A").replace(/ة/g, "\u0647").replace(/ؤ/g, "\u0648").replace(/ئ/g, "\u064A").replace(/[^A-Za-z0-9\u0600-\u06FF\s]/g, " ").replace(/\s+/g, " ").trim();
+}
+var searchSynonyms = {
+  \u0631\u0639\u0628: ["\u062E\u0648\u0641", "\u0645\u0631\u0639\u0628", "horror", "terror"],
+  \u062E\u0648\u0641: ["\u0631\u0639\u0628", "\u0645\u0631\u0639\u0628", "horror"],
+  \u062D\u0628: ["\u0631\u0648\u0645\u0627\u0646\u0633\u064A", "\u0631\u0648\u0645\u0627\u0646\u0633\u064A\u0629", "\u0639\u0627\u0637\u0641\u0629", "romance"],
+  \u0631\u0648\u0645\u0627\u0646\u0633\u064A: ["\u062D\u0628", "\u0631\u0648\u0645\u0627\u0646\u0633\u064A\u0629", "romance"],
+  \u062E\u064A\u0627\u0644: ["\u0641\u0627\u0646\u062A\u0627\u0632\u064A\u0627", "\u0633\u062D\u0631", "\u0627\u0633\u0637\u0648\u0631\u064A", "fantasy"],
+  \u0641\u0627\u0646\u062A\u0627\u0632\u064A\u0627: ["\u062E\u064A\u0627\u0644", "\u0633\u062D\u0631", "fantasy"],
+  \u063A\u0645\u0648\u0636: ["\u062A\u062D\u0642\u064A\u0642", "\u0644\u063A\u0632", "\u062C\u0631\u064A\u0645\u0629", "mystery"],
+  \u0645\u063A\u0627\u0645\u0631\u0629: ["\u0631\u062D\u0644\u0629", "\u062A\u0634\u0648\u064A\u0642", "adventure"],
+  \u062A\u0627\u0631\u064A\u062E: ["\u062A\u0627\u0631\u064A\u062E\u064A", "\u0642\u062F\u064A\u0645", "historical"]
+};
+function levenshtein(a, b) {
+  const row = Array.from({ length: b.length + 1 }, (_, index) => index);
+  for (let i = 1; i <= a.length; i++) {
+    let previous = row[0];
+    row[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      const current = row[j];
+      row[j] = a[i - 1] === b[j - 1] ? previous : Math.min(previous + 1, row[j - 1] + 1, current + 1);
+      previous = current;
+    }
+  }
+  return row[b.length];
+}
+function rankSearchRows(rows, query2) {
+  const normalized = normalizeSearchText(query2);
+  if (!normalized) return rows;
+  const queryWords = normalized.split(" ").filter(Boolean);
+  const expanded = new Set(queryWords);
+  queryWords.forEach((word) => (searchSynonyms[word] ?? []).forEach((item) => expanded.add(normalizeSearchText(item))));
+  return rows.map((row) => {
+    const text2 = normalizeSearchText([row.title, row.description, row.author, row.slug].filter(Boolean).join(" "));
+    const words = text2.split(" ");
+    let score = text2.includes(normalized) ? 100 : 0;
+    for (const word of Array.from(expanded)) {
+      if (text2.includes(word)) score += queryWords.includes(word) ? 35 : 12;
+      else if (words.length) score += Math.max(0, 10 - Math.min(10, Math.min(...words.map((candidate) => levenshtein(word, candidate)))));
+    }
+    return { row, score };
+  }).filter((item) => item.score > 0).sort((a, b) => b.score - a.score || Number(b.row.ratingCount ?? 0) - Number(a.row.ratingCount ?? 0)).map((item) => item.row);
 }
 async function createNovel(input) {
   const db = await getDb();

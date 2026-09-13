@@ -196,7 +196,7 @@ export async function searchNovels(filters: NovelSearchFilters = {}) {
     if (filters.minRating) params.set('rating', `gte.${Math.round(filters.minRating * 100)}`);
     if (query) params.set('or', `(title.ilike.*${query}*,description.ilike.*${query}*)`);
     const rows = await supabaseRest<any[]>('novels', params.toString());
-    return rows.map((row) => ({ ...row, slug: normalizeNovelSlug(row.slug, row.title), author: '', authorSlug: '' }));
+    return rankSearchRows(rows.map((row) => ({ ...row, slug: normalizeNovelSlug(row.slug, row.title), author: '', authorSlug: '' })), query ?? '');
   }
   const conditions = [];
   const query = filters.q?.trim();
@@ -488,6 +488,38 @@ function normalizeNovelSlug(value: string, fallbackTitle?: string): string {
   const trimmed = value.trim();
   if (/^https?:\/\//i.test(trimmed) || trimmed.includes('/')) return normalizeNovelSlug(fallbackTitle || 'novel');
   return trimmed.replace(/^\/+|\/+$/g, '').replace(/\s+/g, '-').replace(/[?#%]/g, '').slice(0, 160) || normalizeNovelSlug(fallbackTitle || 'novel');
+}
+
+function normalizeSearchText(value: string) {
+  return value.toLowerCase().normalize('NFKD').replace(/[\u064B-\u065F\u0670]/g, '')
+    .replace(/[إأآٱ]/g, 'ا').replace(/ى/g, 'ي').replace(/ة/g, 'ه').replace(/ؤ/g, 'و').replace(/ئ/g, 'ي')
+    .replace(/[^A-Za-z0-9\u0600-\u06FF\s]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+const searchSynonyms: Record<string, string[]> = {
+  رعب: ['خوف', 'مرعب', 'horror', 'terror'], خوف: ['رعب', 'مرعب', 'horror'],
+  حب: ['رومانسي', 'رومانسية', 'عاطفة', 'romance'], رومانسي: ['حب', 'رومانسية', 'romance'],
+  خيال: ['فانتازيا', 'سحر', 'اسطوري', 'fantasy'], فانتازيا: ['خيال', 'سحر', 'fantasy'],
+  غموض: ['تحقيق', 'لغز', 'جريمة', 'mystery'], مغامرة: ['رحلة', 'تشويق', 'adventure'],
+  تاريخ: ['تاريخي', 'قديم', 'historical'],
+};
+
+function levenshtein(a: string, b: string) {
+  const row = Array.from({ length: b.length + 1 }, (_, index) => index);
+  for (let i = 1; i <= a.length; i++) {
+    let previous = row[0]; row[0] = i;
+    for (let j = 1; j <= b.length; j++) { const current = row[j]; row[j] = a[i - 1] === b[j - 1] ? previous : Math.min(previous + 1, row[j - 1] + 1, current + 1); previous = current; }
+  }
+  return row[b.length];
+}
+
+function rankSearchRows(rows: any[], query: string) {
+  const normalized = normalizeSearchText(query); if (!normalized) return rows;
+  const queryWords = normalized.split(' ').filter(Boolean); const expanded = new Set(queryWords);
+  queryWords.forEach((word) => (searchSynonyms[word] ?? []).forEach((item) => expanded.add(normalizeSearchText(item))));
+  return rows.map((row) => { const text = normalizeSearchText([row.title, row.description, row.author, row.slug].filter(Boolean).join(' ')); const words = text.split(' '); let score = text.includes(normalized) ? 100 : 0;
+    for (const word of Array.from(expanded)) { if (text.includes(word)) score += queryWords.includes(word) ? 35 : 12; else if (words.length) score += Math.max(0, 10 - Math.min(10, Math.min(...words.map((candidate: string) => levenshtein(word, candidate))))); }
+    return { row, score }; }).filter((item) => item.score > 0).sort((a, b) => b.score - a.score || Number(b.row.ratingCount ?? 0) - Number(a.row.ratingCount ?? 0)).map((item) => item.row);
 }
 
 export async function createNovel(input: AdminNovelInput) {
