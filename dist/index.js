@@ -172,8 +172,8 @@ var ENV = {
   appId: process.env.VITE_APP_ID ?? "",
   cookieSecret: process.env.JWT_SECRET ?? "",
   databaseUrl: process.env.SUPABASE_DATABASE_URL ?? process.env.SUPABASE_DB_URL ?? process.env.DATABASE_URL ?? "",
-  supabaseUrl: process.env.SUPABASE_URL ?? "",
-  supabasePublishableKey: process.env.SUPABASE_PUBLISHABLE_KEY ?? "",
+  supabaseUrl: process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL ?? "",
+  supabasePublishableKey: process.env.SUPABASE_PUBLISHABLE_KEY ?? process.env.VITE_SUPABASE_PUBLISHABLE_KEY ?? "",
   supabaseSecretKey: process.env.SUPABASE_SECRET_KEY ?? "",
   supabaseJwksUrl: process.env.SUPABASE_JWKS_URL ?? "",
   supabaseAdminEmails: process.env.SUPABASE_ADMIN_EMAILS ?? "",
@@ -184,7 +184,8 @@ var ENV = {
   ownerOpenId: process.env.OWNER_OPEN_ID ?? "",
   isProduction: process.env.NODE_ENV === "production",
   forgeApiUrl: process.env.BUILT_IN_FORGE_API_URL ?? "",
-  forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? ""
+  forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? "",
+  geminiApiKey: process.env.GEMINI_API_KEY ?? process.env.GOOGLE_AI_API_KEY ?? ""
 };
 
 // server/db.ts
@@ -218,6 +219,36 @@ async function supabaseRest(table, params) {
   const response = await fetch(`${ENV.supabaseUrl}/rest/v1/${table}?${params}`, { headers: { apikey: ENV.supabaseSecretKey || ENV.supabasePublishableKey, Authorization: `Bearer ${ENV.supabaseSecretKey || ENV.supabasePublishableKey}` } });
   if (!response.ok) throw new Error(`Supabase REST ${response.status}: ${await response.text()}`);
   return response.json();
+}
+async function supabaseCount(table, filter = "") {
+  if (!ENV.supabaseUrl || !ENV.supabasePublishableKey) throw new Error("Supabase REST is not configured");
+  const response = await fetch(`${ENV.supabaseUrl}/rest/v1/${table}?select=id${filter ? `&${filter}` : ""}`, {
+    method: "HEAD",
+    headers: {
+      apikey: ENV.supabaseSecretKey || ENV.supabasePublishableKey,
+      Authorization: `Bearer ${ENV.supabaseSecretKey || ENV.supabasePublishableKey}`,
+      Prefer: "count=exact"
+    }
+  });
+  if (!response.ok) throw new Error(`Supabase REST ${response.status}`);
+  const range = response.headers.get("content-range") ?? "*/0";
+  return Number(range.split("/")[1] || 0);
+}
+async function supabaseWrite(table, method, body, filter = "") {
+  if (!ENV.supabaseUrl || !ENV.supabaseSecretKey) throw new Error("Supabase admin REST is not configured");
+  const response = await fetch(`${ENV.supabaseUrl}/rest/v1/${table}${filter ? `?${filter}` : ""}`, {
+    method,
+    headers: {
+      apikey: ENV.supabaseSecretKey,
+      Authorization: `Bearer ${ENV.supabaseSecretKey}`,
+      "Content-Type": "application/json",
+      Prefer: "return=representation,resolution=merge-duplicates"
+    },
+    body: body === void 0 ? void 0 : JSON.stringify(body)
+  });
+  if (!response.ok) throw new Error(`Supabase REST ${response.status}: ${await response.text()}`);
+  const text2 = await response.text();
+  return text2 ? JSON.parse(text2) : [];
 }
 async function getNovelBySlugFromRest(slug) {
   const decoded = decodeURIComponent(slug).trim();
@@ -271,16 +302,19 @@ async function getUserByOpenId(openId) {
   return result[0];
 }
 async function listUsers() {
-  const db = await requireDb();
+  const db = await getDb();
+  if (!db) return [];
   return db.select({ openId: users.openId, role: users.role }).from(users);
 }
 async function updateUserRole(openId, role) {
-  const db = await requireDb();
+  const db = await getDb();
+  if (!db) return null;
   const [row] = await db.update(users).set({ role, updatedAt: /* @__PURE__ */ new Date() }).where(eq(users.openId, openId)).returning();
   return row ?? null;
 }
 async function listNovels(limit = 50) {
-  const db = await requireDb();
+  const db = await getDb();
+  if (!db) return listNovelsFromRest(limit);
   try {
     const rows = await db.select({
       id: novels.id,
@@ -303,7 +337,17 @@ async function listNovels(limit = 50) {
   }
 }
 async function searchNovels(filters = {}) {
-  const db = await requireDb();
+  const db = await getDb();
+  if (!db) {
+    const limit2 = Math.min(Math.max(filters.limit ?? 50, 1), 100);
+    const query3 = filters.q?.trim();
+    const params = new URLSearchParams({ select: "*", limit: String(limit2) });
+    if (filters.status) params.set("status", `eq.${filters.status}`);
+    if (filters.minRating) params.set("rating", `gte.${Math.round(filters.minRating * 100)}`);
+    if (query3) params.set("or", `(title.ilike.*${query3}*,description.ilike.*${query3}*)`);
+    const rows = await supabaseRest("novels", params.toString());
+    return rankSearchRows(rows.map((row) => ({ ...row, slug: normalizeNovelSlug(row.slug, row.title), author: "", authorSlug: "" })), query3 ?? "");
+  }
   const conditions = [];
   const query2 = filters.q?.trim();
   if (query2) {
@@ -336,7 +380,14 @@ async function searchNovels(filters = {}) {
   return db.select(selection).from(novels).innerJoin(authors, eq(novels.authorId, authors.id)).where(conditions.length ? and(...conditions) : void 0).orderBy(order).limit(limit);
 }
 async function getSearchFacets() {
-  const db = await requireDb();
+  const db = await getDb();
+  if (!db) {
+    const [genreRows2, authorRows2] = await Promise.all([
+      supabaseRest("genres", "select=slug,name&order=name.asc&limit=1000"),
+      supabaseRest("authors", "select=slug,name&order=name.asc&limit=1000")
+    ]);
+    return { genres: genreRows2, authors: authorRows2 };
+  }
   const [genreRows, authorRows] = await Promise.all([
     db.select({ slug: genres.slug, name: genres.name }).from(genres).orderBy(asc(genres.name)),
     db.select({ slug: authors.slug, name: authors.name }).from(authors).orderBy(asc(authors.name))
@@ -344,7 +395,8 @@ async function getSearchFacets() {
   return { genres: genreRows, authors: authorRows };
 }
 async function listAuthors() {
-  const db = await requireDb();
+  const db = await getDb();
+  if (!db) return supabaseRest("authors", "select=*&order=name.asc&limit=1000");
   return db.select().from(authors).orderBy(asc(authors.name));
 }
 async function getAuthorBySlug(slug) {
@@ -353,7 +405,8 @@ async function getAuthorBySlug(slug) {
   return result[0] ?? null;
 }
 async function listGenres() {
-  const db = await requireDb();
+  const db = await getDb();
+  if (!db) return supabaseRest("genres", "select=*&order=name.asc&limit=1000");
   return db.select({ id: genres.id, slug: genres.slug, name: genres.name, description: genres.description, icon: genres.icon, novelCount: sql`COUNT(DISTINCT ${novelGenres.novelId})` }).from(genres).leftJoin(novelGenres, eq(novelGenres.genreId, genres.id)).groupBy(genres.id).orderBy(asc(genres.name));
 }
 async function getGenreBySlug(slug) {
@@ -362,7 +415,8 @@ async function getGenreBySlug(slug) {
   return result[0] ?? null;
 }
 async function listSeries() {
-  const db = await requireDb();
+  const db = await getDb();
+  if (!db) return supabaseRest("series", "select=*&order=title.asc&limit=1000");
   return db.select({ id: series.id, slug: series.slug, title: series.title, description: series.description, status: series.status, parts: sql`COUNT(DISTINCT ${seriesBooks.novelId})`, coverUrl: sql`MIN(${novels.coverUrl})` }).from(series).leftJoin(seriesBooks, eq(seriesBooks.seriesId, series.id)).leftJoin(novels, eq(seriesBooks.novelId, novels.id)).groupBy(series.id).orderBy(asc(series.title));
 }
 async function getSeriesBySlug(slug) {
@@ -453,7 +507,16 @@ async function getMyRating(userId, novelId) {
   return result[0]?.rating ?? null;
 }
 async function getAdminSummary() {
-  const db = await requireDb();
+  const db = await getDb();
+  if (!db) {
+    const [novelsCount, authorsCount, seriesCount, reviewsCount] = await Promise.all([
+      supabaseCount("novels"),
+      supabaseCount("authors"),
+      supabaseCount("series"),
+      supabaseCount("reviews", "status=eq.pending")
+    ]);
+    return { novels: novelsCount, authors: authorsCount, sources: seriesCount, needsReview: reviewsCount };
+  }
   const [novelCount, authorCount, sourceCount, reviewCount] = await Promise.all([
     db.select({ count: sql`COUNT(*)` }).from(novels),
     db.select({ count: sql`COUNT(*)` }).from(authors),
@@ -463,46 +526,67 @@ async function getAdminSummary() {
   return { novels: Number(novelCount[0]?.count ?? 0), authors: Number(authorCount[0]?.count ?? 0), sources: Number(sourceCount[0]?.count ?? 0), needsReview: Number(reviewCount[0]?.count ?? 0) };
 }
 async function listAdminNovels() {
-  const db = await requireDb();
+  const db = await getDb();
+  if (!db) {
+    const rows = await supabaseRest("novels", "select=*&order=updatedAt.desc&limit=1000");
+    return rows;
+  }
   return db.select({ id: novels.id, slug: novels.slug, title: novels.title, authorId: authors.id, author: authors.name, coverUrl: novels.coverUrl, description: novels.description, rating: novels.rating, ratingCount: novels.ratingCount, parts: novels.parts, status: novels.status, publicationYear: novels.publicationYear, language: novels.language, updatedAt: novels.updatedAt }).from(novels).innerJoin(authors, eq(novels.authorId, authors.id)).orderBy(desc(novels.updatedAt));
 }
 async function listAdminAuthors() {
-  const db = await requireDb();
+  const db = await getDb();
+  if (!db) return supabaseRest("authors", "select=*&order=name.asc&limit=1000");
   return db.select().from(authors).orderBy(asc(authors.name));
 }
 async function listAdminGenres() {
-  const db = await requireDb();
+  const db = await getDb();
+  if (!db) return supabaseRest("genres", "select=*&order=name.asc&limit=1000");
   return db.select({ id: genres.id, slug: genres.slug, name: genres.name, description: genres.description, icon: genres.icon, createdAt: genres.createdAt, novelCount: sql`COUNT(DISTINCT ${novelGenres.novelId})` }).from(genres).leftJoin(novelGenres, eq(novelGenres.genreId, genres.id)).groupBy(genres.id).orderBy(asc(genres.name));
 }
 async function createAuthor(input) {
-  const db = await requireDb();
+  const db = await getDb();
+  if (!db) return (await supabaseWrite("authors", "POST", { ...input, bio: input.bio || null, avatarUrl: input.avatarUrl || null, bookCount: input.bookCount ?? 0 }))[0];
   const [row] = await db.insert(authors).values({ ...input, bio: input.bio || null, avatarUrl: input.avatarUrl || null, bookCount: input.bookCount ?? 0 }).returning();
   return row;
 }
 async function updateAuthor(id, input) {
-  const db = await requireDb();
+  const db = await getDb();
+  if (!db) return (await supabaseWrite("authors", "PATCH", { ...input, updatedAt: (/* @__PURE__ */ new Date()).toISOString() }, `id=eq.${id}`))[0] ?? null;
   const [row] = await db.update(authors).set({ ...input, updatedAt: /* @__PURE__ */ new Date() }).where(eq(authors.id, id)).returning();
   return row ?? null;
 }
 async function deleteAuthor(id) {
-  const db = await requireDb();
+  const db = await getDb();
+  if (!db) {
+    const linked2 = await supabaseRest("novels", `select=id&authorId=eq.${id}&limit=1`);
+    if (linked2.length) throw new Error("\u0644\u0627 \u064A\u0645\u0643\u0646 \u062D\u0630\u0641 \u0645\u0624\u0644\u0641 \u0645\u0631\u062A\u0628\u0637 \u0628\u0631\u0648\u0627\u064A\u0627\u062A. \u0627\u0646\u0642\u0644 \u0627\u0644\u0631\u0648\u0627\u064A\u0627\u062A \u0625\u0644\u0649 \u0645\u0624\u0644\u0641 \u0622\u062E\u0631 \u0623\u0648\u0644\u064B\u0627.");
+    await supabaseWrite("authors", "DELETE", void 0, `id=eq.${id}`);
+    return { success: true };
+  }
   const linked = await db.select({ id: novels.id }).from(novels).where(eq(novels.authorId, id)).limit(1);
   if (linked.length) throw new Error("\u0644\u0627 \u064A\u0645\u0643\u0646 \u062D\u0630\u0641 \u0645\u0624\u0644\u0641 \u0645\u0631\u062A\u0628\u0637 \u0628\u0631\u0648\u0627\u064A\u0627\u062A. \u0627\u0646\u0642\u0644 \u0627\u0644\u0631\u0648\u0627\u064A\u0627\u062A \u0625\u0644\u0649 \u0645\u0624\u0644\u0641 \u0622\u062E\u0631 \u0623\u0648\u0644\u064B\u0627.");
   await db.delete(authors).where(eq(authors.id, id));
   return { success: true };
 }
 async function createGenre(input) {
-  const db = await requireDb();
+  const db = await getDb();
+  if (!db) return (await supabaseWrite("genres", "POST", { ...input, description: input.description || null, icon: input.icon || "\u2726" }))[0];
   const [row] = await db.insert(genres).values({ ...input, description: input.description || null, icon: input.icon || "\u2726" }).returning();
   return row;
 }
 async function updateGenre(id, input) {
-  const db = await requireDb();
+  const db = await getDb();
+  if (!db) return (await supabaseWrite("genres", "PATCH", input, `id=eq.${id}`))[0] ?? null;
   const [row] = await db.update(genres).set(input).where(eq(genres.id, id)).returning();
   return row ?? null;
 }
 async function deleteGenre(id) {
-  const db = await requireDb();
+  const db = await getDb();
+  if (!db) {
+    await supabaseWrite("novelGenres", "DELETE", void 0, `genreId=eq.${id}`);
+    await supabaseWrite("genres", "DELETE", void 0, `id=eq.${id}`);
+    return { success: true };
+  }
   await db.delete(novelGenres).where(eq(novelGenres.genreId, id));
   await db.delete(genres).where(eq(genres.id, id));
   return { success: true };
@@ -512,16 +596,75 @@ function normalizeNovelSlug(value, fallbackTitle) {
   if (/^https?:\/\//i.test(trimmed) || trimmed.includes("/")) return normalizeNovelSlug(fallbackTitle || "novel");
   return trimmed.replace(/^\/+|\/+$/g, "").replace(/\s+/g, "-").replace(/[?#%]/g, "").slice(0, 160) || normalizeNovelSlug(fallbackTitle || "novel");
 }
+function normalizeSearchText(value) {
+  return value.toLowerCase().normalize("NFKD").replace(/[\u064B-\u065F\u0670]/g, "").replace(/[إأآٱ]/g, "\u0627").replace(/ى/g, "\u064A").replace(/ة/g, "\u0647").replace(/ؤ/g, "\u0648").replace(/ئ/g, "\u064A").replace(/[^A-Za-z0-9\u0600-\u06FF\s]/g, " ").replace(/\s+/g, " ").trim();
+}
+var searchSynonyms = {
+  \u0631\u0639\u0628: ["\u062E\u0648\u0641", "\u0645\u0631\u0639\u0628", "horror", "terror"],
+  \u062E\u0648\u0641: ["\u0631\u0639\u0628", "\u0645\u0631\u0639\u0628", "horror"],
+  \u062D\u0628: ["\u0631\u0648\u0645\u0627\u0646\u0633\u064A", "\u0631\u0648\u0645\u0627\u0646\u0633\u064A\u0629", "\u0639\u0627\u0637\u0641\u0629", "romance"],
+  \u0631\u0648\u0645\u0627\u0646\u0633\u064A: ["\u062D\u0628", "\u0631\u0648\u0645\u0627\u0646\u0633\u064A\u0629", "romance"],
+  \u062E\u064A\u0627\u0644: ["\u0641\u0627\u0646\u062A\u0627\u0632\u064A\u0627", "\u0633\u062D\u0631", "\u0627\u0633\u0637\u0648\u0631\u064A", "fantasy"],
+  \u0641\u0627\u0646\u062A\u0627\u0632\u064A\u0627: ["\u062E\u064A\u0627\u0644", "\u0633\u062D\u0631", "fantasy"],
+  \u063A\u0645\u0648\u0636: ["\u062A\u062D\u0642\u064A\u0642", "\u0644\u063A\u0632", "\u062C\u0631\u064A\u0645\u0629", "mystery"],
+  \u0645\u063A\u0627\u0645\u0631\u0629: ["\u0631\u062D\u0644\u0629", "\u062A\u0634\u0648\u064A\u0642", "adventure"],
+  \u062A\u0627\u0631\u064A\u062E: ["\u062A\u0627\u0631\u064A\u062E\u064A", "\u0642\u062F\u064A\u0645", "historical"]
+};
+function levenshtein(a, b) {
+  const row = Array.from({ length: b.length + 1 }, (_, index) => index);
+  for (let i = 1; i <= a.length; i++) {
+    let previous = row[0];
+    row[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      const current = row[j];
+      row[j] = a[i - 1] === b[j - 1] ? previous : Math.min(previous + 1, row[j - 1] + 1, current + 1);
+      previous = current;
+    }
+  }
+  return row[b.length];
+}
+function rankSearchRows(rows, query2) {
+  const normalized = normalizeSearchText(query2);
+  if (!normalized) return rows;
+  const queryWords = normalized.split(" ").filter(Boolean);
+  const expanded = new Set(queryWords);
+  queryWords.forEach((word) => (searchSynonyms[word] ?? []).forEach((item) => expanded.add(normalizeSearchText(item))));
+  return rows.map((row) => {
+    const text2 = normalizeSearchText([row.title, row.description, row.author, row.slug].filter(Boolean).join(" "));
+    const words = text2.split(" ");
+    let score = text2.includes(normalized) ? 100 : 0;
+    for (const word of Array.from(expanded)) {
+      if (text2.includes(word)) score += queryWords.includes(word) ? 35 : 12;
+      else if (words.length) score += Math.max(0, 10 - Math.min(10, Math.min(...words.map((candidate) => levenshtein(word, candidate)))));
+    }
+    return { row, score };
+  }).filter((item) => item.score > 0).sort((a, b) => b.score - a.score || Number(b.row.ratingCount ?? 0) - Number(a.row.ratingCount ?? 0)).map((item) => item.row);
+}
 async function createNovel(input) {
-  const db = await requireDb();
+  const db = await getDb();
   const { genreIds = [], ...novelInput } = input;
+  if (!db) {
+    const rows = await supabaseWrite("novels", "POST", { ...novelInput, slug: normalizeNovelSlug(input.slug || input.title), coverUrl: input.coverUrl || null, description: input.description || null });
+    const row2 = rows[0];
+    if (genreIds.length) await supabaseWrite("novelGenres", "POST", genreIds.map((genreId) => ({ novelId: row2.id, genreId })));
+    return row2;
+  }
   const [row] = await db.insert(novels).values({ ...novelInput, slug: normalizeNovelSlug(input.slug || input.title), coverUrl: input.coverUrl || null, description: input.description || null }).returning();
   if (genreIds.length) await db.insert(novelGenres).values(genreIds.map((genreId) => ({ novelId: row.id, genreId }))).onConflictDoNothing();
   return row;
 }
 async function updateNovel(id, input) {
-  const db = await requireDb();
+  const db = await getDb();
   const { genreIds, ...novelInput } = input;
+  if (!db) {
+    const normalizedInput2 = novelInput.slug ? { ...novelInput, slug: normalizeNovelSlug(novelInput.slug) } : novelInput;
+    const rows = await supabaseWrite("novels", "PATCH", { ...normalizedInput2, updatedAt: (/* @__PURE__ */ new Date()).toISOString() }, `id=eq.${id}`);
+    if (genreIds) {
+      await supabaseWrite("novelGenres", "DELETE", void 0, `novelId=eq.${id}`);
+      if (genreIds.length) await supabaseWrite("novelGenres", "POST", genreIds.map((genreId) => ({ novelId: id, genreId })));
+    }
+    return rows[0] ?? null;
+  }
   const normalizedInput = novelInput.slug ? { ...novelInput, slug: normalizeNovelSlug(novelInput.slug) } : novelInput;
   const [row] = await db.update(novels).set({ ...normalizedInput, updatedAt: /* @__PURE__ */ new Date() }).where(eq(novels.id, id)).returning();
   if (!row) return null;
@@ -532,7 +675,12 @@ async function updateNovel(id, input) {
   return row;
 }
 async function deleteNovel(id) {
-  const db = await requireDb();
+  const db = await getDb();
+  if (!db) {
+    for (const [table, column] of [["novelGenres", "novelId"], ["seriesBooks", "novelId"], ["readingListItems", "novelId"], ["ratings", "novelId"], ["reviews", "novelId"]]) await supabaseWrite(table, "DELETE", void 0, `${column}=eq.${id}`);
+    await supabaseWrite("novels", "DELETE", void 0, `id=eq.${id}`);
+    return { success: true };
+  }
   await db.delete(novelGenres).where(eq(novelGenres.novelId, id));
   await db.delete(seriesBooks).where(eq(seriesBooks.novelId, id));
   await db.delete(readingListItems).where(eq(readingListItems.novelId, id));
@@ -1698,7 +1846,7 @@ function toManagedUser(user, localRole) {
     id: user.id,
     email: user.email ?? null,
     name: user.user_metadata?.full_name ?? user.user_metadata?.name ?? null,
-    role: localRole ?? (user.user_metadata?.role === "admin" ? "admin" : "user"),
+    role: localRole ?? (user.app_metadata?.role === "admin" ? "admin" : "user"),
     emailConfirmed: Boolean(user.email_confirmed_at),
     disabled: user.banned_until === "none" ? false : Boolean(user.banned_until),
     createdAt: user.created_at,
@@ -1725,8 +1873,8 @@ async function updateSupabaseUserRole(id, role) {
   if (!client) throw new Error("Supabase admin key is not configured");
   const { data, error } = await client.auth.admin.getUserById(id);
   if (error || !data.user) throw error ?? new Error("User not found");
-  const metadata = { ...data.user.user_metadata, role };
-  const result = await client.auth.admin.updateUserById(id, { user_metadata: metadata });
+  const metadata = { ...data.user.app_metadata, role };
+  const result = await client.auth.admin.updateUserById(id, { app_metadata: metadata });
   if (result.error || !result.data.user) throw result.error ?? new Error("Unable to update user role");
   return result.data.user;
 }
@@ -1765,6 +1913,274 @@ async function uploadNovelCover(dataUrl, filename) {
   const result = await response.json();
   if (!response.ok || !result.secure_url) throw new Error(result.error?.message ?? "Cloudinary upload failed");
   return { url: result.secure_url, publicId: result.public_id ?? publicId };
+}
+
+// server/_core/llm.ts
+var ensureArray = (value) => Array.isArray(value) ? value : [value];
+var normalizeContentPart = (part) => {
+  if (typeof part === "string") {
+    return { type: "text", text: part };
+  }
+  if (part.type === "text") {
+    return part;
+  }
+  if (part.type === "image_url") {
+    return part;
+  }
+  if (part.type === "file_url") {
+    return part;
+  }
+  throw new Error("Unsupported message content part");
+};
+var normalizeMessage = (message) => {
+  const { role, name, tool_call_id } = message;
+  if (role === "tool" || role === "function") {
+    const content = ensureArray(message.content).map((part) => typeof part === "string" ? part : JSON.stringify(part)).join("\n");
+    return {
+      role,
+      name,
+      tool_call_id,
+      content
+    };
+  }
+  const contentParts = ensureArray(message.content).map(normalizeContentPart);
+  if (contentParts.length === 1 && contentParts[0].type === "text") {
+    return {
+      role,
+      name,
+      content: contentParts[0].text
+    };
+  }
+  return {
+    role,
+    name,
+    content: contentParts
+  };
+};
+var normalizeToolChoice = (toolChoice, tools) => {
+  if (!toolChoice) return void 0;
+  if (toolChoice === "none" || toolChoice === "auto") {
+    return toolChoice;
+  }
+  if (toolChoice === "required") {
+    if (!tools || tools.length === 0) {
+      throw new Error(
+        "tool_choice 'required' was provided but no tools were configured"
+      );
+    }
+    if (tools.length > 1) {
+      throw new Error(
+        "tool_choice 'required' needs a single tool or specify the tool name explicitly"
+      );
+    }
+    return {
+      type: "function",
+      function: { name: tools[0].function.name }
+    };
+  }
+  if ("name" in toolChoice) {
+    return {
+      type: "function",
+      function: { name: toolChoice.name }
+    };
+  }
+  return toolChoice;
+};
+var resolveApiUrl = () => ENV.forgeApiUrl && ENV.forgeApiUrl.trim().length > 0 ? `${ENV.forgeApiUrl.replace(/\/$/, "")}/v1/chat/completions` : "https://forge.manus.im/v1/chat/completions";
+var assertApiKey = () => {
+  if (!ENV.forgeApiKey) {
+    throw new Error("OPENAI_API_KEY is not configured");
+  }
+};
+var normalizeResponseFormat = ({
+  responseFormat,
+  response_format,
+  outputSchema,
+  output_schema
+}) => {
+  const explicitFormat = responseFormat || response_format;
+  if (explicitFormat) {
+    if (explicitFormat.type === "json_schema" && !explicitFormat.json_schema?.schema) {
+      throw new Error(
+        "responseFormat json_schema requires a defined schema object"
+      );
+    }
+    return explicitFormat;
+  }
+  const schema = outputSchema || output_schema;
+  if (!schema) return void 0;
+  if (!schema.name || !schema.schema) {
+    throw new Error("outputSchema requires both name and schema");
+  }
+  return {
+    type: "json_schema",
+    json_schema: {
+      name: schema.name,
+      schema: schema.schema,
+      ...typeof schema.strict === "boolean" ? { strict: schema.strict } : {}
+    }
+  };
+};
+var RETRY_MAX_RETRIES = 4;
+var RETRY_BASE_DELAY_MS = 500;
+var RETRY_MAX_DELAY_MS = 3e4;
+var sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+var parseRetryAfter = (value) => {
+  if (!value) return void 0;
+  const seconds = Number(value);
+  if (Number.isFinite(seconds)) return Math.max(0, seconds * 1e3);
+  const at = Date.parse(value);
+  return Number.isNaN(at) ? void 0 : Math.max(0, at - Date.now());
+};
+var computeBackoffDelay = (attempt, retryAfterMs) => {
+  const cap = Math.min(RETRY_BASE_DELAY_MS * 2 ** attempt, RETRY_MAX_DELAY_MS);
+  const jittered = cap / 2 + Math.random() * (cap / 2);
+  return Math.min(Math.max(jittered, retryAfterMs ?? 0), RETRY_MAX_DELAY_MS);
+};
+var fetchWithBackoff = async (url, init) => {
+  let lastError;
+  for (let attempt = 0; attempt <= RETRY_MAX_RETRIES; attempt++) {
+    try {
+      const response = await fetch(url, init);
+      if (response.ok || attempt === RETRY_MAX_RETRIES) {
+        return response;
+      }
+      const retryAfterMs = parseRetryAfter(
+        response.headers.get("retry-after")
+      );
+      try {
+        await response.body?.cancel();
+      } catch {
+      }
+      console.warn(
+        `LLM request retry ${attempt + 1}/${RETRY_MAX_RETRIES} after status ${response.status}`
+      );
+      await sleep(computeBackoffDelay(attempt, retryAfterMs));
+    } catch (error) {
+      lastError = error;
+      if (attempt === RETRY_MAX_RETRIES) throw error;
+      console.warn(
+        `LLM request retry ${attempt + 1}/${RETRY_MAX_RETRIES} after network error`
+      );
+      await sleep(computeBackoffDelay(attempt));
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("LLM request failed after exhausting retries");
+};
+async function invokeLLM(params) {
+  assertApiKey();
+  const {
+    messages,
+    tools,
+    toolChoice,
+    tool_choice,
+    outputSchema,
+    output_schema,
+    responseFormat,
+    response_format,
+    model,
+    thinking,
+    reasoning,
+    maxTokens,
+    max_tokens
+  } = params;
+  const payload = {
+    messages: messages.map(normalizeMessage)
+  };
+  if (model) {
+    payload.model = model;
+  }
+  if (tools && tools.length > 0) {
+    payload.tools = tools;
+  }
+  const normalizedToolChoice = normalizeToolChoice(
+    toolChoice || tool_choice,
+    tools
+  );
+  if (normalizedToolChoice) {
+    payload.tool_choice = normalizedToolChoice;
+  }
+  const resolvedMaxTokens = max_tokens ?? maxTokens;
+  if (typeof resolvedMaxTokens === "number") {
+    payload.max_tokens = resolvedMaxTokens;
+  }
+  if (thinking) {
+    payload.thinking = thinking;
+  }
+  if (reasoning) {
+    payload.reasoning = reasoning;
+  }
+  const normalizedResponseFormat = normalizeResponseFormat({
+    responseFormat,
+    response_format,
+    outputSchema,
+    output_schema
+  });
+  if (normalizedResponseFormat) {
+    payload.response_format = normalizedResponseFormat;
+  }
+  const response = await fetchWithBackoff(resolveApiUrl(), {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${ENV.forgeApiKey}`
+    },
+    body: JSON.stringify(payload)
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(
+      `LLM invoke failed: ${response.status} ${response.statusText} \u2013 ${errorText}`
+    );
+  }
+  return await response.json();
+}
+
+// server/quotes.ts
+async function request(path3, init = {}) {
+  if (!ENV.supabaseUrl || !ENV.supabaseSecretKey) throw new Error("Supabase admin REST is not configured");
+  const response = await fetch(`${ENV.supabaseUrl}/rest/v1/${path3}`, { ...init, headers: { apikey: ENV.supabaseSecretKey, Authorization: `Bearer ${ENV.supabaseSecretKey}`, "Content-Type": "application/json", Prefer: "return=representation", ...init.headers ?? {} } });
+  if (!response.ok) throw new Error(`Quotes API ${response.status}: ${await response.text()}`);
+  const text2 = await response.text();
+  return text2 ? JSON.parse(text2) : [];
+}
+async function listQuotes(publicOnly = false) {
+  return request(`quotes?select=*&${publicOnly ? "status=eq.published&" : ""}order=created_at.desc&limit=200`);
+}
+async function getQuote(id) {
+  const rows = await request(`quotes?id=eq.${id}&status=eq.published&select=*&limit=1`);
+  return rows[0] ?? null;
+}
+async function createQuote(input) {
+  return (await request("quotes", { method: "POST", body: JSON.stringify(input) }))[0];
+}
+async function updateQuote(id, input) {
+  return (await request(`quotes?id=eq.${id}`, { method: "PATCH", body: JSON.stringify({ ...input, updated_at: (/* @__PURE__ */ new Date()).toISOString() }) }))[0];
+}
+async function deleteQuote(id) {
+  await request(`quotes?id=eq.${id}`, { method: "DELETE" });
+  return { success: true };
+}
+async function improveQuote(input) {
+  const prompt = `\u062D\u0633\u0651\u0646 \u0647\u0630\u0627 \u0627\u0644\u0627\u0642\u062A\u0628\u0627\u0633 \u062F\u0648\u0646 \u062A\u063A\u064A\u064A\u0631 \u0645\u0639\u0646\u0627\u0647\u060C \u0648\u0627\u0642\u062A\u0631\u062D \u062A\u0635\u0646\u064A\u0641\u064B\u0627 \u0645\u0646\u0627\u0633\u0628\u064B\u0627. \u0644\u0627 \u062A\u062E\u062A\u0631\u0639 \u0627\u0644\u0642\u0627\u0626\u0644 \u0623\u0648 \u0627\u0644\u0643\u062A\u0627\u0628 \u0625\u0630\u0627 \u0644\u0645 \u064A\u0630\u0643\u0631\u0647\u0645\u0627 \u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645. \u0623\u062E\u0631\u062C JSON \u0641\u0642\u0637 \u0628\u0627\u0644\u0645\u0641\u0627\u062A\u064A\u062D quote, speaker, book, category, note.
+\u0627\u0644\u0646\u0635: ${input.quote}
+\u0627\u0644\u0642\u0627\u0626\u0644 \u0625\u0646 \u0648\u062C\u062F: ${input.speaker ?? ""}
+\u0627\u0644\u0643\u062A\u0627\u0628 \u0625\u0646 \u0648\u062C\u062F: ${input.book ?? ""}`;
+  if (ENV.geminiApiKey) {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${encodeURIComponent(ENV.geminiApiKey)}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ systemInstruction: { parts: [{ text: "\u0623\u0646\u062A \u0645\u062D\u0631\u0631 \u0645\u062D\u062A\u0648\u0649 \u0639\u0631\u0628\u064A \u062F\u0642\u064A\u0642 \u0644\u0645\u0646\u0635\u0629 \u0631\u0648\u0627\u064A\u0627\u062A. \u0644\u0627 \u062A\u0646\u0633\u0628 \u0642\u0648\u0644\u064B\u0627 \u062F\u0648\u0646 \u0645\u0635\u062F\u0631." }] }, contents: [{ role: "user", parts: [{ text: prompt }] }], generationConfig: { temperature: 0.2, responseMimeType: "application/json" } }) });
+    if (!response.ok) throw new Error(`Gemini API ${response.status}: ${await response.text()}`);
+    const payload = await response.json();
+    const content2 = payload.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!content2) throw new Error("\u0644\u0645 \u062A\u064F\u0631\u062C\u0639 Gemini \u0646\u062A\u064A\u062C\u0629 \u0635\u0627\u0644\u062D\u0629");
+    return JSON.parse(content2);
+  }
+  const result = await invokeLLM({ model: "gpt-5-mini", maxTokens: 500, messages: [
+    { role: "system", content: "\u0623\u0646\u062A \u0645\u062D\u0631\u0631 \u0645\u062D\u062A\u0648\u0649 \u0639\u0631\u0628\u064A. \u0633\u0627\u0639\u062F \u0645\u062F\u064A\u0631 \u0645\u0646\u0635\u0629 \u0631\u0648\u0627\u064A\u0627\u062A \u0639\u0644\u0649 \u062A\u062C\u0647\u064A\u0632 \u0627\u0642\u062A\u0628\u0627\u0633 \u0644\u0644\u0646\u0634\u0631. \u0644\u0627 \u062A\u0646\u0633\u0628 \u0642\u0648\u0644\u064B\u0627 \u0644\u0634\u062E\u0635 \u0623\u0648 \u0643\u062A\u0627\u0628 \u062F\u0648\u0646 \u062F\u0644\u064A\u0644\u061B \u0625\u0630\u0627 \u0644\u0645 \u064A\u0630\u0643\u0631 \u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645 \u0627\u0644\u0645\u0635\u062F\u0631 \u0627\u062A\u0631\u0643\u0647 \u0641\u0627\u0631\u063A\u064B\u0627. \u0623\u062E\u0631\u062C JSON \u0641\u0642\u0637." },
+    { role: "user", content: prompt }
+  ], responseFormat: { type: "json_schema", json_schema: { name: "quote_editor", strict: true, schema: { type: "object", properties: { quote: { type: "string" }, speaker: { type: "string" }, book: { type: "string" }, category: { type: "string" }, note: { type: "string" } }, required: ["quote", "speaker", "book", "category", "note"], additionalProperties: false } } } });
+  const content = result.choices[0]?.message.content;
+  if (!content || typeof content !== "string") throw new Error("\u0644\u0645 \u062A\u064F\u0631\u062C\u0639 \u062E\u062F\u0645\u0629 AI \u0646\u062A\u064A\u062C\u0629 \u0635\u0627\u0644\u062D\u0629");
+  return JSON.parse(content);
 }
 
 // server/routers.ts
@@ -1904,6 +2320,17 @@ var appRouter = router({
       update: adminProcedure.input(z3.object({ id: z3.number().int().positive(), data: z3.object({ title: z3.string().min(1).max(255).optional(), body: z3.string().max(5e3).optional(), imageUrl: z3.string().url().optional(), linkUrl: z3.string().url().optional(), placement: z3.string().max(80).optional(), status: z3.enum(["draft", "published", "paused"]).optional(), startAt: z3.string().optional(), endAt: z3.string().optional() }) })).mutation(({ ctx, input }) => updateAd(input.id, input.data, ctx.user)),
       delete: adminProcedure.input(z3.object({ id: z3.number().int().positive() })).mutation(({ ctx, input }) => deleteAd(input.id, ctx.user))
     })
+  }),
+  quotes: router({
+    list: publicProcedure.query(() => listQuotes(true)),
+    byId: publicProcedure.input(z3.object({ id: z3.number().int().positive() })).query(({ input }) => getQuote(input.id))
+  }),
+  adminQuotes: router({
+    list: adminProcedure.query(() => listQuotes(false)),
+    create: adminProcedure.input(z3.object({ quote_text: z3.string().min(3).max(2e3), speaker: z3.string().max(255).nullable().optional(), book_title: z3.string().max(255).nullable().optional(), novel_id: z3.number().int().positive().nullable().optional(), category: z3.string().max(80).nullable().optional(), status: z3.enum(["draft", "published"]) })).mutation(({ input }) => createQuote({ ...input, speaker: input.speaker ?? null, book_title: input.book_title ?? null, novel_id: input.novel_id ?? null, category: input.category ?? null })),
+    update: adminProcedure.input(z3.object({ id: z3.number().int().positive(), data: z3.object({ quote_text: z3.string().min(3).max(2e3).optional(), speaker: z3.string().max(255).nullable().optional(), book_title: z3.string().max(255).nullable().optional(), novel_id: z3.number().int().positive().nullable().optional(), category: z3.string().max(80).nullable().optional(), status: z3.enum(["draft", "published"]).optional() }) })).mutation(({ input }) => updateQuote(input.id, input.data)),
+    delete: adminProcedure.input(z3.object({ id: z3.number().int().positive() })).mutation(({ input }) => deleteQuote(input.id)),
+    improve: adminProcedure.input(z3.object({ quote: z3.string().min(3).max(2e3), speaker: z3.string().max(255).optional(), book: z3.string().max(255).optional() })).mutation(({ input }) => improveQuote(input))
   })
 });
 
@@ -1917,10 +2344,31 @@ async function authenticateSupabaseToken(token) {
   const authUser = data.user;
   const openId = `supabase:${authUser.id}`;
   const email = authUser.email ?? null;
-  const adminEmails = new Set((ENV.supabaseAdminEmails ?? "").split(",").map((value) => value.trim().toLowerCase()).filter(Boolean));
-  const role = email && adminEmails.has(email.toLowerCase()) ? "admin" : void 0;
-  await upsertUser({ openId, name: authUser.user_metadata?.full_name ?? authUser.user_metadata?.name ?? email?.split("@")[0] ?? null, email, loginMethod: "supabase", role, lastSignedIn: /* @__PURE__ */ new Date() });
-  return await getUserByOpenId(openId) ?? null;
+  const adminEmails = new Set((ENV.supabaseAdminEmails ?? "").split(/[\s,;]+/).map((value) => value.trim().toLowerCase()).filter(Boolean));
+  const role = email && (adminEmails.has(email.toLowerCase()) || authUser.app_metadata?.role === "admin") ? "admin" : void 0;
+  try {
+    await upsertUser({ openId, name: authUser.user_metadata?.full_name ?? authUser.user_metadata?.name ?? email?.split("@")[0] ?? null, email, loginMethod: "supabase", role, lastSignedIn: /* @__PURE__ */ new Date() });
+  } catch (dbError) {
+    console.warn("[Auth] Local user sync skipped:", dbError instanceof Error ? dbError.message : dbError);
+  }
+  let localUser = null;
+  try {
+    localUser = await getUserByOpenId(openId) ?? null;
+  } catch (dbError) {
+    console.warn("[Auth] Local user lookup skipped:", dbError instanceof Error ? dbError.message : dbError);
+  }
+  if (localUser) return role === "admin" && localUser.role !== "admin" ? { ...localUser, role: "admin" } : localUser;
+  return {
+    id: 0,
+    openId,
+    name: authUser.user_metadata?.full_name ?? authUser.user_metadata?.name ?? email?.split("@")[0] ?? null,
+    email,
+    loginMethod: "supabase",
+    role: role ?? "user",
+    createdAt: new Date(authUser.created_at ?? Date.now()),
+    updatedAt: /* @__PURE__ */ new Date(),
+    lastSignedIn: /* @__PURE__ */ new Date()
+  };
 }
 
 // server/_core/context.ts
@@ -1928,10 +2376,11 @@ async function createContext(opts) {
   let user = null;
   try {
     const authorization = opts.req.headers.authorization;
-    if (typeof authorization === "string" && authorization.startsWith("Bearer ")) {
+    const hasBearerToken = typeof authorization === "string" && authorization.startsWith("Bearer ");
+    if (hasBearerToken) {
       user = await authenticateSupabaseToken(authorization.slice(7));
     }
-    if (!user) user = await sdk.authenticateRequest(opts.req);
+    if (!user && !hasBearerToken) user = await sdk.authenticateRequest(opts.req);
   } catch (error) {
     user = null;
   }
@@ -2078,8 +2527,8 @@ var vite_config_default = defineConfig({
   root: path.resolve(import.meta.dirname, "client"),
   publicDir: path.resolve(import.meta.dirname, "client", "public"),
   define: {
-    "import.meta.env.VITE_SUPABASE_URL": JSON.stringify(process.env.SUPABASE_URL ?? ""),
-    "import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY": JSON.stringify(process.env.SUPABASE_PUBLISHABLE_KEY ?? "")
+    "import.meta.env.VITE_SUPABASE_URL": JSON.stringify(process.env.VITE_SUPABASE_URL ?? process.env.SUPABASE_URL ?? ""),
+    "import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY": JSON.stringify(process.env.VITE_SUPABASE_PUBLISHABLE_KEY ?? process.env.SUPABASE_PUBLISHABLE_KEY ?? "")
   },
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
@@ -2170,9 +2619,8 @@ async function findAvailablePort(startPort = 3e3) {
   }
   throw new Error(`No available port found starting from ${startPort}`);
 }
-async function startServer() {
+function createApp() {
   const app = express2();
-  const server = createServer(app);
   app.use(express2.json({ limit: "50mb" }));
   app.use(express2.urlencoded({ limit: "50mb", extended: true }));
   registerStorageProxy(app);
@@ -2184,6 +2632,11 @@ async function startServer() {
       createContext
     })
   );
+  return app;
+}
+async function startServer() {
+  const app = createApp();
+  const server = createServer(app);
   if (process.env.NODE_ENV === "development") {
     await setupVite(app, server);
   } else {
@@ -2198,4 +2651,9 @@ async function startServer() {
     console.log(`Server running on http://localhost:${port}/`);
   });
 }
-startServer().catch(console.error);
+if (!process.env.VERCEL) {
+  startServer().catch(console.error);
+}
+export {
+  createApp
+};

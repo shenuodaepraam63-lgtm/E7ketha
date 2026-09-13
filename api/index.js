@@ -2144,6 +2144,10 @@ async function request(path, init = {}) {
 async function listQuotes(publicOnly = false) {
   return request(`quotes?select=*&${publicOnly ? "status=eq.published&" : ""}order=created_at.desc&limit=200`);
 }
+async function getQuote(id) {
+  const rows = await request(`quotes?id=eq.${id}&status=eq.published&select=*&limit=1`);
+  return rows[0] ?? null;
+}
 async function createQuote(input) {
   return (await request("quotes", { method: "POST", body: JSON.stringify(input) }))[0];
 }
@@ -2315,7 +2319,8 @@ var appRouter = router({
     })
   }),
   quotes: router({
-    list: publicProcedure.query(() => listQuotes(true))
+    list: publicProcedure.query(() => listQuotes(true)),
+    byId: publicProcedure.input(z3.object({ id: z3.number().int().positive() })).query(({ input }) => getQuote(input.id))
   }),
   adminQuotes: router({
     list: adminProcedure.query(() => listQuotes(false)),
@@ -2384,12 +2389,27 @@ async function createContext(opts) {
 }
 
 // server/app.ts
+var SITE_URL = "https://e7ketha.vercel.app";
+function xmlEscape(value) {
+  return String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
+}
 function createApp() {
   const app2 = express();
   app2.use(express.json({ limit: "50mb" }));
   app2.use(express.urlencoded({ limit: "50mb", extended: true }));
   registerStorageProxy(app2);
   registerOAuthRoutes(app2);
+  app2.get("/api/sitemap.xml", async (_req, res) => {
+    try {
+      const [novels2, authors2, quotes] = await Promise.all([listNovels(1e4), listAuthors(), listQuotes(true)]);
+      const urls = ["/", "/explore", "/quotes", ...novels2.map((item) => `/books/${item.slug}`), ...authors2.map((item) => `/authors/${item.slug}`), ...quotes.map((item) => `/quotes/${item.id}`)];
+      const body = urls.map((path) => `<url><loc>${xmlEscape(`${SITE_URL}${path}`)}</loc><changefreq>weekly</changefreq><priority>${path === "/" ? "1.0" : "0.7"}</priority></url>`).join("");
+      res.type("application/xml").set("Cache-Control", "public, max-age=300, s-maxage=300").send(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${body}</urlset>`);
+    } catch (error) {
+      console.error("[SEO] sitemap generation failed", error);
+      res.status(503).type("application/xml").send(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>${SITE_URL}/</loc></url></urlset>`);
+    }
+  });
   app2.use(
     "/api/trpc",
     createExpressMiddleware({

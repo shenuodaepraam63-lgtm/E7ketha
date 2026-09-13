@@ -10,13 +10,13 @@ import DiscoverPage from '@/pages/DiscoverPage';
 import { AuthCallbackPage, AuthPage, PasswordResetPage, ProfilePage, ReadingListPage } from '@/pages/AccountPages';
 import AdminPage from '@/pages/AdminPage';
 import NotFound from '@/pages/NotFound';
-import QuotesPage from '@/pages/QuotesPage';
+import QuotesPage, { QuotePage } from '@/pages/QuotesPage';
 import { AboutPage, ContactPage, FaqPage, HowItWorksPage, PrivacyPage, ReportPage, TermsPage } from '@/pages/InfoPages';
 
 function PublicRoutes({ theme, onThemeToggle }: { theme: 'light' | 'dark'; onThemeToggle: () => void }) {
   return <SiteShell theme={theme} onThemeToggle={onThemeToggle}><Switch>
     <Route path="/" component={Home} /><Route path="/explore" component={ExplorePage} /><Route path="/search" component={SearchPage} />
-    <Route path="/quotes" component={QuotesPage} /><Route path="/books/:slug" component={NovelPage} /><Route path="/novel/:slug" component={NovelPage} /><Route path="/novels/:slug" component={NovelPage} />
+    <Route path="/quotes" component={QuotesPage} /><Route path="/quotes/:id" component={QuotePage} /><Route path="/books/:slug" component={NovelPage} /><Route path="/novel/:slug" component={NovelPage} /><Route path="/novels/:slug" component={NovelPage} />
     <Route path="/authors/:slug" component={AuthorPage} /><Route path="/genres/:slug" component={GenrePage} /><Route path="/series/:slug" component={SeriesPage} />
     <Route path="/discover" component={DiscoverPage} /><Route path="/my-list" component={ReadingListPage} /><Route path="/profile" component={ProfilePage} />
     <Route path="/login"><AuthPage /></Route><Route path="/register"><AuthPage register /></Route><Route path="/auth/callback" component={AuthCallbackPage} /><Route path="/reset-password" component={PasswordResetPage} />

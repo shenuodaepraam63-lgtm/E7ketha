@@ -8,7 +8,7 @@ import { commerceRouter } from './routers/commerce';
 import { confirmSupabaseUserEmail, listSupabaseUsers, toManagedUser, updateSupabaseUserRole } from './_core/supabaseAdmin';
 import { uploadNovelCover } from './cloudinary';
 import { audit, createAd, createNotification, deleteAd, getAdminReports, listActiveAds, listAds, listAuditLogs, listMessagesForUser, listNotifications, listTrash, markNotificationRead, purgeTrash, recordAdEvent, restoreTrash, sendAdminMessage, updateAd } from './management';
-import { createQuote, deleteQuote, improveQuote, listQuotes, updateQuote } from './quotes';
+import { createQuote, deleteQuote, getQuote, improveQuote, listQuotes, updateQuote } from './quotes';
 
 const novelSlugInput = z.object({ slug: z.string().min(1).max(160) });
 const ratingInput = z.object({ slug: z.string().min(1).max(160), rating: z.number().int().min(1).max(5) });
@@ -150,6 +150,7 @@ export const appRouter = router({
   }),
   quotes: router({
     list: publicProcedure.query(() => listQuotes(true)),
+    byId: publicProcedure.input(z.object({ id: z.number().int().positive() })).query(({ input }) => getQuote(input.id)),
   }),
   adminQuotes: router({
     list: adminProcedure.query(() => listQuotes(false)),
