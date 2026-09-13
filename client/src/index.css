@@ -1,0 +1,94 @@
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --background: #f7f8fc;
+  --foreground: #101936;
+  --card: #ffffff;
+  --card-foreground: #101936;
+  --primary: #5b4de8;
+  --primary-foreground: #ffffff;
+  --muted: #eef0f7;
+  --muted-foreground: #71809c;
+  --border: #e5e8f1;
+  --ring: #8d84f3;
+  --radius: 18px;
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.dark {
+  --background: #080d1d;
+  --foreground: #f5f7ff;
+  --card: #10172c;
+  --card-foreground: #f5f7ff;
+  --primary: #8c82ff;
+  --primary-foreground: #090d1f;
+  --muted: #171e36;
+  --muted-foreground: #9da9c6;
+  --border: #202a48;
+  --ring: #a9a4ff;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) - 8px);
+  --radius-md: calc(var(--radius) - 4px);
+  --radius-lg: var(--radius);
+}
+
+@layer base {
+  * { @apply border-border outline-ring/50; }
+  html { scroll-behavior: smooth; }
+  body { @apply bg-background text-foreground; margin: 0; font-family: 'Cairo', sans-serif; }
+  button, a, input, select { font: inherit; }
+  button, a { -webkit-tap-highlight-color: transparent; }
+  ::selection { background: rgba(91, 77, 232, .18); }
+}
+
+@layer components {
+  .container { width: 100%; max-width: 1280px; margin-inline: auto; padding-inline: 20px; }
+  .glass { background: color-mix(in srgb, var(--card) 80%, transparent); backdrop-filter: blur(18px); }
+  .section-label { color: #7369e9; font-size: 12px; letter-spacing: .12em; text-transform: uppercase; font-family: 'DM Mono', monospace; }
+  .interactive { transition: transform 180ms var(--ease-out), box-shadow 180ms var(--ease-out), border-color 180ms var(--ease-out), background-color 180ms var(--ease-out); }
+  .interactive:hover { transform: translateY(-3px); }
+  .interactive:active { transform: scale(.98); }
+  .page-transition { animation: page-enter 380ms var(--ease-out) both; transform-origin: top center; }
+  .novel-card { --pointer-x: 50%; --pointer-y: 50%; --rotate-x: 0deg; --rotate-y: 0deg; transition: transform 280ms var(--ease-out), filter 280ms var(--ease-out); will-change: transform; }
+  .novel-card:hover { transform: perspective(900px) rotateX(var(--rotate-x)) rotateY(var(--rotate-y)) translateY(-7px); filter: drop-shadow(0 20px 22px rgba(38, 36, 104, .12)); }
+  .novel-card__visual { transform: translateZ(0); box-shadow: 0 10px 22px -22px rgba(22, 30, 70, .8); transition: box-shadow 280ms var(--ease-out), border-radius 280ms var(--ease-out); }
+  .novel-card:hover .novel-card__visual { box-shadow: 0 26px 38px -24px rgba(67, 55, 170, .5); border-radius: 22px; }
+  .novel-card__shine { background: radial-gradient(circle at var(--pointer-x) var(--pointer-y), rgba(255,255,255,.26), transparent 30%); mix-blend-mode: screen; }
+  .novel-card button { transition: transform 180ms var(--ease-out), background-color 180ms var(--ease-out), color 180ms var(--ease-out); }
+  .novel-card button:hover { transform: scale(1.1); }
+  .cover-shadow { box-shadow: 0 22px 40px -24px rgba(18, 25, 57, .55); }
+  .dark .cover-shadow { box-shadow: 0 22px 40px -24px rgba(0, 0, 0, .85); }
+  .shimmer { background: linear-gradient(90deg, color-mix(in srgb, var(--muted) 80%, transparent) 25%, color-mix(in srgb, var(--card) 90%, transparent) 50%, color-mix(in srgb, var(--muted) 80%, transparent) 75%); background-size: 200% 100%; animation: shimmer 1.4s infinite; }
+}
+
+@keyframes shimmer { to { background-position: -200% 0; } }
+@keyframes book-loader-turn { 0%, 100% { transform: perspective(260px) rotateY(-24deg); } 50% { transform: perspective(260px) rotateY(24deg); } }
+ .book-loader { animation: book-loader-turn 1.2s ease-in-out infinite; transform-origin: center; }
+@keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes page-enter { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+.animate-rise { animation: rise .55s var(--ease-out) both; }
+
+@media (max-width: 640px) {
+  .container { padding-inline: 16px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: .01ms !important; }
+  .novel-card:hover { transform: none; filter: none; }
+}
