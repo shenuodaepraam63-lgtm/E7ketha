@@ -9,7 +9,7 @@ const anonymousContext: TrpcContext = {
   res: {} as TrpcContext['res'],
 };
 
-describe('database persistence', () => {
+describe.skipIf(!process.env.RUN_INTEGRATION_TESTS)('database persistence', () => {
   it('reads seeded novels from the persistent database', async () => {
     const novel = await getNovelBySlug('ard-zikola');
     expect(novel?.title).toBe('أرض زيكولا');
