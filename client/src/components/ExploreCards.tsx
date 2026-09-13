@@ -4,7 +4,7 @@ import type { Author } from '@/lib/data';
 
 export function AuthorCard({ author }: { author: Author }) {
   return <Link href={`/authors/${author.slug}`} className="interactive group flex min-w-[245px] items-center gap-4 rounded-[20px] border border-border/80 bg-card p-4 shadow-[0_12px_30px_-28px_rgba(20,28,60,.6)]">
-    <img src={author.avatar} alt={`صورة ${author.name}`} className="size-16 rounded-[18px] object-cover grayscale-[.15] transition duration-300 group-hover:grayscale-0" />
+    <img src={author.avatar} alt={`صورة ${author.name}`} width="64" height="64" loading="lazy" decoding="async" className="size-16 rounded-[18px] object-cover grayscale-[.15] transition duration-300 group-hover:grayscale-0" />
     <span className="min-w-0"><strong className="block truncate text-sm font-extrabold">{author.name}</strong><span className="mt-1 block text-xs text-muted-foreground">{author.books} رواية</span><span className="mt-2 block truncate text-[10px] text-[#7067ef]">{author.genres.join(' · ')}</span></span>
     <ChevronLeft size={16} className="mr-auto shrink-0 text-muted-foreground transition-transform group-hover:-translate-x-1" />
   </Link>;
