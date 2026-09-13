@@ -18,7 +18,7 @@ export function createApp() {
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   registerStorageProxy(app);
   registerOAuthRoutes(app);
-  app.get("/api/sitemap.xml", async (_req, res) => {
+  const sitemapHandler = async (_req: express.Request, res: express.Response) => {
     try {
       const [novels, authors, genres, seriesList, quotes] = await Promise.all([listNovels(10000), listAuthors(), listGenres(), listSeries(), listQuotes(true)]);
       const staticPaths = ["/", "/explore", "/search", "/quotes", "/discover", "/about", "/how-it-works", "/faq", "/contact", "/privacy", "/terms"];
@@ -30,7 +30,10 @@ export function createApp() {
       console.error("[SEO] sitemap generation failed", error);
       res.status(503).type("application/xml").send(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>${SITE_URL}/</loc></url></urlset>`);
     }
-  });
+  };
+  app.get("/sitemap.xml", sitemapHandler);
+  app.get("/api/sitemap.xml", sitemapHandler);
+  app.get("/", (req, res, next) => req.query.resource === "sitemap" ? sitemapHandler(req, res) : next());
   app.use(
     "/api/trpc",
     createExpressMiddleware({
