@@ -18,6 +18,26 @@ export default function NovelPage() {
   const query = trpc.novels.bySlug.useQuery({ slug }, { enabled: Boolean(slug) });
   const novel = query.data ? toNovel(query.data) : null;
   useEffect(() => { if (query.data?.id && slug !== String(query.data.id)) navigate(`/books/${query.data.id}`, { replace: true }); }, [navigate, query.data?.id, slug]);
+  useEffect(() => {
+    if (!novel) return;
+    const description = `${novel.title} للكاتب ${novel.author}. ${novel.description || `اكتشف تفاصيل الرواية وتقييم القراء ومعلوماتها على منصة رِواية.`}`.replace(/\s+/g, ' ').trim().slice(0, 160);
+    document.title = `${novel.title} — ${novel.author} | رِواية`;
+    const setMeta = (selector: string, attribute: 'name' | 'property', content: string) => {
+      let element = document.head.querySelector<HTMLMetaElement>(selector);
+      if (!element) { element = document.createElement('meta'); element.setAttribute(attribute, selector.match(/['"]([^'"]+)['"]/)?.[1] ?? ''); document.head.appendChild(element); }
+      element.setAttribute('content', content);
+    };
+    setMeta('meta[name="description"]', 'name', description);
+    setMeta('meta[property="og:title"]', 'property', `${novel.title} — ${novel.author}`);
+    setMeta('meta[property="og:description"]', 'property', description);
+    setMeta('meta[property="og:url"]', 'property', `${window.location.origin}/books/${novel.id}`);
+    setMeta('meta[property="og:image"]', 'property', novel.cover);
+    setMeta('meta[name="twitter:title"]', 'name', `${novel.title} — ${novel.author}`);
+    setMeta('meta[name="twitter:description"]', 'name', description);
+    let canonical = document.head.querySelector<HTMLLinkElement>('link[rel="canonical"]');
+    if (!canonical) { canonical = document.createElement('link'); canonical.rel = 'canonical'; document.head.appendChild(canonical); }
+    canonical.href = `${window.location.origin}/books/${novel.id}`;
+  }, [novel]);
   const utils = trpc.useUtils();
   const listQuery = trpc.readingList.list.useQuery(undefined, { enabled: Boolean(novel) });
   const add = trpc.readingList.add.useMutation({ onSuccess: () => { toast.success('أُضيفت إلى قائمة قراءتك'); void utils.readingList.list.invalidate(); }, onError: () => toast.error('سجّل الدخول أولًا لحفظ الروايات') });
