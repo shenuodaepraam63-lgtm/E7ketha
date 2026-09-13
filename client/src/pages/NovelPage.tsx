@@ -37,6 +37,9 @@ export default function NovelPage() {
     let canonical = document.head.querySelector<HTMLLinkElement>('link[rel="canonical"]');
     if (!canonical) { canonical = document.createElement('link'); canonical.rel = 'canonical'; document.head.appendChild(canonical); }
     canonical.href = `${window.location.origin}/books/${novel.id}`;
+    let jsonLd = document.head.querySelector<HTMLScriptElement>('#book-structured-data');
+    if (!jsonLd) { jsonLd = document.createElement('script'); jsonLd.id = 'book-structured-data'; jsonLd.type = 'application/ld+json'; document.head.appendChild(jsonLd); }
+    jsonLd.textContent = JSON.stringify({ '@context': 'https://schema.org', '@type': 'Book', name: novel.title, author: { '@type': 'Person', name: novel.author, url: `${window.location.origin}/authors/${novel.authorSlug}` }, description, image: novel.cover || undefined, inLanguage: novel.language || 'ar', url: `${window.location.origin}/books/${novel.id}` });
   }, [novel]);
   const utils = trpc.useUtils();
   const listQuery = trpc.readingList.list.useQuery(undefined, { enabled: Boolean(novel) });

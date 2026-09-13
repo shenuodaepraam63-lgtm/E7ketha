@@ -11,6 +11,15 @@ const SITE_URL = "https://e7ketha.vercel.app";
 function xmlEscape(value: unknown) {
   return String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
 }
+function renderUrlset(paths: string[]) {
+  const uniquePaths = Array.from(new Set(paths));
+  const body = uniquePaths.map((urlPath) => `<url><loc>${xmlEscape(`${SITE_URL}${urlPath}`)}</loc><changefreq>${urlPath === "/" ? "daily" : "weekly"}</changefreq><priority>${urlPath === "/" ? "1.0" : "0.7"}</priority></url>`).join("");
+  return `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${body}</urlset>`;
+}
+function renderSitemapIndex() {
+  const files = ["novels", "authors", "genres", "series", "quotes"];
+  return `<?xml version="1.0" encoding="UTF-8"?><sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${files.map((file) => `<sitemap><loc>${SITE_URL}/sitemap/${file}.xml</loc></sitemap>`).join("")}</sitemapindex>`;
+}
 
 export function createApp() {
   const app = express();
@@ -23,15 +32,16 @@ export function createApp() {
       const [novels, authors, genres, seriesList, quotes] = await Promise.all([listNovels(10000), listAuthors(), listGenres(), listSeries(), listQuotes(true)]);
       const staticPaths = ["/", "/explore", "/quotes", "/discover", "/about", "/how-it-works", "/faq", "/contact", "/privacy", "/terms"];
       const urls = [...staticPaths, ...novels.map((item) => `/books/${item.id}`), ...authors.map((item) => `/authors/${item.slug}`), ...genres.map((item) => `/genres/${item.slug}`), ...seriesList.map((item) => `/series/${item.slug}`), ...quotes.map((item) => `/quotes/${item.id}`)];
-      const uniqueUrls = Array.from(new Set(urls));
-      const body = uniqueUrls.map((path) => `<url><loc>${xmlEscape(`${SITE_URL}${path}`)}</loc><changefreq>${path === "/" ? "daily" : "weekly"}</changefreq><priority>${path === "/" ? "1.0" : staticPaths.includes(path) ? "0.8" : "0.7"}</priority></url>`).join("");
-      res.type("application/xml").set("Cache-Control", "public, max-age=0, s-maxage=0, must-revalidate").send(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${body}</urlset>`);
+      const resource = String(_req.query.resource ?? "");
+      const sitemap = resource === "index" || resource === "sitemap" ? renderSitemapIndex() : resource === "novels" ? renderUrlset(novels.map((item) => `/books/${item.id}`)) : resource === "authors" ? renderUrlset(authors.map((item) => `/authors/${item.slug}`)) : resource === "genres" ? renderUrlset(genres.map((item) => `/genres/${item.slug}`)) : resource === "series" ? renderUrlset(seriesList.map((item) => `/series/${item.slug}`)) : resource === "quotes" ? renderUrlset(quotes.map((item) => `/quotes/${item.id}`)) : renderUrlset(urls);
+      res.type("application/xml").set("Cache-Control", "public, max-age=0, s-maxage=0, must-revalidate").send(sitemap);
     } catch (error) {
       console.error("[SEO] sitemap generation failed", error);
       res.status(503).type("application/xml").send(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>${SITE_URL}/</loc></url></urlset>`);
     }
   };
   app.get("/sitemap.xml", sitemapHandler);
+  app.get("/sitemap/:type.xml", (req, res) => { req.query.resource = req.params.type; return sitemapHandler(req, res); });
   app.get("/api/sitemap.xml", sitemapHandler);
   app.get("/", (req, res, next) => req.query.resource === "sitemap" ? sitemapHandler(req, res) : next());
   app.use(

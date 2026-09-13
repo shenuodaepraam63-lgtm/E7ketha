@@ -1,5 +1,5 @@
 import { ArrowUpLeft, BookOpen, Check, ChevronLeft, Layers3, Plus, Users } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useRoute } from 'wouter';
 import { AuthorCard, GenreCard, InfoChip, SectionHeading, BookStat } from '@/components/ExploreCards';
 import { NovelCard } from '@/components/NovelCard';
@@ -9,12 +9,27 @@ import { toast } from 'sonner';
 import { trpc } from '@/lib/trpc';
 import { BookLoader } from '@/components/BookLoader';
 
+function setProfileSeo(title: string, description: string, type: string, name: string, path: string) {
+  document.title = title;
+  const url = `${window.location.origin}${path}`;
+  const setMeta = (selector: string, attribute: 'name' | 'property', content: string) => {
+    let element = document.head.querySelector<HTMLMetaElement>(selector);
+    if (!element) { element = document.createElement('meta'); element.setAttribute(attribute, selector.match(/["']([^"']+)["']/)?.[1] ?? ''); document.head.appendChild(element); }
+    element.content = content.slice(0, 160);
+  };
+  setMeta('meta[name="description"]', 'name', description); setMeta('meta[property="og:title"]', 'property', title); setMeta('meta[property="og:description"]', 'property', description); setMeta('meta[property="og:url"]', 'property', url);
+  let canonical = document.head.querySelector<HTMLLinkElement>('link[rel="canonical"]'); if (!canonical) { canonical = document.createElement('link'); canonical.rel = 'canonical'; document.head.appendChild(canonical); } canonical.href = url;
+  let jsonLd = document.head.querySelector<HTMLScriptElement>('#page-structured-data'); if (!jsonLd) { jsonLd = document.createElement('script'); jsonLd.id = 'page-structured-data'; jsonLd.type = 'application/ld+json'; document.head.appendChild(jsonLd); } jsonLd.textContent = JSON.stringify({ '@context': 'https://schema.org', '@type': type, name, url, description });
+}
+
 export function AuthorPage() {
   const [, params] = useRoute('/authors/:slug'); const slug = params?.slug ?? '';
   const authorQuery = trpc.authors.bySlug.useQuery({ slug }, { enabled: Boolean(slug) });
   const novelsQuery = trpc.novels.search.useQuery({ authorSlug: slug, sort: 'popular', limit: 50 }, { enabled: Boolean(slug) });
   const authorsQuery = trpc.authors.list.useQuery(); const [following, setFollowing] = useState(false);
-  if (authorQuery.isLoading) return <Loading />; const author = authorQuery.data ? toAuthor(authorQuery.data) : null;
+  const author = authorQuery.data ? toAuthor(authorQuery.data) : null;
+  useEffect(() => { if (author) setProfileSeo(`${author.name} — المؤلف وأعماله | رِواية`, `${author.name} مؤلف عربي. تعرّف على نبذته وجميع رواياته وأعماله المنشورة على منصة رِواية.`, 'Person', author.name, `/authors/${slug}`); }, [author, slug]);
+  if (authorQuery.isLoading) return <Loading />;
   if (!author) return <NotFound label="المؤلف غير موجود" />; const authorNovels = (novelsQuery.data ?? []).map(toNovel);
   return <div className="container py-10 md:py-16"><Breadcrumbs items={['المؤلفون', author.name]} /><section className="relative overflow-hidden rounded-[28px] bg-[#11183a] p-6 text-white md:p-10"><div className="relative flex flex-col gap-7 md:flex-row md:items-center"><img src={author.avatar || coverFallback} alt={`صورة ${author.name}`} className="size-28 rounded-[26px] object-cover md:size-36" /><div><div className="mb-2 text-[11px] font-bold text-[#aaa4ff]">مؤلف يستحق الاكتشاف</div><h1 className="text-3xl font-extrabold md:text-5xl">{author.name}</h1><p className="mt-2 text-sm text-white/55">{author.bio || 'لا توجد نبذة منشورة بعد.'}</p></div><button onClick={() => { setFollowing(!following); toast.success(following ? 'أُزيلت المتابعة' : 'ستصلك أعماله الجديدة'); }} className="md:mr-auto inline-flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-3 text-xs font-extrabold text-[#11183a]">{following ? <Check size={15} /> : <Plus size={15} />}{following ? 'تتابعه' : 'تابع المؤلف'}</button></div></section><div className="mt-10 grid gap-8 lg:grid-cols-[1fr_280px]"><div><section><h2 className="mb-3 text-xl font-extrabold">نبذة عن المؤلف</h2><p className="max-w-2xl text-sm leading-8 text-muted-foreground">{author.bio || 'سيتم تحديث النبذة من لوحة الإدارة.'}</p></section><section className="mt-12"><SectionHeading title="جميع أعماله" subtitle="الأعمال المنشورة في قاعدة بيانات رِواية" /><div className="grid grid-cols-2 gap-5 sm:grid-cols-3">{authorNovels.map((novel) => <NovelCard key={novel.id} novel={novel} />)}</div>{!authorNovels.length && <EmptyState title="لا توجد روايات بعد" description="لم تُربط روايات بهذا المؤلف بعد." />}</section></div><aside className="space-y-3"><BookStat label="عدد الروايات" value={`${author.books}`} icon={<BookOpen size={14} />} /><BookStat label="المؤلفون المتاحون" value={`${authorsQuery.data?.length ?? 0}`} icon={<Users size={14} />} /></aside></div></div>;
 }
