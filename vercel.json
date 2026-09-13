@@ -4,12 +4,18 @@
   "outputDirectory": "dist/public",
   "framework": "vite",
   "functions": {
-    "api/index.ts": {
+    "api/index.js": {
       "includeFiles": "dist/public/**"
     }
   },
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api" },
-    { "source": "/(.*)", "destination": "/index.html" }
+    {
+      "source": "/api/(.*)",
+      "destination": "/api"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
   ]
 }
