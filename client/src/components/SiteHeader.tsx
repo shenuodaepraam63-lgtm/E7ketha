@@ -37,6 +37,6 @@ export function SiteHeader({ theme, onThemeToggle }: { theme: 'light' | 'dark'; 
 
 export function MobileBottomNav() {
   const [location] = useLocation();
-  const items = [{ href: '/', label: 'الرئيسية', icon: '⌂' }, { href: '/explore', label: 'استكشف', icon: '✦' }, { href: '/search', label: 'بحث', icon: '⌕' }, { href: '/quotes', label: 'اقتباسات', icon: '❝' }, { href: '/my-list', label: 'المحفوظات', icon: '♡' }, { href: '/profile', label: 'حسابي', icon: '◯' }];
+  const items = [{ href: '/', label: 'الرئيسية', icon: '⌂' }, { href: '/explore', label: 'استكشف', icon: '✦' }, { href: '/search', label: 'بحث', icon: '⌕' }, { href: '/quotes', label: 'اقتباسات', icon: '❝' }, { href: '/profile', label: 'حسابي', icon: '◯' }];
   return <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-border bg-background/95 px-1 pb-[max(7px,env(safe-area-inset-bottom))] pt-2 backdrop-blur-xl md:hidden">{items.map((item) => <Link key={item.href} href={item.href} className={`flex flex-col items-center gap-1 rounded-lg py-1 text-[10px] font-semibold ${location === item.href ? 'text-[#675de8]' : 'text-muted-foreground'}`}><span className="text-lg leading-5">{item.icon}</span>{item.label}</Link>)}</nav>;
 }
