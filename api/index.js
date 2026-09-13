@@ -1911,6 +1911,260 @@ async function uploadNovelCover(dataUrl, filename) {
   return { url: result.secure_url, publicId: result.public_id ?? publicId };
 }
 
+// server/_core/llm.ts
+var ensureArray = (value) => Array.isArray(value) ? value : [value];
+var normalizeContentPart = (part) => {
+  if (typeof part === "string") {
+    return { type: "text", text: part };
+  }
+  if (part.type === "text") {
+    return part;
+  }
+  if (part.type === "image_url") {
+    return part;
+  }
+  if (part.type === "file_url") {
+    return part;
+  }
+  throw new Error("Unsupported message content part");
+};
+var normalizeMessage = (message) => {
+  const { role, name, tool_call_id } = message;
+  if (role === "tool" || role === "function") {
+    const content = ensureArray(message.content).map((part) => typeof part === "string" ? part : JSON.stringify(part)).join("\n");
+    return {
+      role,
+      name,
+      tool_call_id,
+      content
+    };
+  }
+  const contentParts = ensureArray(message.content).map(normalizeContentPart);
+  if (contentParts.length === 1 && contentParts[0].type === "text") {
+    return {
+      role,
+      name,
+      content: contentParts[0].text
+    };
+  }
+  return {
+    role,
+    name,
+    content: contentParts
+  };
+};
+var normalizeToolChoice = (toolChoice, tools) => {
+  if (!toolChoice) return void 0;
+  if (toolChoice === "none" || toolChoice === "auto") {
+    return toolChoice;
+  }
+  if (toolChoice === "required") {
+    if (!tools || tools.length === 0) {
+      throw new Error(
+        "tool_choice 'required' was provided but no tools were configured"
+      );
+    }
+    if (tools.length > 1) {
+      throw new Error(
+        "tool_choice 'required' needs a single tool or specify the tool name explicitly"
+      );
+    }
+    return {
+      type: "function",
+      function: { name: tools[0].function.name }
+    };
+  }
+  if ("name" in toolChoice) {
+    return {
+      type: "function",
+      function: { name: toolChoice.name }
+    };
+  }
+  return toolChoice;
+};
+var resolveApiUrl = () => ENV.forgeApiUrl && ENV.forgeApiUrl.trim().length > 0 ? `${ENV.forgeApiUrl.replace(/\/$/, "")}/v1/chat/completions` : "https://forge.manus.im/v1/chat/completions";
+var assertApiKey = () => {
+  if (!ENV.forgeApiKey) {
+    throw new Error("OPENAI_API_KEY is not configured");
+  }
+};
+var normalizeResponseFormat = ({
+  responseFormat,
+  response_format,
+  outputSchema,
+  output_schema
+}) => {
+  const explicitFormat = responseFormat || response_format;
+  if (explicitFormat) {
+    if (explicitFormat.type === "json_schema" && !explicitFormat.json_schema?.schema) {
+      throw new Error(
+        "responseFormat json_schema requires a defined schema object"
+      );
+    }
+    return explicitFormat;
+  }
+  const schema = outputSchema || output_schema;
+  if (!schema) return void 0;
+  if (!schema.name || !schema.schema) {
+    throw new Error("outputSchema requires both name and schema");
+  }
+  return {
+    type: "json_schema",
+    json_schema: {
+      name: schema.name,
+      schema: schema.schema,
+      ...typeof schema.strict === "boolean" ? { strict: schema.strict } : {}
+    }
+  };
+};
+var RETRY_MAX_RETRIES = 4;
+var RETRY_BASE_DELAY_MS = 500;
+var RETRY_MAX_DELAY_MS = 3e4;
+var sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+var parseRetryAfter = (value) => {
+  if (!value) return void 0;
+  const seconds = Number(value);
+  if (Number.isFinite(seconds)) return Math.max(0, seconds * 1e3);
+  const at = Date.parse(value);
+  return Number.isNaN(at) ? void 0 : Math.max(0, at - Date.now());
+};
+var computeBackoffDelay = (attempt, retryAfterMs) => {
+  const cap = Math.min(RETRY_BASE_DELAY_MS * 2 ** attempt, RETRY_MAX_DELAY_MS);
+  const jittered = cap / 2 + Math.random() * (cap / 2);
+  return Math.min(Math.max(jittered, retryAfterMs ?? 0), RETRY_MAX_DELAY_MS);
+};
+var fetchWithBackoff = async (url, init) => {
+  let lastError;
+  for (let attempt = 0; attempt <= RETRY_MAX_RETRIES; attempt++) {
+    try {
+      const response = await fetch(url, init);
+      if (response.ok || attempt === RETRY_MAX_RETRIES) {
+        return response;
+      }
+      const retryAfterMs = parseRetryAfter(
+        response.headers.get("retry-after")
+      );
+      try {
+        await response.body?.cancel();
+      } catch {
+      }
+      console.warn(
+        `LLM request retry ${attempt + 1}/${RETRY_MAX_RETRIES} after status ${response.status}`
+      );
+      await sleep(computeBackoffDelay(attempt, retryAfterMs));
+    } catch (error) {
+      lastError = error;
+      if (attempt === RETRY_MAX_RETRIES) throw error;
+      console.warn(
+        `LLM request retry ${attempt + 1}/${RETRY_MAX_RETRIES} after network error`
+      );
+      await sleep(computeBackoffDelay(attempt));
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("LLM request failed after exhausting retries");
+};
+async function invokeLLM(params) {
+  assertApiKey();
+  const {
+    messages,
+    tools,
+    toolChoice,
+    tool_choice,
+    outputSchema,
+    output_schema,
+    responseFormat,
+    response_format,
+    model,
+    thinking,
+    reasoning,
+    maxTokens,
+    max_tokens
+  } = params;
+  const payload = {
+    messages: messages.map(normalizeMessage)
+  };
+  if (model) {
+    payload.model = model;
+  }
+  if (tools && tools.length > 0) {
+    payload.tools = tools;
+  }
+  const normalizedToolChoice = normalizeToolChoice(
+    toolChoice || tool_choice,
+    tools
+  );
+  if (normalizedToolChoice) {
+    payload.tool_choice = normalizedToolChoice;
+  }
+  const resolvedMaxTokens = max_tokens ?? maxTokens;
+  if (typeof resolvedMaxTokens === "number") {
+    payload.max_tokens = resolvedMaxTokens;
+  }
+  if (thinking) {
+    payload.thinking = thinking;
+  }
+  if (reasoning) {
+    payload.reasoning = reasoning;
+  }
+  const normalizedResponseFormat = normalizeResponseFormat({
+    responseFormat,
+    response_format,
+    outputSchema,
+    output_schema
+  });
+  if (normalizedResponseFormat) {
+    payload.response_format = normalizedResponseFormat;
+  }
+  const response = await fetchWithBackoff(resolveApiUrl(), {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${ENV.forgeApiKey}`
+    },
+    body: JSON.stringify(payload)
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(
+      `LLM invoke failed: ${response.status} ${response.statusText} \u2013 ${errorText}`
+    );
+  }
+  return await response.json();
+}
+
+// server/quotes.ts
+async function request(path, init = {}) {
+  if (!ENV.supabaseUrl || !ENV.supabaseSecretKey) throw new Error("Supabase admin REST is not configured");
+  const response = await fetch(`${ENV.supabaseUrl}/rest/v1/${path}`, { ...init, headers: { apikey: ENV.supabaseSecretKey, Authorization: `Bearer ${ENV.supabaseSecretKey}`, "Content-Type": "application/json", Prefer: "return=representation", ...init.headers ?? {} } });
+  if (!response.ok) throw new Error(`Quotes API ${response.status}: ${await response.text()}`);
+  const text2 = await response.text();
+  return text2 ? JSON.parse(text2) : [];
+}
+async function listQuotes(publicOnly = false) {
+  return request(`quotes?select=*&${publicOnly ? "status=eq.published&" : ""}order=created_at.desc&limit=200`);
+}
+async function createQuote(input) {
+  return (await request("quotes", { method: "POST", body: JSON.stringify(input) }))[0];
+}
+async function updateQuote(id, input) {
+  return (await request(`quotes?id=eq.${id}`, { method: "PATCH", body: JSON.stringify({ ...input, updated_at: (/* @__PURE__ */ new Date()).toISOString() }) }))[0];
+}
+async function deleteQuote(id) {
+  await request(`quotes?id=eq.${id}`, { method: "DELETE" });
+  return { success: true };
+}
+async function improveQuote(input) {
+  const result = await invokeLLM({ model: "gpt-5-mini", maxTokens: 500, messages: [
+    { role: "system", content: "\u0623\u0646\u062A \u0645\u062D\u0631\u0631 \u0645\u062D\u062A\u0648\u0649 \u0639\u0631\u0628\u064A. \u0633\u0627\u0639\u062F \u0645\u062F\u064A\u0631 \u0645\u0646\u0635\u0629 \u0631\u0648\u0627\u064A\u0627\u062A \u0639\u0644\u0649 \u062A\u062C\u0647\u064A\u0632 \u0627\u0642\u062A\u0628\u0627\u0633 \u0644\u0644\u0646\u0634\u0631. \u0644\u0627 \u062A\u0646\u0633\u0628 \u0642\u0648\u0644\u064B\u0627 \u0644\u0634\u062E\u0635 \u0623\u0648 \u0643\u062A\u0627\u0628 \u062F\u0648\u0646 \u062F\u0644\u064A\u0644\u061B \u0625\u0630\u0627 \u0644\u0645 \u064A\u0630\u0643\u0631 \u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645 \u0627\u0644\u0645\u0635\u062F\u0631 \u0627\u062A\u0631\u0643\u0647 \u0641\u0627\u0631\u063A\u064B\u0627. \u0623\u062E\u0631\u062C JSON \u0641\u0642\u0637." },
+    { role: "user", content: `\u062D\u0633\u0651\u0646 \u0647\u0630\u0627 \u0627\u0644\u0627\u0642\u062A\u0628\u0627\u0633 \u062F\u0648\u0646 \u062A\u063A\u064A\u064A\u0631 \u0645\u0639\u0646\u0627\u0647\u060C \u0648\u0627\u0642\u062A\u0631\u062D \u062A\u0635\u0646\u064A\u0641\u064B\u0627 \u0645\u0646\u0627\u0633\u0628\u064B\u0627. \u0627\u0644\u0646\u0635: ${input.quote}
+\u0627\u0644\u0642\u0627\u0626\u0644 \u0625\u0646 \u0648\u062C\u062F: ${input.speaker ?? ""}
+\u0627\u0644\u0643\u062A\u0627\u0628 \u0625\u0646 \u0648\u062C\u062F: ${input.book ?? ""}` }
+  ], responseFormat: { type: "json_schema", json_schema: { name: "quote_editor", strict: true, schema: { type: "object", properties: { quote: { type: "string" }, speaker: { type: "string" }, book: { type: "string" }, category: { type: "string" }, note: { type: "string" } }, required: ["quote", "speaker", "book", "category", "note"], additionalProperties: false } } } });
+  const content = result.choices[0]?.message.content;
+  if (!content || typeof content !== "string") throw new Error("\u0644\u0645 \u062A\u064F\u0631\u062C\u0639 \u062E\u062F\u0645\u0629 AI \u0646\u062A\u064A\u062C\u0629 \u0635\u0627\u0644\u062D\u0629");
+  return JSON.parse(content);
+}
+
 // server/routers.ts
 var novelSlugInput = z3.object({ slug: z3.string().min(1).max(160) });
 var ratingInput = z3.object({ slug: z3.string().min(1).max(160), rating: z3.number().int().min(1).max(5) });
@@ -2048,6 +2302,16 @@ var appRouter = router({
       update: adminProcedure.input(z3.object({ id: z3.number().int().positive(), data: z3.object({ title: z3.string().min(1).max(255).optional(), body: z3.string().max(5e3).optional(), imageUrl: z3.string().url().optional(), linkUrl: z3.string().url().optional(), placement: z3.string().max(80).optional(), status: z3.enum(["draft", "published", "paused"]).optional(), startAt: z3.string().optional(), endAt: z3.string().optional() }) })).mutation(({ ctx, input }) => updateAd(input.id, input.data, ctx.user)),
       delete: adminProcedure.input(z3.object({ id: z3.number().int().positive() })).mutation(({ ctx, input }) => deleteAd(input.id, ctx.user))
     })
+  }),
+  quotes: router({
+    list: publicProcedure.query(() => listQuotes(true))
+  }),
+  adminQuotes: router({
+    list: adminProcedure.query(() => listQuotes(false)),
+    create: adminProcedure.input(z3.object({ quote_text: z3.string().min(3).max(2e3), speaker: z3.string().max(255).nullable().optional(), book_title: z3.string().max(255).nullable().optional(), novel_id: z3.number().int().positive().nullable().optional(), category: z3.string().max(80).nullable().optional(), status: z3.enum(["draft", "published"]) })).mutation(({ input }) => createQuote({ ...input, speaker: input.speaker ?? null, book_title: input.book_title ?? null, novel_id: input.novel_id ?? null, category: input.category ?? null })),
+    update: adminProcedure.input(z3.object({ id: z3.number().int().positive(), data: z3.object({ quote_text: z3.string().min(3).max(2e3).optional(), speaker: z3.string().max(255).nullable().optional(), book_title: z3.string().max(255).nullable().optional(), novel_id: z3.number().int().positive().nullable().optional(), category: z3.string().max(80).nullable().optional(), status: z3.enum(["draft", "published"]).optional() }) })).mutation(({ input }) => updateQuote(input.id, input.data)),
+    delete: adminProcedure.input(z3.object({ id: z3.number().int().positive() })).mutation(({ input }) => deleteQuote(input.id)),
+    improve: adminProcedure.input(z3.object({ quote: z3.string().min(3).max(2e3), speaker: z3.string().max(255).optional(), book: z3.string().max(255).optional() })).mutation(({ input }) => improveQuote(input))
   })
 });
 
