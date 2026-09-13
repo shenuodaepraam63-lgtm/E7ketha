@@ -216,6 +216,36 @@ async function supabaseRest(table, params) {
   if (!response.ok) throw new Error(`Supabase REST ${response.status}: ${await response.text()}`);
   return response.json();
 }
+async function supabaseCount(table, filter = "") {
+  if (!ENV.supabaseUrl || !ENV.supabasePublishableKey) throw new Error("Supabase REST is not configured");
+  const response = await fetch(`${ENV.supabaseUrl}/rest/v1/${table}?select=id${filter ? `&${filter}` : ""}`, {
+    method: "HEAD",
+    headers: {
+      apikey: ENV.supabaseSecretKey || ENV.supabasePublishableKey,
+      Authorization: `Bearer ${ENV.supabaseSecretKey || ENV.supabasePublishableKey}`,
+      Prefer: "count=exact"
+    }
+  });
+  if (!response.ok) throw new Error(`Supabase REST ${response.status}`);
+  const range = response.headers.get("content-range") ?? "*/0";
+  return Number(range.split("/")[1] || 0);
+}
+async function supabaseWrite(table, method, body, filter = "") {
+  if (!ENV.supabaseUrl || !ENV.supabaseSecretKey) throw new Error("Supabase admin REST is not configured");
+  const response = await fetch(`${ENV.supabaseUrl}/rest/v1/${table}${filter ? `?${filter}` : ""}`, {
+    method,
+    headers: {
+      apikey: ENV.supabaseSecretKey,
+      Authorization: `Bearer ${ENV.supabaseSecretKey}`,
+      "Content-Type": "application/json",
+      Prefer: "return=representation,resolution=merge-duplicates"
+    },
+    body: body === void 0 ? void 0 : JSON.stringify(body)
+  });
+  if (!response.ok) throw new Error(`Supabase REST ${response.status}: ${await response.text()}`);
+  const text2 = await response.text();
+  return text2 ? JSON.parse(text2) : [];
+}
 async function getNovelBySlugFromRest(slug) {
   const decoded = decodeURIComponent(slug).trim();
   const candidates = Array.from(/* @__PURE__ */ new Set([slug, decoded, normalizeNovelSlug(decoded)])).filter(Boolean);
@@ -268,16 +298,19 @@ async function getUserByOpenId(openId) {
   return result[0];
 }
 async function listUsers() {
-  const db = await requireDb();
+  const db = await getDb();
+  if (!db) return [];
   return db.select({ openId: users.openId, role: users.role }).from(users);
 }
 async function updateUserRole(openId, role) {
-  const db = await requireDb();
+  const db = await getDb();
+  if (!db) return null;
   const [row] = await db.update(users).set({ role, updatedAt: /* @__PURE__ */ new Date() }).where(eq(users.openId, openId)).returning();
   return row ?? null;
 }
 async function listNovels(limit = 50) {
-  const db = await requireDb();
+  const db = await getDb();
+  if (!db) return listNovelsFromRest(limit);
   try {
     const rows = await db.select({
       id: novels.id,
@@ -300,7 +333,17 @@ async function listNovels(limit = 50) {
   }
 }
 async function searchNovels(filters = {}) {
-  const db = await requireDb();
+  const db = await getDb();
+  if (!db) {
+    const limit2 = Math.min(Math.max(filters.limit ?? 50, 1), 100);
+    const query3 = filters.q?.trim();
+    const params = new URLSearchParams({ select: "*", limit: String(limit2) });
+    if (filters.status) params.set("status", `eq.${filters.status}`);
+    if (filters.minRating) params.set("rating", `gte.${Math.round(filters.minRating * 100)}`);
+    if (query3) params.set("or", `(title.ilike.*${query3}*,description.ilike.*${query3}*)`);
+    const rows = await supabaseRest("novels", params.toString());
+    return rows.map((row) => ({ ...row, slug: normalizeNovelSlug(row.slug, row.title), author: "", authorSlug: "" }));
+  }
   const conditions = [];
   const query2 = filters.q?.trim();
   if (query2) {
@@ -333,7 +376,14 @@ async function searchNovels(filters = {}) {
   return db.select(selection).from(novels).innerJoin(authors, eq(novels.authorId, authors.id)).where(conditions.length ? and(...conditions) : void 0).orderBy(order).limit(limit);
 }
 async function getSearchFacets() {
-  const db = await requireDb();
+  const db = await getDb();
+  if (!db) {
+    const [genreRows2, authorRows2] = await Promise.all([
+      supabaseRest("genres", "select=slug,name&order=name.asc&limit=1000"),
+      supabaseRest("authors", "select=slug,name&order=name.asc&limit=1000")
+    ]);
+    return { genres: genreRows2, authors: authorRows2 };
+  }
   const [genreRows, authorRows] = await Promise.all([
     db.select({ slug: genres.slug, name: genres.name }).from(genres).orderBy(asc(genres.name)),
     db.select({ slug: authors.slug, name: authors.name }).from(authors).orderBy(asc(authors.name))
@@ -341,7 +391,8 @@ async function getSearchFacets() {
   return { genres: genreRows, authors: authorRows };
 }
 async function listAuthors() {
-  const db = await requireDb();
+  const db = await getDb();
+  if (!db) return supabaseRest("authors", "select=*&order=name.asc&limit=1000");
   return db.select().from(authors).orderBy(asc(authors.name));
 }
 async function getAuthorBySlug(slug) {
@@ -350,7 +401,8 @@ async function getAuthorBySlug(slug) {
   return result[0] ?? null;
 }
 async function listGenres() {
-  const db = await requireDb();
+  const db = await getDb();
+  if (!db) return supabaseRest("genres", "select=*&order=name.asc&limit=1000");
   return db.select({ id: genres.id, slug: genres.slug, name: genres.name, description: genres.description, icon: genres.icon, novelCount: sql`COUNT(DISTINCT ${novelGenres.novelId})` }).from(genres).leftJoin(novelGenres, eq(novelGenres.genreId, genres.id)).groupBy(genres.id).orderBy(asc(genres.name));
 }
 async function getGenreBySlug(slug) {
@@ -359,7 +411,8 @@ async function getGenreBySlug(slug) {
   return result[0] ?? null;
 }
 async function listSeries() {
-  const db = await requireDb();
+  const db = await getDb();
+  if (!db) return supabaseRest("series", "select=*&order=title.asc&limit=1000");
   return db.select({ id: series.id, slug: series.slug, title: series.title, description: series.description, status: series.status, parts: sql`COUNT(DISTINCT ${seriesBooks.novelId})`, coverUrl: sql`MIN(${novels.coverUrl})` }).from(series).leftJoin(seriesBooks, eq(seriesBooks.seriesId, series.id)).leftJoin(novels, eq(seriesBooks.novelId, novels.id)).groupBy(series.id).orderBy(asc(series.title));
 }
 async function getSeriesBySlug(slug) {
@@ -450,7 +503,16 @@ async function getMyRating(userId, novelId) {
   return result[0]?.rating ?? null;
 }
 async function getAdminSummary() {
-  const db = await requireDb();
+  const db = await getDb();
+  if (!db) {
+    const [novelsCount, authorsCount, seriesCount, reviewsCount] = await Promise.all([
+      supabaseCount("novels"),
+      supabaseCount("authors"),
+      supabaseCount("series"),
+      supabaseCount("reviews", "status=eq.pending")
+    ]);
+    return { novels: novelsCount, authors: authorsCount, sources: seriesCount, needsReview: reviewsCount };
+  }
   const [novelCount, authorCount, sourceCount, reviewCount] = await Promise.all([
     db.select({ count: sql`COUNT(*)` }).from(novels),
     db.select({ count: sql`COUNT(*)` }).from(authors),
@@ -460,46 +522,67 @@ async function getAdminSummary() {
   return { novels: Number(novelCount[0]?.count ?? 0), authors: Number(authorCount[0]?.count ?? 0), sources: Number(sourceCount[0]?.count ?? 0), needsReview: Number(reviewCount[0]?.count ?? 0) };
 }
 async function listAdminNovels() {
-  const db = await requireDb();
+  const db = await getDb();
+  if (!db) {
+    const rows = await supabaseRest("novels", "select=*&order=updatedAt.desc&limit=1000");
+    return rows;
+  }
   return db.select({ id: novels.id, slug: novels.slug, title: novels.title, authorId: authors.id, author: authors.name, coverUrl: novels.coverUrl, description: novels.description, rating: novels.rating, ratingCount: novels.ratingCount, parts: novels.parts, status: novels.status, publicationYear: novels.publicationYear, language: novels.language, updatedAt: novels.updatedAt }).from(novels).innerJoin(authors, eq(novels.authorId, authors.id)).orderBy(desc(novels.updatedAt));
 }
 async function listAdminAuthors() {
-  const db = await requireDb();
+  const db = await getDb();
+  if (!db) return supabaseRest("authors", "select=*&order=name.asc&limit=1000");
   return db.select().from(authors).orderBy(asc(authors.name));
 }
 async function listAdminGenres() {
-  const db = await requireDb();
+  const db = await getDb();
+  if (!db) return supabaseRest("genres", "select=*&order=name.asc&limit=1000");
   return db.select({ id: genres.id, slug: genres.slug, name: genres.name, description: genres.description, icon: genres.icon, createdAt: genres.createdAt, novelCount: sql`COUNT(DISTINCT ${novelGenres.novelId})` }).from(genres).leftJoin(novelGenres, eq(novelGenres.genreId, genres.id)).groupBy(genres.id).orderBy(asc(genres.name));
 }
 async function createAuthor(input) {
-  const db = await requireDb();
+  const db = await getDb();
+  if (!db) return (await supabaseWrite("authors", "POST", { ...input, bio: input.bio || null, avatarUrl: input.avatarUrl || null, bookCount: input.bookCount ?? 0 }))[0];
   const [row] = await db.insert(authors).values({ ...input, bio: input.bio || null, avatarUrl: input.avatarUrl || null, bookCount: input.bookCount ?? 0 }).returning();
   return row;
 }
 async function updateAuthor(id, input) {
-  const db = await requireDb();
+  const db = await getDb();
+  if (!db) return (await supabaseWrite("authors", "PATCH", { ...input, updatedAt: (/* @__PURE__ */ new Date()).toISOString() }, `id=eq.${id}`))[0] ?? null;
   const [row] = await db.update(authors).set({ ...input, updatedAt: /* @__PURE__ */ new Date() }).where(eq(authors.id, id)).returning();
   return row ?? null;
 }
 async function deleteAuthor(id) {
-  const db = await requireDb();
+  const db = await getDb();
+  if (!db) {
+    const linked2 = await supabaseRest("novels", `select=id&authorId=eq.${id}&limit=1`);
+    if (linked2.length) throw new Error("\u0644\u0627 \u064A\u0645\u0643\u0646 \u062D\u0630\u0641 \u0645\u0624\u0644\u0641 \u0645\u0631\u062A\u0628\u0637 \u0628\u0631\u0648\u0627\u064A\u0627\u062A. \u0627\u0646\u0642\u0644 \u0627\u0644\u0631\u0648\u0627\u064A\u0627\u062A \u0625\u0644\u0649 \u0645\u0624\u0644\u0641 \u0622\u062E\u0631 \u0623\u0648\u0644\u064B\u0627.");
+    await supabaseWrite("authors", "DELETE", void 0, `id=eq.${id}`);
+    return { success: true };
+  }
   const linked = await db.select({ id: novels.id }).from(novels).where(eq(novels.authorId, id)).limit(1);
   if (linked.length) throw new Error("\u0644\u0627 \u064A\u0645\u0643\u0646 \u062D\u0630\u0641 \u0645\u0624\u0644\u0641 \u0645\u0631\u062A\u0628\u0637 \u0628\u0631\u0648\u0627\u064A\u0627\u062A. \u0627\u0646\u0642\u0644 \u0627\u0644\u0631\u0648\u0627\u064A\u0627\u062A \u0625\u0644\u0649 \u0645\u0624\u0644\u0641 \u0622\u062E\u0631 \u0623\u0648\u0644\u064B\u0627.");
   await db.delete(authors).where(eq(authors.id, id));
   return { success: true };
 }
 async function createGenre(input) {
-  const db = await requireDb();
+  const db = await getDb();
+  if (!db) return (await supabaseWrite("genres", "POST", { ...input, description: input.description || null, icon: input.icon || "\u2726" }))[0];
   const [row] = await db.insert(genres).values({ ...input, description: input.description || null, icon: input.icon || "\u2726" }).returning();
   return row;
 }
 async function updateGenre(id, input) {
-  const db = await requireDb();
+  const db = await getDb();
+  if (!db) return (await supabaseWrite("genres", "PATCH", input, `id=eq.${id}`))[0] ?? null;
   const [row] = await db.update(genres).set(input).where(eq(genres.id, id)).returning();
   return row ?? null;
 }
 async function deleteGenre(id) {
-  const db = await requireDb();
+  const db = await getDb();
+  if (!db) {
+    await supabaseWrite("novelGenres", "DELETE", void 0, `genreId=eq.${id}`);
+    await supabaseWrite("genres", "DELETE", void 0, `id=eq.${id}`);
+    return { success: true };
+  }
   await db.delete(novelGenres).where(eq(novelGenres.genreId, id));
   await db.delete(genres).where(eq(genres.id, id));
   return { success: true };
@@ -510,15 +593,30 @@ function normalizeNovelSlug(value, fallbackTitle) {
   return trimmed.replace(/^\/+|\/+$/g, "").replace(/\s+/g, "-").replace(/[?#%]/g, "").slice(0, 160) || normalizeNovelSlug(fallbackTitle || "novel");
 }
 async function createNovel(input) {
-  const db = await requireDb();
+  const db = await getDb();
   const { genreIds = [], ...novelInput } = input;
+  if (!db) {
+    const rows = await supabaseWrite("novels", "POST", { ...novelInput, slug: normalizeNovelSlug(input.slug || input.title), coverUrl: input.coverUrl || null, description: input.description || null });
+    const row2 = rows[0];
+    if (genreIds.length) await supabaseWrite("novelGenres", "POST", genreIds.map((genreId) => ({ novelId: row2.id, genreId })));
+    return row2;
+  }
   const [row] = await db.insert(novels).values({ ...novelInput, slug: normalizeNovelSlug(input.slug || input.title), coverUrl: input.coverUrl || null, description: input.description || null }).returning();
   if (genreIds.length) await db.insert(novelGenres).values(genreIds.map((genreId) => ({ novelId: row.id, genreId }))).onConflictDoNothing();
   return row;
 }
 async function updateNovel(id, input) {
-  const db = await requireDb();
+  const db = await getDb();
   const { genreIds, ...novelInput } = input;
+  if (!db) {
+    const normalizedInput2 = novelInput.slug ? { ...novelInput, slug: normalizeNovelSlug(novelInput.slug) } : novelInput;
+    const rows = await supabaseWrite("novels", "PATCH", { ...normalizedInput2, updatedAt: (/* @__PURE__ */ new Date()).toISOString() }, `id=eq.${id}`);
+    if (genreIds) {
+      await supabaseWrite("novelGenres", "DELETE", void 0, `novelId=eq.${id}`);
+      if (genreIds.length) await supabaseWrite("novelGenres", "POST", genreIds.map((genreId) => ({ novelId: id, genreId })));
+    }
+    return rows[0] ?? null;
+  }
   const normalizedInput = novelInput.slug ? { ...novelInput, slug: normalizeNovelSlug(novelInput.slug) } : novelInput;
   const [row] = await db.update(novels).set({ ...normalizedInput, updatedAt: /* @__PURE__ */ new Date() }).where(eq(novels.id, id)).returning();
   if (!row) return null;
@@ -529,7 +627,12 @@ async function updateNovel(id, input) {
   return row;
 }
 async function deleteNovel(id) {
-  const db = await requireDb();
+  const db = await getDb();
+  if (!db) {
+    for (const [table, column] of [["novelGenres", "novelId"], ["seriesBooks", "novelId"], ["readingListItems", "novelId"], ["ratings", "novelId"], ["reviews", "novelId"]]) await supabaseWrite(table, "DELETE", void 0, `${column}=eq.${id}`);
+    await supabaseWrite("novels", "DELETE", void 0, `id=eq.${id}`);
+    return { success: true };
+  }
   await db.delete(novelGenres).where(eq(novelGenres.novelId, id));
   await db.delete(seriesBooks).where(eq(seriesBooks.novelId, id));
   await db.delete(readingListItems).where(eq(readingListItems.novelId, id));
