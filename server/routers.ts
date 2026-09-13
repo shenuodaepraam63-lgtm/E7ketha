@@ -8,6 +8,7 @@ import { commerceRouter } from './routers/commerce';
 import { confirmSupabaseUserEmail, listSupabaseUsers, toManagedUser, updateSupabaseUserRole } from './_core/supabaseAdmin';
 import { uploadNovelCover } from './cloudinary';
 import { audit, createAd, createNotification, deleteAd, getAdminReports, listActiveAds, listAds, listAuditLogs, listMessagesForUser, listNotifications, listTrash, markNotificationRead, purgeTrash, recordAdEvent, restoreTrash, sendAdminMessage, updateAd } from './management';
+import { createQuote, deleteQuote, improveQuote, listQuotes, updateQuote } from './quotes';
 
 const novelSlugInput = z.object({ slug: z.string().min(1).max(160) });
 const ratingInput = z.object({ slug: z.string().min(1).max(160), rating: z.number().int().min(1).max(5) });
@@ -146,6 +147,16 @@ export const appRouter = router({
       update: adminProcedure.input(z.object({ id: z.number().int().positive(), data: z.object({ title: z.string().min(1).max(255).optional(), body: z.string().max(5000).optional(), imageUrl: z.string().url().optional(), linkUrl: z.string().url().optional(), placement: z.string().max(80).optional(), status: z.enum(['draft', 'published', 'paused']).optional(), startAt: z.string().optional(), endAt: z.string().optional() }) })).mutation(({ ctx, input }) => updateAd(input.id, input.data, ctx.user)),
       delete: adminProcedure.input(z.object({ id: z.number().int().positive() })).mutation(({ ctx, input }) => deleteAd(input.id, ctx.user)),
     }),
+  }),
+  quotes: router({
+    list: publicProcedure.query(() => listQuotes(true)),
+  }),
+  adminQuotes: router({
+    list: adminProcedure.query(() => listQuotes(false)),
+    create: adminProcedure.input(z.object({ quote_text: z.string().min(3).max(2000), speaker: z.string().max(255).nullable().optional(), book_title: z.string().max(255).nullable().optional(), novel_id: z.number().int().positive().nullable().optional(), category: z.string().max(80).nullable().optional(), status: z.enum(['draft', 'published']) })).mutation(({ input }) => createQuote({ ...input, speaker: input.speaker ?? null, book_title: input.book_title ?? null, novel_id: input.novel_id ?? null, category: input.category ?? null })),
+    update: adminProcedure.input(z.object({ id: z.number().int().positive(), data: z.object({ quote_text: z.string().min(3).max(2000).optional(), speaker: z.string().max(255).nullable().optional(), book_title: z.string().max(255).nullable().optional(), novel_id: z.number().int().positive().nullable().optional(), category: z.string().max(80).nullable().optional(), status: z.enum(['draft', 'published']).optional() }) })).mutation(({ input }) => updateQuote(input.id, input.data)),
+    delete: adminProcedure.input(z.object({ id: z.number().int().positive() })).mutation(({ input }) => deleteQuote(input.id)),
+    improve: adminProcedure.input(z.object({ quote: z.string().min(3).max(2000), speaker: z.string().max(255).optional(), book: z.string().max(255).optional() })).mutation(({ input }) => improveQuote(input)),
   }),
 });
 
