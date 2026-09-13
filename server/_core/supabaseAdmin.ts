@@ -27,7 +27,7 @@ export function toManagedUser(user: SupabaseUser, localRole?: 'user' | 'admin'):
     id: user.id,
     email: user.email ?? null,
     name: (user.user_metadata?.full_name ?? user.user_metadata?.name ?? null) as string | null,
-    role: localRole ?? ((user.user_metadata?.role === 'admin' ? 'admin' : 'user') as 'user' | 'admin'),
+    role: localRole ?? ((user.app_metadata?.role === 'admin' ? 'admin' : 'user') as 'admin' | 'user'),
     emailConfirmed: Boolean(user.email_confirmed_at),
     disabled: user.banned_until === 'none' ? false : Boolean(user.banned_until),
     createdAt: user.created_at,
@@ -56,8 +56,8 @@ export async function updateSupabaseUserRole(id: string, role: 'user' | 'admin')
   if (!client) throw new Error('Supabase admin key is not configured');
   const { data, error } = await client.auth.admin.getUserById(id);
   if (error || !data.user) throw error ?? new Error('User not found');
-  const metadata = { ...data.user.user_metadata, role };
-  const result = await client.auth.admin.updateUserById(id, { user_metadata: metadata });
+  const metadata = { ...data.user.app_metadata, role };
+  const result = await client.auth.admin.updateUserById(id, { app_metadata: metadata });
   if (result.error || !result.data.user) throw result.error ?? new Error('Unable to update user role');
   return result.data.user;
 }

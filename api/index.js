@@ -1695,7 +1695,7 @@ function toManagedUser(user, localRole) {
     id: user.id,
     email: user.email ?? null,
     name: user.user_metadata?.full_name ?? user.user_metadata?.name ?? null,
-    role: localRole ?? (user.user_metadata?.role === "admin" ? "admin" : "user"),
+    role: localRole ?? (user.app_metadata?.role === "admin" ? "admin" : "user"),
     emailConfirmed: Boolean(user.email_confirmed_at),
     disabled: user.banned_until === "none" ? false : Boolean(user.banned_until),
     createdAt: user.created_at,
@@ -1722,8 +1722,8 @@ async function updateSupabaseUserRole(id, role) {
   if (!client) throw new Error("Supabase admin key is not configured");
   const { data, error } = await client.auth.admin.getUserById(id);
   if (error || !data.user) throw error ?? new Error("User not found");
-  const metadata = { ...data.user.user_metadata, role };
-  const result = await client.auth.admin.updateUserById(id, { user_metadata: metadata });
+  const metadata = { ...data.user.app_metadata, role };
+  const result = await client.auth.admin.updateUserById(id, { app_metadata: metadata });
   if (result.error || !result.data.user) throw result.error ?? new Error("Unable to update user role");
   return result.data.user;
 }
@@ -1915,7 +1915,7 @@ async function authenticateSupabaseToken(token) {
   const openId = `supabase:${authUser.id}`;
   const email = authUser.email ?? null;
   const adminEmails = new Set((ENV.supabaseAdminEmails ?? "").split(",").map((value) => value.trim().toLowerCase()).filter(Boolean));
-  const role = email && adminEmails.has(email.toLowerCase()) ? "admin" : void 0;
+  const role = email && (adminEmails.has(email.toLowerCase()) || authUser.app_metadata?.role === "admin") ? "admin" : void 0;
   try {
     await upsertUser({ openId, name: authUser.user_metadata?.full_name ?? authUser.user_metadata?.name ?? email?.split("@")[0] ?? null, email, loginMethod: "supabase", role, lastSignedIn: /* @__PURE__ */ new Date() });
   } catch (dbError) {
