@@ -2401,9 +2401,11 @@ function createApp() {
   registerOAuthRoutes(app2);
   app2.get("/api/sitemap.xml", async (_req, res) => {
     try {
-      const [novels2, authors2, quotes] = await Promise.all([listNovels(1e4), listAuthors(), listQuotes(true)]);
-      const urls = ["/", "/explore", "/quotes", ...novels2.map((item) => `/books/${item.slug}`), ...authors2.map((item) => `/authors/${item.slug}`), ...quotes.map((item) => `/quotes/${item.id}`)];
-      const body = urls.map((path) => `<url><loc>${xmlEscape(`${SITE_URL}${path}`)}</loc><changefreq>weekly</changefreq><priority>${path === "/" ? "1.0" : "0.7"}</priority></url>`).join("");
+      const [novels2, authors2, genres2, seriesList, quotes] = await Promise.all([listNovels(1e4), listAuthors(), listGenres(), listSeries(), listQuotes(true)]);
+      const staticPaths = ["/", "/explore", "/search", "/quotes", "/discover", "/about", "/how-it-works", "/faq", "/contact", "/privacy", "/terms"];
+      const urls = [...staticPaths, ...novels2.map((item) => `/books/${item.slug}`), ...authors2.map((item) => `/authors/${item.slug}`), ...genres2.map((item) => `/genres/${item.slug}`), ...seriesList.map((item) => `/series/${item.slug}`), ...quotes.map((item) => `/quotes/${item.id}`)];
+      const uniqueUrls = Array.from(new Set(urls));
+      const body = uniqueUrls.map((path) => `<url><loc>${xmlEscape(`${SITE_URL}${path}`)}</loc><changefreq>${path === "/" ? "daily" : "weekly"}</changefreq><priority>${path === "/" ? "1.0" : staticPaths.includes(path) ? "0.8" : "0.7"}</priority></url>`).join("");
       res.type("application/xml").set("Cache-Control", "public, max-age=300, s-maxage=300").send(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${body}</urlset>`);
     } catch (error) {
       console.error("[SEO] sitemap generation failed", error);
