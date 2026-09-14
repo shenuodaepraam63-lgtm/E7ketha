@@ -17,7 +17,7 @@
     { "src": "^/genres/([^/]+)$", "dest": "/api?resource=seo&path=/genres/$1" },
     { "src": "^/series/([^/]+)$", "dest": "/api?resource=seo&path=/series/$1" },
     { "src": "^/quotes/([0-9]+)$", "dest": "/api?resource=seo&path=/quotes/$1" },
-    { "src": "^/quotes/category/(.*)$", "dest": "/api?resource=seo&path=%2Fquotes%2Fcategory%2F$1" },
+    { "src": "^/quotes/category/(.*)", "dest": "/api?resource=seo&path=%2Fquotes%2Fcategory%2F$1" },
     { "handle": "filesystem" },
     { "src": "^/api/(.*)$", "dest": "/api" },
     { "src": "^/(.*)$", "dest": "/index.html" }
