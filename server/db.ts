@@ -539,6 +539,21 @@ async function resolveCoverUrl(value?: string | null) {
   const url = value?.trim();
   if (!url) return null;
   try {
+    const parsedUrl = new URL(url);
+    const archiveMatch = parsedUrl.hostname.endsWith('archive.org') ? parsedUrl.pathname.match(/^\/details\/([^/]+)/) : null;
+    if (archiveMatch?.[1]) {
+      const metadataResponse = await fetch(`https://archive.org/metadata/${encodeURIComponent(archiveMatch[1])}`, { signal: AbortSignal.timeout(7000) });
+      if (metadataResponse.ok) {
+        const metadata = await metadataResponse.json() as { files?: Array<{ name?: string; format?: string }> };
+        const imageFiles = (metadata.files ?? []).filter((file) => {
+          const name = (file.name ?? '').toLowerCase();
+          const format = (file.format ?? '').toLowerCase();
+          return /\.(jpe?g|png|webp|gif|avif)$/i.test(name) || /image\/(jpeg|png|webp|gif|avif)/i.test(format);
+        });
+        const selected = imageFiles.find((file) => /cover|front|title/i.test(file.name ?? '')) ?? imageFiles[0];
+        if (selected?.name) return `https://archive.org/download/${encodeURIComponent(archiveMatch[1])}/${selected.name.split('/').map(encodeURIComponent).join('/')}`;
+      }
+    }
     const response = await fetch(url, { redirect: 'follow', signal: AbortSignal.timeout(7000), headers: { Accept: 'image/*, text/html;q=0.9' } });
     const contentType = response.headers.get('content-type') ?? '';
     if (contentType.startsWith('image/')) return response.url || url;
