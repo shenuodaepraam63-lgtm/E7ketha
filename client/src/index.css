@@ -80,6 +80,9 @@
   .quote-card > * { position: relative; z-index: 1; }
   .quote-card::after { content: ''; position: absolute; inset: -3px; z-index: 0; border-radius: inherit; padding: 3px; background: conic-gradient(from 0deg, transparent 0 8%, #ff542e 14%, #ffd166 19%, transparent 27% 45%, #ff3d24 53%, #ffb347 60%, transparent 68% 82%, #ff4a28 90%, transparent 96%); -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; filter: blur(1.5px) drop-shadow(0 0 8px rgba(255,88,37,.72)); animation: quote-fire 2.4s linear infinite; pointer-events: none; }
   .quote-card:hover::before { box-shadow: 0 0 32px rgba(118, 91, 255, .28), inset 0 0 28px rgba(118, 91, 255, .1); }
+  .novel-link-button { transition: transform 180ms var(--ease-out), box-shadow 180ms var(--ease-out), filter 180ms var(--ease-out); }
+  .novel-link-button:hover { transform: translateY(-3px); box-shadow: 0 14px 26px -18px currentColor; filter: saturate(1.15); }
+  .novel-link-button:active { transform: scale(.98); }
 }
 
 @keyframes shimmer { to { background-position: -200% 0; } }
