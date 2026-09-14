@@ -91,7 +91,7 @@ async function getNovelBySlugFromRest(slug: string) {
       const row = numericRows[0];
       const authorsRows = await supabaseRest<any[]>('authors', `select=name,slug&id=eq.${row.authorId}&limit=1`);
       const author = authorsRows[0];
-      return { id: row.id, slug: normalizeNovelSlug(row.slug, row.title), title: row.title, coverUrl: row.coverUrl, description: row.description, rating: row.rating, ratingCount: row.ratingCount, parts: row.parts, status: row.status, publicationYear: row.publicationYear, language: row.language, author: author?.name ?? 'مؤلف غير معروف', authorSlug: author?.slug ?? '', authorId: row.authorId, links: await listNovelLinks(Number(row.id)) };
+      return { id: row.id, slug: normalizeNovelSlug(row.slug, row.title), title: row.title, coverUrl: row.coverUrl, description: row.description, rightsNote: row.rightsNote, rating: row.rating, ratingCount: row.ratingCount, parts: row.parts, status: row.status, publicationYear: row.publicationYear, language: row.language, author: author?.name ?? 'مؤلف غير معروف', authorSlug: author?.slug ?? '', authorId: row.authorId, links: await listNovelLinks(Number(row.id)) };
     }
   }
   const candidates = Array.from(new Set([slug, decoded, normalizeNovelSlug(decoded)])).filter(Boolean);
@@ -100,7 +100,7 @@ async function getNovelBySlugFromRest(slug: string) {
   if (!row) return null;
   const authorsRows = await supabaseRest<any[]>('authors', `select=name,slug&id=eq.${row.authorId}&limit=1`);
   const author = authorsRows[0];
-  return { id: row.id, slug: normalizeNovelSlug(row.slug, row.title), title: row.title, coverUrl: row.coverUrl, description: row.description, rating: row.rating, ratingCount: row.ratingCount, parts: row.parts, status: row.status, publicationYear: row.publicationYear, language: row.language, author: author?.name ?? 'مؤلف غير معروف', authorSlug: author?.slug ?? '', authorId: row.authorId, links: await listNovelLinks(Number(row.id)) };
+  return { id: row.id, slug: normalizeNovelSlug(row.slug, row.title), title: row.title, coverUrl: row.coverUrl, description: row.description, rightsNote: row.rightsNote, rating: row.rating, ratingCount: row.ratingCount, parts: row.parts, status: row.status, publicationYear: row.publicationYear, language: row.language, author: author?.name ?? 'مؤلف غير معروف', authorSlug: author?.slug ?? '', authorId: row.authorId, links: await listNovelLinks(Number(row.id)) };
 }
 
 async function listNovelsFromRest(limit = 50) {
@@ -108,7 +108,7 @@ async function listNovelsFromRest(limit = 50) {
   const authorIds = Array.from(new Set(rows.map((row) => row.authorId).filter(Boolean)));
   const authorsRows = authorIds.length ? await supabaseRest<any[]>('authors', `select=id,name,slug&id=in.(${authorIds.join(',')})`) : [];
   const authorsMap = new Map(authorsRows.map((author) => [String(author.id), author]));
-  return rows.map((row) => ({ id: row.id, slug: normalizeNovelSlug(row.slug, row.title), title: row.title, coverUrl: row.coverUrl, description: row.description, rating: row.rating, ratingCount: row.ratingCount, parts: row.parts, status: row.status, publicationYear: row.publicationYear, author: authorsMap.get(String(row.authorId))?.name ?? 'مؤلف غير معروف', authorSlug: authorsMap.get(String(row.authorId))?.slug ?? '' }));
+  return rows.map((row) => ({ id: row.id, slug: normalizeNovelSlug(row.slug, row.title), title: row.title, coverUrl: row.coverUrl, description: row.description, rightsNote: row.rightsNote, rating: row.rating, ratingCount: row.ratingCount, parts: row.parts, status: row.status, publicationYear: row.publicationYear, author: authorsMap.get(String(row.authorId))?.name ?? 'مؤلف غير معروف', authorSlug: authorsMap.get(String(row.authorId))?.slug ?? '' }));
 }
 
 export async function upsertUser(user: InsertUser): Promise<void> {
@@ -422,7 +422,7 @@ export async function listAdminNovels() {
     const rows = await supabaseRest<any[]>('novels', 'select=*&order=updatedAt.desc&limit=1000');
     return Promise.all(rows.map(async (row) => ({ ...row, links: await listNovelLinks(Number(row.id)) })));
   }
-  const rows = await db.select({ id: novels.id, slug: novels.slug, title: novels.title, authorId: authors.id, author: authors.name, coverUrl: novels.coverUrl, description: novels.description, rating: novels.rating, ratingCount: novels.ratingCount, parts: novels.parts, status: novels.status, publicationYear: novels.publicationYear, language: novels.language, updatedAt: novels.updatedAt }).from(novels).innerJoin(authors, eq(novels.authorId, authors.id)).orderBy(desc(novels.updatedAt));
+  const rows = await db.select({ id: novels.id, slug: novels.slug, title: novels.title, authorId: authors.id, author: authors.name, coverUrl: novels.coverUrl, description: novels.description, rightsNote: novels.rightsNote, rating: novels.rating, ratingCount: novels.ratingCount, parts: novels.parts, status: novels.status, publicationYear: novels.publicationYear, language: novels.language, updatedAt: novels.updatedAt }).from(novels).innerJoin(authors, eq(novels.authorId, authors.id)).orderBy(desc(novels.updatedAt));
   return Promise.all(rows.map(async (row) => ({ ...row, links: await listNovelLinks(Number(row.id)) })));
 }
 
@@ -493,7 +493,7 @@ export async function deleteGenre(id: number) {
 }
 
 export type NovelLinkInput = { label: string; url: string; type: 'read' | 'download' };
-export type AdminNovelInput = { slug: string; title: string; authorId: number; coverUrl?: string; description?: string; parts?: number; status?: 'standalone' | 'completed' | 'ongoing'; publicationYear?: number; language?: string; genreIds?: number[]; links?: NovelLinkInput[] };
+export type AdminNovelInput = { slug: string; title: string; authorId: number; coverUrl?: string; description?: string; rightsNote?: string; parts?: number; status?: 'standalone' | 'completed' | 'ongoing'; publicationYear?: number; language?: string; genreIds?: number[]; links?: NovelLinkInput[] };
 async function listNovelLinks(novelId: number) { try { return await supabaseRest<any[]>('novelLinks', `select=id,label,url,type,displayOrder&novelId=eq.${novelId}&order=displayOrder.asc&limit=50`); } catch { return []; } }
 async function replaceNovelLinks(novelId: number, links: NovelLinkInput[] = []) { await supabaseWrite('novelLinks', 'DELETE', undefined, `novelId=eq.${novelId}`); if (links.length) await supabaseWrite('novelLinks', 'POST', links.map((link, index) => ({ novelId, label: link.label, url: link.url, type: link.type, displayOrder: index }))); }
 

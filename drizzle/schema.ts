@@ -65,6 +65,7 @@ export const novels = pgTable('novels', {
   seriesId: integer('seriesId'),
   coverUrl: varchar('coverUrl', { length: 500 }),
   description: text('description'),
+  rightsNote: text('rightsNote'),
   rating: integer('rating').default(0).notNull(),
   ratingCount: integer('ratingCount').default(0).notNull(),
   parts: integer('parts').default(1).notNull(),
