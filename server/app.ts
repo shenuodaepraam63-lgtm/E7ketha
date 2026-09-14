@@ -98,7 +98,7 @@ async function renderPublicSeo(pathname: string) {
     if (!selected) return { html: '<!doctype html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="robots" content="noindex"><title>السلسلة غير موجودة | رِواية</title></head><body><h1>السلسلة غير موجودة</h1></body></html>', status: 404 };
     const description = stripHtml(selected.description || `سلسلة ${selected.title} والروايات المرتبطة بها على منصة رِواية.`);
     const canonical = `${origin}/series/${encodeURIComponent(selected.slug)}`;
-    const books = selected.books.map((book) => `<li><a href="${origin}/books/${htmlEscape(book.slug)}">${htmlEscape(book.title)}</a>${book.author ? ` — ${htmlEscape(book.author)}` : ''}</li>`).join('');
+    const books = (selected.books as Array<{ title: string; slug: string; author?: string | null }>).map((book) => `<li><a href="${origin}/books/${htmlEscape(book.slug)}">${htmlEscape(book.title)}</a>${book.author ? ` — ${htmlEscape(book.author)}` : ''}</li>`).join('');
     return renderSeoDocument(readClientTemplate(), { title: `${selected.title} — رِواية`, description, canonical, type: 'collection', image: selected.coverUrl ?? undefined, jsonLd: { '@context': 'https://schema.org', '@type': 'CollectionPage', name: selected.title, description, url: canonical }, content: `<main lang="ar" dir="rtl"><nav><a href="${origin}/">الرئيسية</a> / <a href="${origin}/explore">استكشف</a></nav><article><h1>${htmlEscape(selected.title)}</h1><p>${htmlEscape(selected.description || '')}</p><h2>ترتيب القراءة</h2><ol>${books}</ol></article></main>` });
   }
 

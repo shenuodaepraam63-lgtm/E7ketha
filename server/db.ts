@@ -285,9 +285,14 @@ export async function listAuthors() {
 }
 
 export async function getAuthorBySlug(slug: string) {
-  const db = await requireDb();
-  const result = await db.select().from(authors).where(eq(authors.slug, slug)).limit(1);
-  return result[0] ?? null;
+  try {
+    const db = await requireDb();
+    const result = await db.select().from(authors).where(eq(authors.slug, slug)).limit(1);
+    return result[0] ?? null;
+  } catch (error) {
+    console.warn('[Database] Falling back to Supabase REST for author lookup:', error instanceof Error ? error.message : error);
+    return (await listAuthors()).find((author) => author.slug === decodeURIComponent(slug).trim()) ?? null;
+  }
 }
 
 export async function listGenres() {
@@ -297,9 +302,14 @@ export async function listGenres() {
 }
 
 export async function getGenreBySlug(slug: string) {
-  const db = await requireDb();
-  const result = await db.select({ id: genres.id, slug: genres.slug, name: genres.name, description: genres.description, icon: genres.icon, novelCount: sql<number>`COUNT(DISTINCT ${novelGenres.novelId})` }).from(genres).leftJoin(novelGenres, eq(novelGenres.genreId, genres.id)).where(eq(genres.slug, slug)).groupBy(genres.id).limit(1);
-  return result[0] ?? null;
+  try {
+    const db = await requireDb();
+    const result = await db.select({ id: genres.id, slug: genres.slug, name: genres.name, description: genres.description, icon: genres.icon, novelCount: sql<number>`COUNT(DISTINCT ${novelGenres.novelId})` }).from(genres).leftJoin(novelGenres, eq(novelGenres.genreId, genres.id)).where(eq(genres.slug, slug)).groupBy(genres.id).limit(1);
+    return result[0] ?? null;
+  } catch (error) {
+    console.warn('[Database] Falling back to Supabase REST for genre lookup:', error instanceof Error ? error.message : error);
+    return (await listGenres()).find((genre) => genre.slug === decodeURIComponent(slug).trim()) ?? null;
+  }
 }
 
 export async function listSeries() {
@@ -309,18 +319,24 @@ export async function listSeries() {
 }
 
 export async function getSeriesBySlug(slug: string) {
-  const db = await requireDb();
-  const rows = await db.select({ id: series.id, slug: series.slug, title: series.title, description: series.description, status: series.status, order: seriesBooks.order, bookTitle: novels.title, bookSlug: novels.slug, coverUrl: novels.coverUrl, author: authors.name }).from(series).leftJoin(seriesBooks, eq(seriesBooks.seriesId, series.id)).leftJoin(novels, eq(seriesBooks.novelId, novels.id)).leftJoin(authors, eq(novels.authorId, authors.id)).where(eq(series.slug, slug)).orderBy(asc(seriesBooks.order));
-  if (!rows.length) return null;
-  const first = rows[0];
-  return { ...first, books: rows.filter((row) => row.bookSlug).map((row) => ({ title: row.bookTitle!, slug: row.bookSlug!, coverUrl: row.coverUrl, author: row.author })) };
+  try {
+    const db = await requireDb();
+    const rows = await db.select({ id: series.id, slug: series.slug, title: series.title, description: series.description, status: series.status, order: seriesBooks.order, bookTitle: novels.title, bookSlug: novels.slug, coverUrl: novels.coverUrl, author: authors.name }).from(series).leftJoin(seriesBooks, eq(seriesBooks.seriesId, series.id)).leftJoin(novels, eq(seriesBooks.novelId, novels.id)).leftJoin(authors, eq(novels.authorId, authors.id)).where(eq(series.slug, slug)).orderBy(asc(seriesBooks.order));
+    if (!rows.length) return null;
+    const first = rows[0];
+    return { ...first, books: rows.filter((row) => row.bookSlug).map((row) => ({ title: row.bookTitle!, slug: row.bookSlug!, coverUrl: row.coverUrl, author: row.author })) };
+  } catch (error) {
+    console.warn('[Database] Falling back to Supabase REST for series lookup:', error instanceof Error ? error.message : error);
+    const item = (await listSeries()).find((entry) => entry.slug === decodeURIComponent(slug).trim());
+    return item ? { ...item, books: [] } : null;
+  }
 }
 
 export async function getNovelBySlug(slug: string) {
-  const db = await requireDb();
   const decodedSlug = decodeURIComponent(slug).trim();
   const normalizedSlug = normalizeNovelSlug(decodedSlug);
   try {
+  const db = await requireDb();
   const numericMatch = /^\d+$/.test(decodedSlug) ? sql`n.id = ${Number(decodedSlug)}` : sql`FALSE`;
   const result = await db.execute(sql`
     SELECT
