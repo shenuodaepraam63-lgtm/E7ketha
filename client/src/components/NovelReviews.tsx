@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { MessageSquarePen, Star } from 'lucide-react';
+import { MessageSquare, Star } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/_core/hooks/useAuth';
 import { trpc } from '@/lib/trpc';
@@ -102,7 +102,7 @@ export function NovelReviews({ slug, avgRating, ratingCount }: { slug: string; a
 
         <div className="rounded-2xl border border-[#675de8]/20 bg-gradient-to-br from-[#f8f7ff] to-transparent p-4 dark:from-[#1a1a2e]">
           <div className="mb-3 flex items-center gap-2">
-            <MessageSquarePen size={16} className="text-[#675de8]" />
+            <MessageSquare size={16} className="text-[#675de8]" />
             <h3 className="text-sm font-extrabold">اكتب رأيك</h3>
           </div>
           <textarea
