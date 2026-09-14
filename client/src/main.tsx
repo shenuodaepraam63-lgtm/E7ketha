@@ -1,7 +1,7 @@
 import { trpc } from "@/lib/trpc";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { httpBatchLink } from "@trpc/client";
-import { createRoot, hydrateRoot } from "react-dom/client";
+import { createRoot } from "react-dom/client";
 import superjson from "superjson";
 import App from "./App";
 import "./index.css";
@@ -49,5 +49,12 @@ const app = <trpc.Provider client={trpcClient} queryClient={queryClient}>
   </QueryClientProvider>
 </trpc.Provider>;
 
-if (rootElement.childNodes.length > 0) hydrateRoot(rootElement, app);
-else createRoot(rootElement).render(app);
+// SSR public pages inject an SEO shell into #root (server/app.ts). That shell is
+// structurally aligned with SiteShell + Home but cannot reproduce lucide SVG
+// paths or auth/theme-dependent controls. Using hydrateRoot against it throws
+// React #418 and recovers via a full client re-render (double work).
+// Clear the shell once, then mount — crawlers still receive the SSR HTML.
+if (rootElement.childNodes.length > 0) {
+  rootElement.replaceChildren();
+}
+createRoot(rootElement).render(app);
