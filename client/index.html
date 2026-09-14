@@ -1,1 +1,49 @@
-PLACEHOLDER_HTML
+<!doctype html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+    <meta name="theme-color" content="#0b1025" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="preconnect" href="https://res.cloudinary.com" />
+    <link rel="dns-prefetch" href="https://pagead2.googlesyndication.com" />
+    <link rel="dns-prefetch" href="https://www.googletagmanager.com" />
+    <link rel="preload" as="image" href="https://images.unsplash.com/photo-1543002588-bfa74002ed7e?auto=format&fit=crop&w=700&q=88" fetchpriority="high" />
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" onload="this.onload=null;this.rel='stylesheet'" />
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" /></noscript>
+    <script>
+      (() => {
+        const loadThirdParty = () => {
+          if (window.__riwayaThirdPartyLoaded) return;
+          window.__riwayaThirdPartyLoaded = true;
+          window.dataLayer = window.dataLayer || [];
+          // GTM owns analytics config; avoid second gtag bootstrap.
+          // GTM loads gtag internally — do not load gtag.js a second time (duplicate TBT).
+          const scripts = [
+            ['https://www.googletagmanager.com/gtm.js?id=GTM-WHXK2GT3', 'tag-manager'],
+            ['https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-1874360923595437', 'adsense']
+          ];
+          for (const [src, id] of scripts) {
+            const script = document.createElement('script');
+            script.async = true;
+            script.src = src;
+            script.dataset.riwayaThirdParty = id;
+            if (id === 'adsense') script.crossOrigin = 'anonymous';
+            document.head.appendChild(script);
+          }
+        };
+        if ('requestIdleCallback' in window) window.requestIdleCallback(loadThirdParty, { timeout: 2500 });
+        else window.addEventListener('load', () => window.setTimeout(loadThirdParty, 500), { once: true });
+      })();
+    </script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"WebSite","name":"رِواية","url":"https://e7ketha.vercel.app/","description":"منصة اكتشاف الروايات العربية","inLanguage":"ar","potentialAction":{"@type":"SearchAction","target":"https://e7ketha.vercel.app/search?q={search_term_string}","query-input":"required name=search_term_string"}}</script>
+    <title>رِواية — اكتشف روايتك القادمة</title>
+  </head>
+  <body>
+    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-WHXK2GT3" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
