@@ -144,7 +144,16 @@ export default defineConfig({
       output: {
         manualChunks(id) {
           if (!id.includes("node_modules")) return;
-          if (id.includes("react-dom") || id.includes("/react/") || id.includes("scheduler")) return "react-vendor";
+          // Match only the react/react-dom/scheduler packages — NOT @radix-ui/react-*.
+          // Broad "/react/" matching previously pulled Radix into react-vendor and broke React.Activity.
+          if (
+            /[/\\](react|react-dom|scheduler)([/\\]|$)/.test(id) &&
+            !id.includes("@radix-ui") &&
+            !id.includes("lucide-react") &&
+            !id.includes("@tanstack")
+          ) {
+            return "react-vendor";
+          }
           if (id.includes("@tanstack") || id.includes("@trpc") || id.includes("superjson")) return "query-trpc";
           if (id.includes("@radix-ui") || id.includes("cmdk") || id.includes("vaul") || id.includes("sonner")) return "ui-vendor";
           if (id.includes("lucide-react")) return "icons";
