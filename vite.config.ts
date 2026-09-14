@@ -150,7 +150,15 @@ function vitePluginManusDebugCollector(): Plugin {
   };
 }
 
-const plugins = [react(), tailwindcss(), jsxLocPlugin(), vitePluginManusRuntime(), vitePluginManusDebugCollector()];
+// jsxLocPlugin injects data-loc attributes that break SSR hydration (React #418).
+// Keep it only in development for debugging.
+const plugins = [
+  react(),
+  tailwindcss(),
+  ...(process.env.NODE_ENV === "production" ? [] : [jsxLocPlugin()]),
+  vitePluginManusRuntime(),
+  vitePluginManusDebugCollector(),
+];
 
 export default defineConfig({
   plugins,
