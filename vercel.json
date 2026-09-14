@@ -9,7 +9,7 @@
     }
   },
   "routes": [
-    { "src": "^/$", "dest": "/api?resource=seo&path=/" },
+    { "src": "^/$", "dest": "/api?resource=seo&path=%2F" },
     { "src": "^/sitemap\\.xml$", "dest": "/api?resource=sitemap" },
     { "src": "^/sitemap/(.*)\\.xml$", "dest": "/api?resource=$1" },
     { "src": "^/(books|novel|novels)/([^/]+)$", "dest": "/api?resource=seo&path=/$1/$2" },
