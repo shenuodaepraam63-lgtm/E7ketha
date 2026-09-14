@@ -18,25 +18,40 @@
     <meta property="og:image:alt" content="E7ketha — كل رواية لها حكاية" />
     <meta name="twitter:image" content="https://e7ketha.vercel.app/og-riwaya-1200x630.jpg" />
     <meta name="twitter:card" content="summary_large_image" />
-    <!-- Google tag (gtag.js) -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-6XPEN8XCQZ"></script>
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" onload="this.onload=null;this.rel='stylesheet'" />
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&family=DM+Mono:wght@400;500;600;700;800&display=swap" /></noscript>
     <script>
-      window.dataLayer = window.dataLayer || [];
-      function gtag(){dataLayer.push(arguments);}
-      gtag('js', new Date());
-      gtag('config', 'G-6XPEN8XCQZ');
+      (() => {
+        const loadThirdParty = () => {
+          if (window.__riwayaThirdPartyLoaded) return;
+          window.__riwayaThirdPartyLoaded = true;
+          window.dataLayer = window.dataLayer || [];
+          window.gtag = function(){ window.dataLayer.push(arguments); };
+          window.gtag('js', new Date());
+          window.gtag('config', 'G-6XPEN8XCQZ');
+          const scripts = [
+            ['https://www.googletagmanager.com/gtag/js?id=G-6XPEN8XCQZ', 'analytics'],
+            ['https://www.googletagmanager.com/gtm.js?id=GTM-WHXK2GT3', 'tag-manager'],
+            ['https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-1874360923595437', 'adsense']
+          ];
+          for (const [src, id] of scripts) {
+            const script = document.createElement('script');
+            script.async = true;
+            script.src = src;
+            script.dataset.riwayaThirdParty = id;
+            if (id === 'adsense') script.crossOrigin = 'anonymous';
+            document.head.appendChild(script);
+          }
+        };
+        if ('requestIdleCallback' in window) window.requestIdleCallback(loadThirdParty, { timeout: 2500 });
+        else window.addEventListener('load', () => window.setTimeout(loadThirdParty, 500), { once: true });
+      })();
     </script>
-    <!-- Google Tag Manager -->
-    <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','GTM-WHXK2GT3');</script>
-    <!-- End Google Tag Manager -->
-    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-1874360923595437" crossorigin="anonymous"></script>
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"WebSite","name":"رِواية","url":"https://e7ketha.vercel.app/","description":"منصة اكتشاف الروايات العربية","inLanguage":"ar","potentialAction":{"@type":"SearchAction","target":"https://e7ketha.vercel.app/search?q={search_term_string}","query-input":"required name=search_term_string"}}</script>
     <title>رِواية — اكتشف روايتك القادمة</title>
   </head>
   <body>
-    <!-- Google Tag Manager (noscript) -->
     <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-WHXK2GT3" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
-    <!-- End Google Tag Manager (noscript) -->
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
