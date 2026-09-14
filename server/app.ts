@@ -11,7 +11,7 @@ import { getQuote, listQuotes, listQuotesByCategory } from "./quotes";
 
 const SITE_URL = "https://e7ketha.vercel.app";
 function xmlEscape(value: unknown) {
-  return String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
+  return String(value ?? "").replace(/&/g, "&").replace(/</g, "<").replace(/>/g, ">").replace(/"/g, """).replace(/'/g, "'");
 }
 function renderUrlset(paths: string[]) {
   const uniquePaths = Array.from(new Set(paths));
@@ -25,7 +25,7 @@ function renderSitemapIndex() {
 function quoteCategorySlug(value: string) { return encodeURIComponent(value.trim().toLowerCase()).replace(/%20/g, "-"); }
 
 function htmlEscape(value: unknown) {
-  return String(value ?? "").replace(/[&<>'"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[character] ?? character);
+  return String(value ?? "").replace(/[&<>'"]/g, (character) => ({ '&': '&', '<': '<', '>': '>', "'": '&#39;', '"': '"' })[character] ?? character);
 }
 
 function stripHtml(value: unknown, max = 180) {
@@ -145,33 +145,43 @@ export function createApp() {
       const authorQuotePaths = authors.map((item) => `/authors/${item.slug}/quotes`);
       const bookQuotePaths = novels.map((item) => `/books/${item.slug}/quotes`);
       const categoryQuotePaths = quoteCategories.map((category) => `/quotes/category/${quoteCategorySlug(category)}`);
-      const staticPaths = ["/", "/explore", "/quotes", "/quotes/categories", "/discover", "/about", "/contact", "/privacy", "/login", "/register", "/search"];
-      const paths = [
-        ...staticPaths,
-        ...novels.map((n) => `/books/${n.slug}`),
-        ...authors.map((a) => `/authors/${a.slug}`),
-        ...genres.map((g) => `/genres/${g.slug}`),
-        ...seriesList.map((s) => `/series/${s.slug}`),
-        ...quotes.map((q) => `/quotes/${q.id}`),
-        ...authorQuotePaths,
-        ...bookQuotePaths,
-        ...categoryQuotePaths,
-      ];
-      res.type("application/xml").send(renderUrlset(paths));
-    } catch (e) {
-      console.error(e);
-      res.status(500).send("sitemap error");
+      const staticPaths = ["/", "/explore", "/quotes", "/quotes/categories", "/discover", "/about", "/how-it-works", "/faq", "/contact", "/privacy", "/terms"];
+      const urls = [...staticPaths, ...novels.map((item) => `/books/${item.slug}`), ...bookQuotePaths, ...authors.map((item) => `/authors/${item.slug}`), ...authorQuotePaths, ...genres.map((item) => `/genres/${item.slug}`), ...seriesList.map((item) => `/series/${item.slug}`), ...categoryQuotePaths, ...quotes.map((item) => `/quotes/${item.id}`)];
+      const resource = String(_req.query.resource ?? "");
+      const sitemap = resource === "index" || resource === "sitemap" ? renderSitemapIndex() : resource === "novels" ? renderUrlset([...novels.map((item) => `/books/${item.slug}`), ...bookQuotePaths]) : resource === "authors" ? renderUrlset([...authors.map((item) => `/authors/${item.slug}`), ...authorQuotePaths]) : resource === "genres" ? renderUrlset(genres.map((item) => `/genres/${item.slug}`)) : resource === "series" ? renderUrlset(seriesList.map((item) => `/series/${item.slug}`)) : resource === "quotes" ? renderUrlset([...categoryQuotePaths, ...quotes.map((item) => `/quotes/${item.id}`)]) : renderUrlset(urls);
+      res.type("application/xml").set("Cache-Control", "public, max-age=0, s-maxage=0, must-revalidate").send(sitemap);
+    } catch (error) {
+      console.error("[SEO] sitemap generation failed", error);
+      res.status(503).type("application/xml").send(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>${SITE_URL}/</loc></url></urlset>`);
     }
   };
+  app.get("/sitemap.xml", sitemapHandler);
+  app.get("/sitemap/:type.xml", (req, res) => { req.query.resource = req.params.type; return sitemapHandler(req, res); });
+  app.get("/api/sitemap.xml", sitemapHandler);
   const directSeoHandler = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const pathname = req.path;
+    if (pathname.startsWith('/quotes/') && !/^\/quotes\/(?:\d+|category\/[^/]+)$/.test(pathname)) return next();
     try {
-      const result = await renderPublicSeo(req.path);
+      const result = await renderPublicSeo(pathname);
       if (!result) return next();
-      res.status(result.status).type("html").send(result.html);
+      return res.status(result.status).type('html').set('Cache-Control', 'public, max-age=0, s-maxage=300, stale-while-revalidate=600').send(result.html);
     } catch (error) {
+      console.error('[SEO] direct server HTML render failed', error);
       return next(error);
     }
   };
+  app.get(['/books/:slug', '/novel/:slug', '/novels/:slug', '/authors/:slug', '/genres/:slug', '/series/:slug', '/quotes/:id', '/quotes/category/:slug'], directSeoHandler);
+  app.get("/api", async (req, res, next) => {
+    if (req.query.resource !== 'seo' || typeof req.query.path !== 'string') return next();
+    try {
+      const result = await renderPublicSeo(req.query.path);
+      if (!result) return next();
+      return res.status(result.status).type('html').set('Cache-Control', 'public, max-age=0, s-maxage=300, stale-while-revalidate=600').send(result.html);
+    } catch (error) {
+      console.error('[SEO] server HTML render failed', error);
+      return next(error);
+    }
+  });
   app.get("/", (req, res, next) => req.query.resource === "sitemap" ? sitemapHandler(req, res) : directSeoHandler(req, res, next));
   app.use(
     "/api/trpc",
