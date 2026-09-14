@@ -11,13 +11,14 @@ async function request<T>(path: string, init: RequestInit = {}) {
   const text = await response.text(); return (text ? JSON.parse(text) : []) as T;
 }
 
-export async function listQuotes(publicOnly = false) {
-  const rows = await request<QuoteRecord[]>(`quotes?select=*&${publicOnly ? 'status=eq.published&' : ''}order=created_at.desc&limit=200`); return enrichQuotes(rows);
+export async function listQuotes(publicOnly = false, limit = 200, offset = 0) {
+  const rows = await request<QuoteRecord[]>(`quotes?select=*&${publicOnly ? 'status=eq.published&' : ''}order=created_at.desc&limit=${Math.min(500, Math.max(1, limit))}&offset=${Math.max(0, offset)}`); return enrichQuotes(rows);
 }
 export async function getQuote(id: number) {
   const rows = await request<QuoteRecord[]>(`quotes?id=eq.${id}&status=eq.published&select=*&limit=1`);
   return (await enrichQuotes(rows))[0] ?? null;
 }
+export async function getQuoteNeighbors(id: number) { const quotes = await listQuotes(true, 500); const index = quotes.findIndex((quote) => quote.id === id); return { previous: index > 0 ? quotes[index - 1] : null, next: index >= 0 && index < quotes.length - 1 ? quotes[index + 1] : null }; }
 export async function listQuotesByAuthor(slug: string) { return (await listQuotes(true)).filter((quote) => quote.author_slug === slug); }
 export async function listQuotesByBook(slug: string) { return (await listQuotes(true)).filter((quote) => quote.book_slug === slug); }
 export async function listQuotesByCategory(category: string) { const wanted = comparable(category.replace(/-/g, ' ')); return (await listQuotes(true)).filter((quote) => quote.category && comparable(quote.category) === wanted); }

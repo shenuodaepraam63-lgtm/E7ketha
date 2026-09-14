@@ -8,7 +8,7 @@ import { commerceRouter } from './routers/commerce';
 import { confirmSupabaseUserEmail, listSupabaseUsers, toManagedUser, updateSupabaseUserRole } from './_core/supabaseAdmin';
 import { uploadNovelCover } from './cloudinary';
 import { audit, createAd, createNotification, deleteAd, getAdminReports, listActiveAds, listAds, listAuditLogs, listMessagesForUser, listNotifications, listTrash, markNotificationRead, purgeTrash, recordAdEvent, restoreTrash, sendAdminMessage, updateAd } from './management';
-import { createQuote, createQuoteImport, deleteQuote, existingQuoteTexts, getQuote, improveQuote, listQuoteAuthors, listQuoteBooks, listQuoteCategories, listQuoteImports, listQuotes, listQuotesByAuthor, listQuotesByBook, listQuotesByCategory, matchEntity, previewQuotesFromUrl, updateQuote } from './quotes';
+import { createQuote, createQuoteImport, deleteQuote, existingQuoteTexts, getQuote, getQuoteNeighbors, improveQuote, listQuoteAuthors, listQuoteBooks, listQuoteCategories, listQuoteImports, listQuotes, listQuotesByAuthor, listQuotesByBook, listQuotesByCategory, matchEntity, previewQuotesFromUrl, updateQuote } from './quotes';
 
 const novelSlugInput = z.object({ slug: z.string().min(1).max(160) });
 const ratingInput = z.object({ slug: z.string().min(1).max(160), rating: z.number().int().min(1).max(5) });
@@ -149,8 +149,9 @@ export const appRouter = router({
     }),
   }),
   quotes: router({
-    list: publicProcedure.query(() => listQuotes(true)),
+    list: publicProcedure.input(z.object({ limit: z.number().int().min(1).max(500).default(10), offset: z.number().int().min(0).default(0) }).optional()).query(({ input }) => listQuotes(true, input?.limit ?? 10, input?.offset ?? 0)),
     byId: publicProcedure.input(z.object({ id: z.number().int().positive() })).query(({ input }) => getQuote(input.id)),
+    neighbors: publicProcedure.input(z.object({ id: z.number().int().positive() })).query(({ input }) => getQuoteNeighbors(input.id)),
     byAuthor: publicProcedure.input(z.object({ slug: z.string().min(1).max(160) })).query(({ input }) => listQuotesByAuthor(input.slug)),
     byBook: publicProcedure.input(z.object({ slug: z.string().min(1).max(160) })).query(({ input }) => listQuotesByBook(input.slug)),
     byCategory: publicProcedure.input(z.object({ category: z.string().min(1).max(80) })).query(({ input }) => listQuotesByCategory(input.category)),
