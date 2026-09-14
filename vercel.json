@@ -10,6 +10,10 @@
   },
   "rewrites": [
     {
+      "source": "/",
+      "destination": "/api?resource=seo&path=/"
+    },
+    {
       "source": "/sitemap.xml",
       "destination": "/api?resource=sitemap"
     },
@@ -42,6 +46,10 @@
       "destination": "/index.html"
     },
     {
+      "source": "/series/:slug",
+      "destination": "/api?resource=seo&path=/series/:slug"
+    },
+    {
       "source": "/genres/:slug",
       "destination": "/api?resource=seo&path=/genres/:slug"
     },
@@ -51,7 +59,7 @@
     },
     {
       "source": "/quotes/category/:slug",
-      "destination": "/index.html"
+      "destination": "/api?resource=seo&path=/quotes/category/:slug"
     },
     {
       "source": "/quotes/:id",

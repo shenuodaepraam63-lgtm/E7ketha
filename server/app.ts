@@ -7,7 +7,7 @@ import { registerStorageProxy } from "./_core/storageProxy";
 import { appRouter } from "./routers";
 import { createContext } from "./_core/context";
 import { getAuthorBySlug, getGenreBySlug, getNovelBySlug, getSeriesBySlug, listAuthors, listGenres, listNovels, listSeries } from "./db";
-import { getQuote, listQuotes } from "./quotes";
+import { getQuote, listQuotes, listQuotesByCategory } from "./quotes";
 
 const SITE_URL = "https://e7ketha.vercel.app";
 function xmlEscape(value: unknown) {
@@ -58,7 +58,11 @@ function renderSeoDocument(template: string, input: { title: string; description
 async function renderPublicSeo(pathname: string) {
   const normalized = pathname.replace(/\/$/, '') || '/';
   const origin = SITE_URL;
-  if (normalized === '/') return null;
+  if (normalized === '/') {
+    const novels = await listNovels(10);
+    const novelLinks = novels.map((novel) => `<li><a href="${origin}/books/${htmlEscape(novel.slug)}">${htmlEscape(novel.title)}</a>${novel.author ? ` — ${htmlEscape(novel.author)}` : ''}</li>`).join('');
+    return renderSeoDocument(readClientTemplate(), { title: 'رِواية — اكتشف روايتك القادمة', description: 'رِواية — منصة اكتشاف الروايات العربية. ابحث عن روايتك القادمة واستكشف المؤلفين والتصنيفات والاقتباسات.', canonical: `${origin}/`, jsonLd: { '@context': 'https://schema.org', '@type': 'WebSite', name: 'رِواية', url: `${origin}/`, description: 'منصة اكتشاف الروايات العربية', inLanguage: 'ar', potentialAction: { '@type': 'SearchAction', target: `${origin}/search?q={search_term_string}`, 'query-input': 'required name=search_term_string' } }, content: `<main lang="ar" dir="rtl"><article><h1>رِواية — اكتشف روايتك القادمة</h1><p>ابحث واستكشف مكتبة رِواية الحية من أول فكرة لحد آخر صفحة.</p><nav><a href="${origin}/explore">استكشف الروايات</a> <a href="${origin}/quotes">الاقتباسات</a> <a href="${origin}/authors/ahmed-khaled-tawfik">المؤلفون</a></nav><section><h2>روايات مختارة</h2><ul>${novelLinks}</ul></section></article></main>` });
+  }
 
   if (/^\/(?:books|novel|novels)\/[^/]+$/.test(normalized)) {
     const slug = decodeURIComponent(normalized.split('/').pop() ?? '');
@@ -108,6 +112,17 @@ async function renderPublicSeo(pathname: string) {
     const description = stripHtml(quote.quote_text);
     const canonical = `${origin}/quotes/${quote.id}`;
     return renderSeoDocument(readClientTemplate(), { title: `اقتباس من ${quote.book_title || 'رواية'} | رِواية`, description, canonical, jsonLd: { '@context': 'https://schema.org', '@type': 'Quotation', text: quote.quote_text, author: quote.author_name ? { '@type': 'Person', name: quote.author_name } : undefined, isPartOf: quote.book_title ? { '@type': 'Book', name: quote.book_title } : undefined, url: canonical }, content: `<main lang="ar" dir="rtl"><nav><a href="${origin}/">الرئيسية</a> / <a href="${origin}/quotes">الاقتباسات</a></nav><article><h1>اقتباس من ${htmlEscape(quote.book_title || 'رواية')}</h1><blockquote>${htmlEscape(quote.quote_text)}</blockquote>${quote.author_name ? `<p>— <a href="${origin}/authors/${htmlEscape(quote.author_slug || '')}">${htmlEscape(quote.author_name)}</a></p>` : ''}</article></main>` });
+  }
+
+  if (/^\/quotes\/category\/[^/]+$/.test(normalized)) {
+    const slug = decodeURIComponent(normalized.split('/').pop() ?? '');
+    const category = slug.replace(/-/g, ' ').trim();
+    const quotes = await listQuotesByCategory(slug);
+    if (!quotes.length) return { html: '<!doctype html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="robots" content="noindex"><title>تصنيف الاقتباسات غير موجود | رِواية</title></head><body><h1>تصنيف الاقتباسات غير موجود</h1></body></html>', status: 404 };
+    const description = `اقرأ أجمل الاقتباسات عن ${category} من كتاب ومؤلفين مختلفين في رِواية.`;
+    const canonical = `${origin}/quotes/category/${encodeURIComponent(slug)}`;
+    const quoteItems = quotes.slice(0, 50).map((quote) => `<li><blockquote>${htmlEscape(quote.quote_text)}</blockquote>${quote.author_slug ? `<a href="${origin}/authors/${htmlEscape(quote.author_slug)}">${htmlEscape(quote.author_name)}</a>` : ''}${quote.book_slug ? ` · <a href="${origin}/books/${htmlEscape(quote.book_slug)}">${htmlEscape(quote.book_title)}</a>` : ''}</li>`).join('');
+    return renderSeoDocument(readClientTemplate(), { title: `اقتباسات ${category} | رِواية`, description, canonical, type: 'collection', jsonLd: { '@context': 'https://schema.org', '@type': 'CollectionPage', name: `اقتباسات ${category}`, description, url: canonical }, content: `<main lang="ar" dir="rtl"><nav><a href="${origin}/">الرئيسية</a> / <a href="${origin}/quotes">الاقتباسات</a></nav><article><h1>اقتباسات ${htmlEscape(category)}</h1><p>${htmlEscape(description)}</p><ul>${quoteItems}</ul></article></main>` });
   }
   return null;
 }
@@ -162,7 +177,7 @@ export function createApp() {
       return next(error);
     }
   });
-  app.get("/", (req, res, next) => req.query.resource === "sitemap" ? sitemapHandler(req, res) : next());
+  app.get("/", (req, res, next) => req.query.resource === "sitemap" ? sitemapHandler(req, res) : directSeoHandler(req, res, next));
   app.use(
     "/api/trpc",
     createExpressMiddleware({
