@@ -8,70 +8,18 @@
       "includeFiles": "dist/public/**"
     }
   },
-  "rewrites": [
-    {
-      "source": "/",
-      "destination": "/api?resource=seo&path=/"
-    },
-    {
-      "source": "/sitemap.xml",
-      "destination": "/api?resource=sitemap"
-    },
-    {
-      "source": "/sitemap/(.*).xml",
-      "destination": "/api?resource=$1"
-    },
-    {
-      "source": "/books/:slug",
-      "destination": "/api?resource=seo&path=/books/:slug"
-    },
-    {
-      "source": "/novel/:slug",
-      "destination": "/api?resource=seo&path=/novel/:slug"
-    },
-    {
-      "source": "/novels/:slug",
-      "destination": "/api?resource=seo&path=/novels/:slug"
-    },
-    {
-      "source": "/books/:slug/quotes",
-      "destination": "/index.html"
-    },
-    {
-      "source": "/authors/:slug",
-      "destination": "/api?resource=seo&path=/authors/:slug"
-    },
-    {
-      "source": "/authors/:slug/quotes",
-      "destination": "/index.html"
-    },
-    {
-      "source": "/series/:slug",
-      "destination": "/api?resource=seo&path=/series/:slug"
-    },
-    {
-      "source": "/genres/:slug",
-      "destination": "/api?resource=seo&path=/genres/:slug"
-    },
-    {
-      "source": "/quotes/categories",
-      "destination": "/index.html"
-    },
-    {
-      "source": "/quotes/category/:slug",
-      "destination": "/api?resource=seo&path=/quotes/category/:slug"
-    },
-    {
-      "source": "/quotes/:id",
-      "destination": "/api?resource=seo&path=/quotes/:id"
-    },
-    {
-      "source": "/api/(.*)",
-      "destination": "/api"
-    },
-    {
-      "source": "/(.*)",
-      "destination": "/index.html"
-    }
+  "routes": [
+    { "src": "^/$", "dest": "/api?resource=seo&path=/" },
+    { "src": "^/sitemap\\.xml$", "dest": "/api?resource=sitemap" },
+    { "src": "^/sitemap/(.*)\\.xml$", "dest": "/api?resource=$1" },
+    { "src": "^/(books|novel|novels)/([^/]+)$", "dest": "/api?resource=seo&path=/$1/$2" },
+    { "src": "^/authors/([^/]+)$", "dest": "/api?resource=seo&path=/authors/$1" },
+    { "src": "^/genres/([^/]+)$", "dest": "/api?resource=seo&path=/genres/$1" },
+    { "src": "^/series/([^/]+)$", "dest": "/api?resource=seo&path=/series/$1" },
+    { "src": "^/quotes/([0-9]+)$", "dest": "/api?resource=seo&path=/quotes/$1" },
+    { "src": "^/quotes/category/([^/]+)$", "dest": "/api?resource=seo&path=/quotes/category/$1" },
+    { "handle": "filesystem" },
+    { "src": "^/api/(.*)$", "dest": "/api" },
+    { "src": "^/(.*)$", "dest": "/index.html" }
   ]
 }
