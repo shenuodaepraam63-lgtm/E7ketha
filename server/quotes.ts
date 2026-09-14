@@ -20,7 +20,7 @@ export async function getQuote(id: number) {
   const rows = await request<QuoteRecord[]>(`quotes?id=eq.${id}&status=eq.published&select=*&limit=1`);
   return (await enrichQuotes(rows))[0] ?? null;
 }
-export async function getQuoteNeighbors(id: number) { const quotes = await listQuotes(true, 500); const index = quotes.findIndex((quote) => quote.id === id); return { previous: index > 0 ? quotes[index - 1] : null, next: index >= 0 && index < quotes.length - 1 ? quotes[index + 1] : null }; }
+export async function getQuoteNeighbors(id: number) { const current = await request<Array<{ id: number; created_at: string }>>(`quotes?id=eq.${id}&status=eq.published&select=id,created_at&limit=1`); const row = current[0]; if (!row) return { previous: null, next: null }; const timestamp = encodeURIComponent(row.created_at); const [previous, next] = await Promise.all([request<Array<{ id: number }>>(`quotes?status=eq.published&created_at=gt.${timestamp}&select=id&order=created_at.asc&limit=1`), request<Array<{ id: number }>>(`quotes?status=eq.published&created_at=lt.${timestamp}&select=id&order=created_at.desc&limit=1`)]); return { previous: previous[0] ?? null, next: next[0] ?? null }; }
 export async function listQuotesByAuthor(slug: string) { return (await listQuotes(true)).filter((quote) => quote.author_slug === slug); }
 export async function listQuotesByBook(slug: string) { return (await listQuotes(true)).filter((quote) => quote.book_slug === slug); }
 export async function listQuotesByCategory(category: string) { const wanted = comparable(category.replace(/-/g, ' ')); return (await listQuotes(true)).filter((quote) => quote.category && comparable(quote.category) === wanted); }

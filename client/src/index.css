@@ -75,6 +75,10 @@
   .cover-shadow { box-shadow: 0 22px 40px -24px rgba(18, 25, 57, .55); }
   .dark .cover-shadow { box-shadow: 0 22px 40px -24px rgba(0, 0, 0, .85); }
   .shimmer { background: linear-gradient(90deg, color-mix(in srgb, var(--muted) 80%, transparent) 25%, color-mix(in srgb, var(--card) 90%, transparent) 50%, color-mix(in srgb, var(--muted) 80%, transparent) 75%); background-size: 200% 100%; animation: shimmer 1.4s infinite; }
+  .quote-card { isolation: isolate; border-radius: 34px 18px 38px 22px !important; border-color: color-mix(in srgb, #8b7cff 24%, var(--border)); animation: quote-wave 5s ease-in-out infinite; }
+  .quote-card::before { content: ''; position: absolute; inset: 5px; z-index: -1; border-radius: 30px 14px 34px 18px; border: 1px solid rgba(151, 132, 255, .18); box-shadow: 0 0 18px rgba(118, 91, 255, .12), inset 0 0 24px rgba(118, 91, 255, .04); pointer-events: none; }
+  .quote-card::after { content: ''; position: absolute; left: -8%; right: -8%; bottom: -28px; z-index: -1; height: 72px; opacity: .7; background: radial-gradient(ellipse at 8% 70%, rgba(255, 94, 36, .8) 0 7%, transparent 23%), radial-gradient(ellipse at 24% 35%, rgba(255, 196, 64, .65) 0 6%, transparent 20%), radial-gradient(ellipse at 43% 78%, rgba(255, 72, 31, .7) 0 8%, transparent 24%), radial-gradient(ellipse at 65% 38%, rgba(255, 184, 48, .6) 0 6%, transparent 21%), radial-gradient(ellipse at 88% 68%, rgba(255, 73, 30, .72) 0 8%, transparent 23%); filter: blur(7px); animation: quote-fire 1.8s ease-in-out infinite alternate; pointer-events: none; }
+  .quote-card:hover::before { box-shadow: 0 0 28px rgba(118, 91, 255, .24), inset 0 0 28px rgba(118, 91, 255, .08); }
 }
 
 @keyframes shimmer { to { background-position: -200% 0; } }
@@ -82,6 +86,8 @@
  .book-loader { animation: book-loader-turn 1.2s ease-in-out infinite; transform-origin: center; }
 @keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes page-enter { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes quote-wave { 0%, 100% { border-radius: 34px 18px 38px 22px; } 50% { border-radius: 22px 36px 20px 40px; } }
+@keyframes quote-fire { from { transform: translateY(4px) scaleX(.96); opacity: .45; } to { transform: translateY(-3px) scaleX(1.03); opacity: .78; } }
 .animate-rise { animation: rise .55s var(--ease-out) both; }
 
 @media (max-width: 640px) {
@@ -91,4 +97,5 @@
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: .01ms !important; }
   .novel-card:hover { transform: none; filter: none; }
+  .quote-card::after { animation: none; opacity: .45; }
 }
