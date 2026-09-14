@@ -18,6 +18,10 @@ export async function getQuote(id: number) {
   const rows = await request<QuoteRecord[]>(`quotes?id=eq.${id}&status=eq.published&select=*&limit=1`);
   return (await enrichQuotes(rows))[0] ?? null;
 }
+export async function listQuotesByAuthor(slug: string) { return (await listQuotes(true)).filter((quote) => quote.author_slug === slug); }
+export async function listQuotesByBook(slug: string) { return (await listQuotes(true)).filter((quote) => quote.book_slug === slug); }
+export async function listQuotesByCategory(category: string) { const wanted = comparable(category.replace(/-/g, ' ')); return (await listQuotes(true)).filter((quote) => quote.category && comparable(quote.category) === wanted); }
+export async function listQuoteCategories() { return Array.from(new Set((await listQuotes(true)).map((quote) => quote.category).filter((category): category is string => Boolean(category?.trim())))); }
 async function enrichQuotes(rows: QuoteRecord[]) { const [authors, books] = await Promise.all([listQuoteAuthors(), listQuoteBooks()]); return rows.map((row) => { const author = authors.find((item) => item.id === row.author_id) ?? matchEntity(row.speaker, authors); const book = books.find((item) => item.id === row.novel_id) ?? matchEntity(row.book_title, books); return { ...row, quote_text: cleanImportedQuote(row.quote_text), author_id: author?.id ?? row.author_id ?? null, author_name: author?.name ?? row.speaker, author_slug: author?.slug ?? null, book_id: book?.id ?? row.novel_id ?? null, book_title: book?.title ?? row.book_title, book_slug: book?.slug ?? null }; }); }
 export async function createQuote(input: Omit<QuoteRecord, 'id' | 'created_at' | 'updated_at'>) { return (await request<QuoteRecord[]>('quotes', { method: 'POST', body: JSON.stringify(input) }))[0]; }
 export async function updateQuote(id: number, input: Partial<Omit<QuoteRecord, 'id' | 'created_at' | 'updated_at'>>) { return (await request<QuoteRecord[]>(`quotes?id=eq.${id}`, { method: 'PATCH', body: JSON.stringify({ ...input, updated_at: new Date().toISOString() }) }))[0]; }

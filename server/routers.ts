@@ -8,7 +8,7 @@ import { commerceRouter } from './routers/commerce';
 import { confirmSupabaseUserEmail, listSupabaseUsers, toManagedUser, updateSupabaseUserRole } from './_core/supabaseAdmin';
 import { uploadNovelCover } from './cloudinary';
 import { audit, createAd, createNotification, deleteAd, getAdminReports, listActiveAds, listAds, listAuditLogs, listMessagesForUser, listNotifications, listTrash, markNotificationRead, purgeTrash, recordAdEvent, restoreTrash, sendAdminMessage, updateAd } from './management';
-import { createQuote, createQuoteImport, deleteQuote, existingQuoteTexts, getQuote, improveQuote, listQuoteAuthors, listQuoteBooks, listQuoteImports, listQuotes, matchEntity, previewQuotesFromUrl, updateQuote } from './quotes';
+import { createQuote, createQuoteImport, deleteQuote, existingQuoteTexts, getQuote, improveQuote, listQuoteAuthors, listQuoteBooks, listQuoteCategories, listQuoteImports, listQuotes, listQuotesByAuthor, listQuotesByBook, listQuotesByCategory, matchEntity, previewQuotesFromUrl, updateQuote } from './quotes';
 
 const novelSlugInput = z.object({ slug: z.string().min(1).max(160) });
 const ratingInput = z.object({ slug: z.string().min(1).max(160), rating: z.number().int().min(1).max(5) });
@@ -151,6 +151,10 @@ export const appRouter = router({
   quotes: router({
     list: publicProcedure.query(() => listQuotes(true)),
     byId: publicProcedure.input(z.object({ id: z.number().int().positive() })).query(({ input }) => getQuote(input.id)),
+    byAuthor: publicProcedure.input(z.object({ slug: z.string().min(1).max(160) })).query(({ input }) => listQuotesByAuthor(input.slug)),
+    byBook: publicProcedure.input(z.object({ slug: z.string().min(1).max(160) })).query(({ input }) => listQuotesByBook(input.slug)),
+    byCategory: publicProcedure.input(z.object({ category: z.string().min(1).max(80) })).query(({ input }) => listQuotesByCategory(input.category)),
+    categories: publicProcedure.query(() => listQuoteCategories()),
   }),
   adminQuotes: router({
     list: adminProcedure.query(() => listQuotes(false)),

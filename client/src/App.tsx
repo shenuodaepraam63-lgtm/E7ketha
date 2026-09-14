@@ -21,6 +21,10 @@ const AdminPage = lazy(() => import('@/pages/AdminPage'));
 const NotFound = lazy(() => import('@/pages/NotFound'));
 const QuotesPage = lazy(() => import('@/pages/QuotesPage'));
 const QuotePage = lazy(() => import('@/pages/QuotesPage').then((module) => ({ default: module.QuotePage })));
+const QuoteCategoriesPage = lazy(() => import('@/pages/QuoteLandingPages'));
+const QuoteCategoryPage = lazy(() => import('@/pages/QuoteLandingPages').then((module) => ({ default: module.QuoteCategoryPage })));
+const AuthorQuotesPage = lazy(() => import('@/pages/QuoteLandingPages').then((module) => ({ default: module.AuthorQuotesPage })));
+const BookQuotesPage = lazy(() => import('@/pages/QuoteLandingPages').then((module) => ({ default: module.BookQuotesPage })));
 const AboutPage = lazy(() => import('@/pages/InfoPages').then((module) => ({ default: module.AboutPage })));
 const ContactPage = lazy(() => import('@/pages/InfoPages').then((module) => ({ default: module.ContactPage })));
 const FaqPage = lazy(() => import('@/pages/InfoPages').then((module) => ({ default: module.FaqPage })));
@@ -67,8 +71,8 @@ function SeoManager({ location }: { location: string }) {
 function PublicRoutes({ theme, onThemeToggle }: { theme: 'light' | 'dark'; onThemeToggle: () => void }) {
   return <SiteShell theme={theme} onThemeToggle={onThemeToggle}><Suspense fallback={<LoadingPage />}><Switch>
     <Route path="/" component={Home} /><Route path="/explore" component={ExplorePage} /><Route path="/search" component={SearchPage} />
-    <Route path="/quotes" component={QuotesPage} /><Route path="/quotes/:id" component={QuotePage} /><Route path="/books/:slug" component={NovelPage} /><Route path="/novel/:slug" component={NovelPage} /><Route path="/novels/:slug" component={NovelPage} />
-    <Route path="/authors/:slug" component={AuthorPage} /><Route path="/genres/:slug" component={GenrePage} /><Route path="/series/:slug" component={SeriesPage} />
+    <Route path="/quotes" component={QuotesPage} /><Route path="/quotes/categories" component={QuoteCategoriesPage} /><Route path="/quotes/category/:slug" component={QuoteCategoryPage} /><Route path="/quotes/:id" component={QuotePage} /><Route path="/books/:slug/quotes" component={BookQuotesPage} /><Route path="/books/:slug" component={NovelPage} /><Route path="/novel/:slug" component={NovelPage} /><Route path="/novels/:slug" component={NovelPage} />
+    <Route path="/authors/:slug/quotes" component={AuthorQuotesPage} /><Route path="/authors/:slug" component={AuthorPage} /><Route path="/genres/:slug" component={GenrePage} /><Route path="/series/:slug" component={SeriesPage} />
     <Route path="/discover" component={DiscoverPage} /><Route path="/my-list" component={ReadingListPage} /><Route path="/profile" component={ProfilePage} />
     <Route path="/login">{() => <AuthPage />}</Route><Route path="/register">{() => <AuthPage register />}</Route><Route path="/auth/callback" component={AuthCallbackPage} /><Route path="/reset-password" component={PasswordResetPage} />
     <Route path="/about" component={AboutPage} /><Route path="/how-it-works" component={HowItWorksPage} /><Route path="/privacy" component={PrivacyPage} /><Route path="/terms" component={TermsPage} />
