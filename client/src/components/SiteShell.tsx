@@ -5,7 +5,7 @@ import { Link, useLocation } from 'wouter';
 
 export function SiteShell({ children, theme, onThemeToggle, footer = true }: { children: ReactNode; theme: 'light' | 'dark'; onThemeToggle: () => void; footer?: boolean }) {
   const [location] = useLocation();
-  return <div dir="rtl" className="min-h-screen overflow-x-hidden"><SiteHeader theme={theme} onThemeToggle={onThemeToggle} /><main className="page-transition">{children}</main>{footer && <SiteFooter />}<MobileBottomNav /></div>;
+  return <div dir="rtl" className="min-h-screen overflow-x-hidden" suppressHydrationWarning><SiteHeader theme={theme} onThemeToggle={onThemeToggle} /><main className="page-transition">{children}</main>{footer && <SiteFooter />}<MobileBottomNav /></div>;
 }
 
 export function Breadcrumbs({ items }: { items: string[] }) {
