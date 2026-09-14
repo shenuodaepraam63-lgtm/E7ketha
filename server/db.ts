@@ -46,7 +46,7 @@ function requireDb() {
 
 async function supabaseRest<T>(table: string, params: string) {
   if (!ENV.supabaseUrl || !ENV.supabasePublishableKey) throw new Error('Supabase REST is not configured');
-  const response = await fetch(`${ENV.supabaseUrl}/rest/v1/${table}?${params}`, { headers: { apikey: ENV.supabaseSecretKey || ENV.supabasePublishableKey, Authorization: `Bearer ${ENV.supabaseSecretKey || ENV.supabasePublishableKey}` } });
+  const response = await fetch(`${ENV.supabaseUrl}/rest/v1/${table}?${params}`, { signal: AbortSignal.timeout(10000), headers: { apikey: ENV.supabaseSecretKey || ENV.supabasePublishableKey, Authorization: `Bearer ${ENV.supabaseSecretKey || ENV.supabasePublishableKey}` } });
   if (!response.ok) throw new Error(`Supabase REST ${response.status}: ${await response.text()}`);
   return response.json() as Promise<T>;
 }
@@ -419,11 +419,13 @@ export async function getAdminSummary() {
 export async function listAdminNovels() {
   const db = await getDb();
   if (!db) {
-    const rows = await supabaseRest<any[]>('novels', 'select=*&order=updatedAt.desc&limit=1000');
-    return Promise.all(rows.map(async (row) => ({ ...row, links: await listNovelLinks(Number(row.id)) })));
+    const rows = await supabaseRest<any[]>('novels', 'select=id,slug,title,authorId,coverUrl,description,rightsNote,rating,ratingCount,parts,status,publicationYear,language,updatedAt&order=updatedAt.desc&limit=100');
+    const linksByNovel = await listNovelLinksBatch(rows.map((row) => Number(row.id)));
+    return rows.map((row) => ({ ...row, links: linksByNovel.get(Number(row.id)) ?? [] }));
   }
-  const rows = await db.select({ id: novels.id, slug: novels.slug, title: novels.title, authorId: authors.id, author: authors.name, coverUrl: novels.coverUrl, description: novels.description, rightsNote: novels.rightsNote, rating: novels.rating, ratingCount: novels.ratingCount, parts: novels.parts, status: novels.status, publicationYear: novels.publicationYear, language: novels.language, updatedAt: novels.updatedAt }).from(novels).innerJoin(authors, eq(novels.authorId, authors.id)).orderBy(desc(novels.updatedAt));
-  return Promise.all(rows.map(async (row) => ({ ...row, links: await listNovelLinks(Number(row.id)) })));
+  const rows = await db.select({ id: novels.id, slug: novels.slug, title: novels.title, authorId: authors.id, author: authors.name, coverUrl: novels.coverUrl, description: novels.description, rightsNote: novels.rightsNote, rating: novels.rating, ratingCount: novels.ratingCount, parts: novels.parts, status: novels.status, publicationYear: novels.publicationYear, language: novels.language, updatedAt: novels.updatedAt }).from(novels).innerJoin(authors, eq(novels.authorId, authors.id)).orderBy(desc(novels.updatedAt)).limit(100);
+  const linksByNovel = await listNovelLinksBatch(rows.map((row) => Number(row.id)));
+  return rows.map((row) => ({ ...row, links: linksByNovel.get(Number(row.id)) ?? [] }));
 }
 
 export async function listAdminAuthors() {
@@ -495,6 +497,15 @@ export async function deleteGenre(id: number) {
 export type NovelLinkInput = { label: string; url: string; type: 'read' | 'download' };
 export type AdminNovelInput = { slug: string; title: string; authorId: number; coverUrl?: string; description?: string; rightsNote?: string; parts?: number; status?: 'standalone' | 'completed' | 'ongoing'; publicationYear?: number; language?: string; genreIds?: number[]; links?: NovelLinkInput[] };
 async function listNovelLinks(novelId: number) { try { return await supabaseRest<any[]>('novelLinks', `select=id,label,url,type,displayOrder&novelId=eq.${novelId}&order=displayOrder.asc&limit=50`); } catch { return []; } }
+async function listNovelLinksBatch(novelIds: number[]) {
+  if (!novelIds.length) return new Map<number, any[]>();
+  try {
+    const rows = await supabaseRest<any[]>('novelLinks', `select=id,novelId,label,url,type,displayOrder&novelId=in.(${novelIds.join(',')})&order=displayOrder.asc&limit=2000`);
+    const grouped = new Map<number, any[]>();
+    for (const row of rows) { const id = Number(row.novelId); const list = grouped.get(id) ?? []; list.push(row); grouped.set(id, list); }
+    return grouped;
+  } catch { return new Map<number, any[]>(); }
+}
 async function replaceNovelLinks(novelId: number, links: NovelLinkInput[] = []) { await supabaseWrite('novelLinks', 'DELETE', undefined, `novelId=eq.${novelId}`); if (links.length) await supabaseWrite('novelLinks', 'POST', links.map((link, index) => ({ novelId, label: link.label, url: link.url, type: link.type, displayOrder: index }))); }
 
 function normalizeNovelSlug(value: string, fallbackTitle?: string): string {
