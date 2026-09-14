@@ -3,8 +3,9 @@ import { Route, Switch, useLocation } from 'wouter';
 import { Toaster } from 'sonner';
 import { SiteShell } from '@/components/SiteShell';
 import { BookLoader } from '@/components/BookLoader';
+// Homepage must not be lazy: SSR shell must align with the initial React tree.
+import Home from '@/pages/Home';
 
-const Home = lazy(() => import('@/pages/Home'));
 const ExplorePage = lazy(() => import('@/pages/ExplorePages').then((module) => ({ default: module.ExplorePage })));
 const SearchPage = lazy(() => import('@/pages/ExplorePages').then((module) => ({ default: module.SearchPage })));
 const NovelPage = lazy(() => import('@/pages/NovelPage'));
