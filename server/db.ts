@@ -423,6 +423,7 @@ export async function listAdminNovels() {
     return Promise.all(rows.map(async (row) => ({ ...row, links: await listNovelLinks(Number(row.id)) })));
   }
   const rows = await db.select({ id: novels.id, slug: novels.slug, title: novels.title, authorId: authors.id, author: authors.name, coverUrl: novels.coverUrl, description: novels.description, rating: novels.rating, ratingCount: novels.ratingCount, parts: novels.parts, status: novels.status, publicationYear: novels.publicationYear, language: novels.language, updatedAt: novels.updatedAt }).from(novels).innerJoin(authors, eq(novels.authorId, authors.id)).orderBy(desc(novels.updatedAt));
+  return Promise.all(rows.map(async (row) => ({ ...row, links: await listNovelLinks(Number(row.id)) })));
 }
 
 export async function listAdminAuthors() {
