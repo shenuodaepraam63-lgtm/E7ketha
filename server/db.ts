@@ -25,7 +25,11 @@ export async function getDb() {
       _pool = new Pool({
         connectionString: ENV.databaseUrl,
         ssl: { rejectUnauthorized: false },
-        max: 10,
+        // Vercel functions are short-lived; keep the per-instance pool small.
+        max: Number(process.env.DB_POOL_MAX ?? 2),
+        connectionTimeoutMillis: Number(process.env.DB_CONNECTION_TIMEOUT_MS ?? 5000),
+        idleTimeoutMillis: Number(process.env.DB_IDLE_TIMEOUT_MS ?? 10000),
+        maxUses: Number(process.env.DB_POOL_MAX_USES ?? 500),
       });
       _db = drizzle(_pool);
     } catch (error) {
@@ -95,8 +99,8 @@ async function getNovelBySlugFromRest(slug: string) {
     }
   }
   const candidates = Array.from(new Set([slug, decoded, normalizeNovelSlug(decoded)])).filter(Boolean);
-  const rows = await supabaseRest<any[]>('novels', `select=*&or=(${candidates.map((value) => `slug.eq.${encodeURIComponent(value)}`).join(',')})&limit=1`);
-  const row = rows[0] ?? (await supabaseRest<any[]>('novels', 'select=*&limit=1000')).find((item) => normalizeNovelSlug(item.slug, item.title) === normalizeNovelSlug(decoded));
+  const rows = await supabaseRest<any[]>('novels', `select=id,slug,title,coverUrl,description,rightsNote,rating,ratingCount,parts,status,publicationYear,language,authorId&or=(${candidates.map((value) => `slug.eq.${encodeURIComponent(value)}`).join(',')})&limit=1`);
+  const row = rows[0];
   if (!row) return null;
   const authorsRows = await supabaseRest<any[]>('authors', `select=name,slug&id=eq.${row.authorId}&limit=1`);
   const author = authorsRows[0];
@@ -317,23 +321,28 @@ export async function getNovelBySlug(slug: string) {
   const decodedSlug = decodeURIComponent(slug).trim();
   const normalizedSlug = normalizeNovelSlug(decodedSlug);
   try {
-  const result = await db.select({
-    id: novels.id,
-    slug: novels.slug,
-    title: novels.title,
-    coverUrl: novels.coverUrl,
-    description: novels.description,
-    rating: novels.rating,
-    ratingCount: novels.ratingCount,
-    parts: novels.parts,
-    status: novels.status,
-    publicationYear: novels.publicationYear,
-    language: novels.language,
-    author: authors.name,
-    authorSlug: authors.slug,
-    authorId: authors.id,
-  }).from(novels).innerJoin(authors, eq(novels.authorId, authors.id)).where(or(/^\d+$/.test(decodedSlug) ? eq(novels.id, Number(decodedSlug)) : eq(novels.slug, slug), eq(novels.slug, decodedSlug), eq(novels.slug, normalizedSlug))).limit(1);
-  if (result[0]) return { ...result[0], slug: normalizeNovelSlug(result[0].slug, result[0].title), links: await listNovelLinks(Number(result[0].id)) };
+  const numericMatch = /^\d+$/.test(decodedSlug) ? sql`n.id = ${Number(decodedSlug)}` : sql`FALSE`;
+  const result = await db.execute(sql`
+    SELECT
+      n.id, n.slug, n.title, n."coverUrl", n.description, n."rightsNote",
+      n.rating, n."ratingCount", n.parts, n.status, n."publicationYear", n.language,
+      a.name AS author, a.slug AS "authorSlug", a.id AS "authorId",
+      COALESCE(
+        json_agg(
+          json_build_object('id', l.id, 'label', l.label, 'url', l.url, 'type', l.type, 'displayOrder', l."displayOrder")
+          ORDER BY l."displayOrder" ASC
+        ) FILTER (WHERE l.id IS NOT NULL),
+        '[]'::json
+      ) AS links
+    FROM public."novels" n
+    INNER JOIN public."authors" a ON a.id = n."authorId"
+    LEFT JOIN public."novelLinks" l ON l."novelId" = n.id
+    WHERE (${numericMatch} OR n.slug = ${slug} OR n.slug = ${decodedSlug} OR n.slug = ${normalizedSlug})
+    GROUP BY n.id, a.id
+    LIMIT 1
+  `);
+  const row = result.rows[0] as any;
+  if (row) return { ...row, slug: normalizeNovelSlug(row.slug, row.title), links: row.links ?? [] };
   return getNovelBySlugFromRest(slug);
   } catch (error) {
     console.warn('[Database] Falling back to Supabase REST for novel lookup:', error instanceof Error ? error.message : error);
