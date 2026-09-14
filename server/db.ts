@@ -544,8 +544,10 @@ async function resolveCoverUrl(value?: string | null) {
     if (contentType.startsWith('image/')) return response.url || url;
     if (contentType.includes('text/html')) {
       const html = await response.text();
-      const match = html.match(/<meta[^>]+property=[\"']og:image[\"'][^>]+content=[\"']([^\"']+)[\"']/i) ?? html.match(/<meta[^>]+content=[\"']([^\"']+)[\"'][^>]+property=[\"']og:image[\"']/i);
+      const match = html.match(/<meta[^>]+(?:property|name)=[\"'](?:og:image|twitter:image)[\"'][^>]+content=[\"']([^\"']+)[\"']/i) ?? html.match(/<meta[^>]+content=[\"']([^\"']+)[\"'][^>]+(?:property|name)=[\"'](?:og:image|twitter:image)[\"']/i);
       if (match?.[1]) return new URL(match[1], response.url || url).toString();
+      const imageSource = html.match(/<img[^>]+(?:src|data-src)=[\"']([^\"']+)[\"']/i)?.[1];
+      if (imageSource) return new URL(imageSource, response.url || url).toString();
     }
   } catch { /* نحتفظ بالرابط الأصلي إذا كان الموقع يمنع الفحص */ }
   return url;
