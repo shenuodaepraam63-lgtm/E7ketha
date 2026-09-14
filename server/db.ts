@@ -535,17 +535,34 @@ function rankSearchRows(rows: any[], query: string) {
     return { row, score }; }).filter((item) => item.score > 0).sort((a, b) => b.score - a.score || Number(b.row.ratingCount ?? 0) - Number(a.row.ratingCount ?? 0)).map((item) => item.row);
 }
 
+async function resolveCoverUrl(value?: string | null) {
+  const url = value?.trim();
+  if (!url) return null;
+  try {
+    const response = await fetch(url, { redirect: 'follow', signal: AbortSignal.timeout(7000), headers: { Accept: 'image/*, text/html;q=0.9' } });
+    const contentType = response.headers.get('content-type') ?? '';
+    if (contentType.startsWith('image/')) return response.url || url;
+    if (contentType.includes('text/html')) {
+      const html = await response.text();
+      const match = html.match(/<meta[^>]+property=[\"']og:image[\"'][^>]+content=[\"']([^\"']+)[\"']/i) ?? html.match(/<meta[^>]+content=[\"']([^\"']+)[\"'][^>]+property=[\"']og:image[\"']/i);
+      if (match?.[1]) return new URL(match[1], response.url || url).toString();
+    }
+  } catch { /* نحتفظ بالرابط الأصلي إذا كان الموقع يمنع الفحص */ }
+  return url;
+}
+
 export async function createNovel(input: AdminNovelInput) {
   const db = await getDb();
   const { genreIds = [], links, ...novelInput } = input;
+  const resolvedCoverUrl = await resolveCoverUrl(input.coverUrl);
   if (!db) {
-    const rows = await supabaseWrite<any[]>('novels', 'POST', { ...novelInput, slug: normalizeNovelSlug(input.slug || input.title), coverUrl: input.coverUrl || null, description: input.description || null });
+    const rows = await supabaseWrite<any[]>('novels', 'POST', { ...novelInput, slug: normalizeNovelSlug(input.slug || input.title), coverUrl: resolvedCoverUrl, description: input.description || null });
     const row = rows[0];
     if (links) await replaceNovelLinks(Number(row.id), links);
     if (genreIds.length) await supabaseWrite('novelGenres', 'POST', genreIds.map((genreId) => ({ novelId: row.id, genreId })));
     return row;
   }
-  const [row] = await db.insert(novels).values({ ...novelInput, slug: normalizeNovelSlug(input.slug || input.title), coverUrl: input.coverUrl || null, description: input.description || null }).returning();
+  const [row] = await db.insert(novels).values({ ...novelInput, slug: normalizeNovelSlug(input.slug || input.title), coverUrl: resolvedCoverUrl, description: input.description || null }).returning();
   if (links) await replaceNovelLinks(Number(row.id), links);
   if (genreIds.length) await db.insert(novelGenres).values(genreIds.map((genreId) => ({ novelId: row.id, genreId }))).onConflictDoNothing();
   return row;
@@ -554,6 +571,8 @@ export async function createNovel(input: AdminNovelInput) {
 export async function updateNovel(id: number, input: Partial<AdminNovelInput>) {
   const db = await getDb();
   const { genreIds, links, ...novelInput } = input
+  const resolvedCoverUrl = input.coverUrl === undefined ? undefined : await resolveCoverUrl(input.coverUrl);
+  if (resolvedCoverUrl !== undefined) novelInput.coverUrl = resolvedCoverUrl ?? '';
   if (!db) {
     const normalizedInput = novelInput.slug ? { ...novelInput, slug: normalizeNovelSlug(novelInput.slug) } : novelInput;
     const rows = await supabaseWrite<any[]>('novels', 'PATCH', { ...normalizedInput, updatedAt: new Date().toISOString() }, `id=eq.${id}`);
