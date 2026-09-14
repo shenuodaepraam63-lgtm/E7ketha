@@ -5,6 +5,31 @@ import { PageIntro, Breadcrumbs, EmptyState } from '@/components/SiteShell';
 import { trpc } from '@/lib/trpc';
 import { toast } from 'sonner';
 
+function playQuoteOpenSound() {
+  if (typeof window === 'undefined') return;
+  try {
+    const AudioContextClass = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AudioContextClass) return;
+    const context = new AudioContextClass();
+    const now = context.currentTime;
+    const gain = context.createGain();
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.08, now + 0.015);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.24);
+    gain.connect(context.destination);
+    [220, 440, 660].forEach((frequency, index) => {
+      const oscillator = context.createOscillator();
+      oscillator.type = index === 0 ? 'sine' : 'triangle';
+      oscillator.frequency.setValueAtTime(frequency, now);
+      oscillator.frequency.exponentialRampToValueAtTime(frequency * 0.72, now + 0.2);
+      oscillator.connect(gain);
+      oscillator.start(now);
+      oscillator.stop(now + 0.25);
+    });
+    window.setTimeout(() => void context.close(), 320);
+  } catch { /* بعض المتصفحات تمنع الصوت قبل التفاعل، ولا نعطل فتح الاقتباس */ }
+}
+
 export default function QuotesPage() {
   const [visibleCount, setVisibleCount] = useState(10);
   const query = trpc.quotes.list.useQuery({ limit: visibleCount, offset: 0 }, { placeholderData: (previous) => previous });
@@ -14,7 +39,7 @@ export default function QuotesPage() {
     <Breadcrumbs items={['اقتباسات الكتب']} />
     <PageIntro eyebrow="بين السطور" title="اقتباسات الكتب" description="اكتشف اقتباسات عن الحياة والحب والنجاح والفلسفة من كتّاب وروايات مختلفة." /><div className="mb-8 flex flex-wrap items-center gap-3"><div className="flex min-w-[240px] flex-1 items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3"><Search size={18} className="text-[#675de8]" /><input value={search} onChange={(event) => setSearch(event.target.value)} className="min-w-0 flex-1 bg-transparent text-sm outline-none" placeholder="ابحث عن اقتباس أو كاتب أو كتاب..." /></div><Link href="/quotes/categories" className="rounded-2xl border border-[#675de8]/30 bg-[#f0eeff] px-4 py-3 text-xs font-extrabold text-[#675de8]">تصفح التصنيفات</Link></div>
     {query.isLoading ? <div className="flex min-h-56 items-center justify-center gap-2 text-sm text-muted-foreground"><Loader2 className="animate-spin" size={18} /> جارٍ تحميل الاقتباسات...</div> : <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
-      {filtered.map((item, index) => <Link key={item.id} href={`/quotes/${item.id}`} className="quote-card group relative overflow-hidden rounded-[26px] border border-border bg-card p-6 shadow-[0_18px_50px_-38px_rgba(22,30,70,.5)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_24px_58px_-34px_rgba(91,77,232,.35)]">
+      {filtered.map((item, index) => <Link key={item.id} href={`/quotes/${item.id}`} onClick={playQuoteOpenSound} className="quote-card group relative overflow-hidden rounded-[26px] border border-border bg-card p-6 shadow-[0_18px_50px_-38px_rgba(22,30,70,.5)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_24px_58px_-34px_rgba(91,77,232,.35)]">
         <div className="mb-8 flex items-center justify-between"><span className="grid size-11 place-items-center rounded-2xl bg-[#f0eeff] text-[#675de8] dark:bg-[#24224c] dark:text-[#bcb7ff]"><Quote size={20} /></span><span className="text-[11px] font-bold text-muted-foreground">{String(index + 1).padStart(2, '0')}</span></div>
         <blockquote className="text-lg font-extrabold leading-9 tracking-[-.04em]">“{item.quote_text}”</blockquote>
         <div className="mt-8 flex items-center gap-3 border-t border-border pt-4"><BookOpen size={15} className="text-[#675de8]" /><div>{item.book_slug ? <Link href={`/books/${item.book_slug}`} onClick={(event) => event.stopPropagation()} className="block text-xs font-extrabold hover:text-[#675de8]">{item.book_title}</Link> : <p className="text-xs font-extrabold">{item.book_title || 'مصدر غير محدد'}</p>}{item.author_slug ? <Link href={`/authors/${item.author_slug}`} onClick={(event) => event.stopPropagation()} className="mt-1 block text-[10px] text-muted-foreground hover:text-[#675de8]">{item.author_name}</Link> : <p className="mt-1 text-[10px] text-muted-foreground">{item.author_name || item.speaker || 'القائل غير محدد'}</p>}{item.category && <p className="mt-1 text-[10px] text-muted-foreground">{item.category}</p>}</div></div>
