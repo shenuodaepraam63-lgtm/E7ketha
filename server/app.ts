@@ -160,7 +160,7 @@ export function createApp() {
   app.get("/api/sitemap.xml", sitemapHandler);
   const directSeoHandler = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
     const pathname = req.path;
-    if (pathname.startsWith('/quotes/') && !/^\/quotes\/\d+$/.test(pathname)) return next();
+    if (pathname.startsWith('/quotes/') && !/^\/quotes\/(?:\d+|category\/[^/]+)$/.test(pathname)) return next();
     try {
       const result = await renderPublicSeo(pathname);
       if (!result) return next();
@@ -170,7 +170,7 @@ export function createApp() {
       return next(error);
     }
   };
-  app.get(['/books/:slug', '/novel/:slug', '/novels/:slug', '/authors/:slug', '/genres/:slug', '/series/:slug', '/quotes/:id'], directSeoHandler);
+  app.get(['/books/:slug', '/novel/:slug', '/novels/:slug', '/authors/:slug', '/genres/:slug', '/series/:slug', '/quotes/:id', '/quotes/category/:slug'], directSeoHandler);
   app.get("/api", async (req, res, next) => {
     if (req.query.resource !== 'seo' || typeof req.query.path !== 'string') return next();
     try {
