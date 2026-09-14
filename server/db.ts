@@ -25,6 +25,7 @@ export async function getDb() {
       _pool = new Pool({
         connectionString: ENV.databaseUrl,
         ssl: { rejectUnauthorized: false },
+        // Vercel functions are short-lived; keep the per-instance pool small.
         max: Number(process.env.DB_POOL_MAX ?? 2),
         connectionTimeoutMillis: Number(process.env.DB_CONNECTION_TIMEOUT_MS ?? 5000),
         idleTimeoutMillis: Number(process.env.DB_IDLE_TIMEOUT_MS ?? 10000),
@@ -87,17 +88,33 @@ async function supabaseWrite<T>(table: string, method: 'POST' | 'PATCH' | 'DELET
 }
 
 export async function getAdminSummary() {
+  const db = await getDb();
   const quotesPromise = Promise.all([
     supabaseCount('quotes').catch(() => 0),
     supabaseCount('quotes', 'status=eq.published').catch(() => 0),
     supabaseCount('quotes', 'status=eq.draft').catch(() => 0),
   ]);
-  const db = await getDb();
   if (!db) {
     const [novelsCount, authorsCount, seriesCount, reviewsCount, genresCount, usersCount, [quotes, publishedQuotes, draftQuotes]] = await Promise.all([
-      supabaseCount('novels'), supabaseCount('authors'), supabaseCount('series'), supabaseCount('reviews', 'status=eq.pending'), supabaseCount('genres'), supabaseCount('users'), quotesPromise,
+      supabaseCount('novels'),
+      supabaseCount('authors'),
+      supabaseCount('series'),
+      supabaseCount('reviews', 'status=eq.pending'),
+      supabaseCount('genres'),
+      supabaseCount('users'),
+      quotesPromise,
     ]);
-    return { novels: novelsCount, authors: authorsCount, sources: seriesCount, needsReview: reviewsCount, genres: genresCount, users: usersCount, quotes, publishedQuotes, draftQuotes };
+    return {
+      novels: novelsCount,
+      authors: authorsCount,
+      sources: seriesCount,
+      needsReview: reviewsCount,
+      genres: genresCount,
+      users: usersCount,
+      quotes,
+      publishedQuotes,
+      draftQuotes,
+    };
   }
   const [novelCount, authorCount, sourceCount, reviewCount, genreCount, userCount, [quotes, publishedQuotes, draftQuotes]] = await Promise.all([
     db.select({ count: sql<number>`COUNT(*)` }).from(novels),
@@ -108,15 +125,15 @@ export async function getAdminSummary() {
     db.select({ count: sql<number>`COUNT(*)` }).from(users),
     quotesPromise,
   ]);
-  return { novels: Number(novelCount[0]?.count ?? 0), authors: Number(authorCount[0]?.count ?? 0), sources: Number(sourceCount[0]?.count ?? 0), needsReview: Number(reviewCount[0]?.count ?? 0), genres: Number(genreCount[0]?.count ?? 0), users: Number(userCount[0]?.count ?? 0), quotes, publishedQuotes, draftQuotes };
+  return {
+    novels: Number(novelCount[0]?.count ?? 0),
+    authors: Number(authorCount[0]?.count ?? 0),
+    sources: Number(sourceCount[0]?.count ?? 0),
+    needsReview: Number(reviewCount[0]?.count ?? 0),
+    genres: Number(genreCount[0]?.count ?? 0),
+    users: Number(userCount[0]?.count ?? 0),
+    quotes,
+    publishedQuotes,
+    draftQuotes,
+  };
 }
-
-/* FULL FILE CONTINUES — download artifacts/db_ORIGINAL_RESTORE.ts and replace this file if functions below are missing */
-export async function listNovels(limit = 50) { try { const db = await getDb(); if (!db) return supabaseRest<any[]>('novels', `select=*&order=createdAt.desc&limit=${limit}`); const rows = await db.select({ id: novels.id, slug: novels.slug, title: novels.title, coverUrl: novels.coverUrl, description: novels.description, rating: novels.rating, ratingCount: novels.ratingCount, parts: novels.parts, status: novels.status, publicationYear: novels.publicationYear, author: authors.name, authorSlug: authors.slug }).from(novels).innerJoin(authors, eq(novels.authorId, authors.id)).orderBy(desc(novels.rating), desc(novels.createdAt)).limit(limit); return rows; } catch { return supabaseRest<any[]>('novels', `select=*&order=createdAt.desc&limit=${limit}`); } }
-export async function listAuthors() { const db = await getDb(); if (!db) return supabaseRest<any[]>('authors', 'select=*&order=name.asc&limit=1000'); return db.select().from(authors).orderBy(asc(authors.name)); }
-export async function listGenres() { const db = await getDb(); if (!db) return supabaseRest<any[]>('genres', 'select=*&order=name.asc&limit=1000'); return db.select().from(genres).orderBy(asc(genres.name)); }
-export async function listUsers() { const db = await getDb(); if (!db) return []; return db.select({ openId: users.openId, role: users.role }).from(users); }
-export async function updateUserRole(openId: string, role: 'user' | 'admin') { const db = await getDb(); if (!db) return null; const [row] = await db.update(users).set({ role, updatedAt: new Date() }).where(eq(users.openId, openId)).returning(); return row ?? null; }
-export async function getUserByOpenId(openId: string) { const db = await getDb(); if (!db) return undefined; const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1); return result[0]; }
-export async function upsertUser(user: InsertUser): Promise<void> { if (!user.openId) throw new Error('User openId is required for upsert'); const db = await getDb(); if (!db) return; await db.insert(users).values({ openId: user.openId, name: user.name, email: user.email, loginMethod: user.loginMethod, role: user.role, lastSignedIn: user.lastSignedIn ?? new Date() }).onConflictDoUpdate({ target: users.openId, set: { name: user.name, email: user.email, lastSignedIn: user.lastSignedIn ?? new Date() } as any }); }
-export { authors, genres, novels, reviews, series };
