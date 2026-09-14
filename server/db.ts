@@ -568,7 +568,8 @@ export async function updateNovel(id: number, input: Partial<AdminNovelInput>) {
   if (!row) return null;
   if (links) await replaceNovelLinks(id, links);
   if (genreIds) {
-    await db.delete(novelGenres).where(eq(novelGenres.novelId, id));
+    await replaceNovelLinks(id);
+  await db.delete(novelGenres).where(eq(novelGenres.novelId, id));
     if (genreIds.length) await db.insert(novelGenres).values(genreIds.map((genreId) => ({ novelId: id, genreId }))).onConflictDoNothing();
   }
   return row;
@@ -577,6 +578,7 @@ export async function updateNovel(id: number, input: Partial<AdminNovelInput>) {
 export async function deleteNovel(id: number) {
   const db = await getDb();
   if (!db) {
+    await replaceNovelLinks(id);
     for (const [table, column] of [['novelGenres', 'novelId'], ['seriesBooks', 'novelId'], ['readingListItems', 'novelId'], ['ratings', 'novelId'], ['reviews', 'novelId']] as const) await supabaseWrite(table, 'DELETE', undefined, `${column}=eq.${id}`);
     await supabaseWrite('novels', 'DELETE', undefined, `id=eq.${id}`);
     return { success: true } as const;
