@@ -6,10 +6,15 @@ import path from "node:path";
 import { defineConfig, type Plugin, type ViteDevServer } from "vite";
 import { vitePluginManusRuntime } from "vite-plugin-manus-runtime";
 
+// =============================================================================
+// Manus Debug Collector - Vite Plugin
+// Writes browser logs directly to files, trimmed when exceeding size limit
+// =============================================================================
+
 const PROJECT_ROOT = import.meta.dirname;
 const LOG_DIR = path.join(PROJECT_ROOT, ".manus-logs");
-const MAX_LOG_SIZE_BYTES = 1 * 1024 * 1024;
-const TRIM_TARGET_BYTES = Math.floor(MAX_LOG_SIZE_BYTES * 0.6);
+const MAX_LOG_SIZE_BYTES = 1 * 1024 * 1024; // 1MB per log file
+const TRIM_TARGET_BYTES = Math.floor(MAX_LOG_SIZE_BYTES * 0.6); // Trim to 60% to avoid constant re-trimming
 
 type LogSource = "browserConsole" | "networkRequests" | "sessionReplay";
 
@@ -29,6 +34,7 @@ function trimLogFile(logPath: string, maxSize: number) {
     const keptLines: string[] = [];
     let keptBytes = 0;
 
+    // Keep newest lines (from end) that fit within 60% of maxSize
     const targetSize = TRIM_TARGET_BYTES;
     for (let i = lines.length - 1; i >= 0; i--) {
       const lineBytes = Buffer.byteLength(`${lines[i]}\n`, "utf-8");
@@ -49,15 +55,24 @@ function writeToLogFile(source: LogSource, entries: unknown[]) {
   ensureLogDir();
   const logPath = path.join(LOG_DIR, `${source}.log`);
 
+  // Format entries with timestamps
   const lines = entries.map((entry) => {
     const ts = new Date().toISOString();
     return `[${ts}] ${JSON.stringify(entry)}`;
   });
 
+  // Append to log file
   fs.appendFileSync(logPath, `${lines.join("\n")}\n`, "utf-8");
+
+  // Trim if exceeds max size
   trimLogFile(logPath, MAX_LOG_SIZE_BYTES);
 }
 
+/**
+ * Vite plugin to collect browser debug logs
+ * - POST /__manus__/logs: Browser sends logs, written directly to files
+ * - Files: browserConsole.log, networkRequests.log, sessionReplay.log
+ */
 function vitePluginManusDebugCollector(): Plugin {
   return {
     name: "vite-plugin-manus-debug-collector",
@@ -140,29 +155,6 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
-    rollupOptions: {
-      output: {
-        manualChunks(id) {
-          if (!id.includes("node_modules")) return;
-          // Match only the react/react-dom/scheduler packages — NOT @radix-ui/react-*.
-          // Broad "/react/" matching previously pulled Radix into react-vendor and broke React.Activity.
-          if (
-            /[/\\](react|react-dom|scheduler)([/\\]|$)/.test(id) &&
-            !id.includes("@radix-ui") &&
-            !id.includes("lucide-react") &&
-            !id.includes("@tanstack")
-          ) {
-            return "react-vendor";
-          }
-          if (id.includes("@tanstack") || id.includes("@trpc") || id.includes("superjson")) return "query-trpc";
-          if (id.includes("@radix-ui") || id.includes("cmdk") || id.includes("vaul") || id.includes("sonner")) return "ui-vendor";
-          if (id.includes("lucide-react")) return "icons";
-          if (id.includes("framer-motion") || id.includes("recharts") || id.includes("embla-carousel")) return "heavy-libs";
-          if (id.includes("@supabase") || id.includes("wouter") || id.includes("zod") || id.includes("clsx") || id.includes("tailwind-merge") || id.includes("class-variance")) return "app-vendor";
-        },
-      },
-    },
-    chunkSizeWarningLimit: 700,
   },
   server: {
     host: true,
