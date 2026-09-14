@@ -3,7 +3,7 @@ import { COOKIE_NAME } from '@shared/const';
 import { getSessionCookieOptions } from './_core/cookies';
 import { systemRouter } from './_core/systemRouter';
 import { adminProcedure, protectedProcedure, publicProcedure, router } from './_core/trpc';
-import { addToReadingList, createAuthor, createGenre, createNovel, deleteAuthor, deleteGenre, deleteNovel, getAdminSummary, getAuthorBySlug, getGenreBySlug, getMyRating, getNovelBySlug, getReadingList, getSearchFacets, getSeriesBySlug, listAdminAuthors, listAdminGenres, listAdminNovels, listAuthors, listGenres, listNovels, listSeries, listUsers, removeFromReadingList, searchNovels, setRating, updateAuthor, updateGenre, updateNovel, updateReadingStatus, updateUserRole } from './db';
+import { addToReadingList, createAuthor, createGenre, createNovel, deleteAuthor, deleteGenre, deleteNovel, getAdminSummary, getAuthorBySlug, getGenreBySlug, getMyRating, getNovelBySlug, getReadingList, getSearchFacets, getSeriesBySlug, listAdminAuthors, listAdminGenres, listAdminNovels, listAuthors, listGenres, listNovels, listSeries, listUsers, removeFromReadingList, searchNovels, setRating, updateAuthor, updateGenre, updateNovel, updateReadingStatus, updateUserRole, resolveCoverUrl } from './db';
 import { commerceRouter } from './routers/commerce';
 import { confirmSupabaseUserEmail, listSupabaseUsers, toManagedUser, updateSupabaseUserRole } from './_core/supabaseAdmin';
 import { uploadNovelCover } from './cloudinary';
@@ -97,6 +97,7 @@ export const appRouter = router({
       update: adminProcedure.input(z.object({ id: z.number().int().positive(), data: novelFields.partial() })).mutation(({ input }) => updateNovel(input.id, input.data)),
       delete: adminProcedure.input(z.object({ id: z.number().int().positive() })).mutation(({ input }) => deleteNovel(input.id)),
       uploadCover: adminProcedure.input(coverUploadInput).mutation(({ input }) => uploadNovelCover(input.dataUrl, input.filename)),
+      resolveCover: adminProcedure.input(z.object({ url: z.string().url() })).mutation(({ input }) => resolveCoverUrl(input.url)),
     }),
     authors: router({
       list: adminProcedure.query(() => listAdminAuthors()),

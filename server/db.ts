@@ -535,7 +535,7 @@ function rankSearchRows(rows: any[], query: string) {
     return { row, score }; }).filter((item) => item.score > 0).sort((a, b) => b.score - a.score || Number(b.row.ratingCount ?? 0) - Number(a.row.ratingCount ?? 0)).map((item) => item.row);
 }
 
-async function resolveCoverUrl(value?: string | null) {
+export async function resolveCoverUrl(value?: string | null) {
   const url = value?.trim();
   if (!url) return null;
   try {
@@ -605,8 +605,7 @@ export async function updateNovel(id: number, input: Partial<AdminNovelInput>) {
   if (!row) return null;
   if (links) await replaceNovelLinks(id, links);
   if (genreIds) {
-    await replaceNovelLinks(id);
-  await db.delete(novelGenres).where(eq(novelGenres.novelId, id));
+    await db.delete(novelGenres).where(eq(novelGenres.novelId, id));
     if (genreIds.length) await db.insert(novelGenres).values(genreIds.map((genreId) => ({ novelId: id, genreId }))).onConflictDoNothing();
   }
   return row;
