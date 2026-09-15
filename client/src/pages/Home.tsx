@@ -44,11 +44,6 @@ export default function Home() {
               <GlobalSearch hero />
             </div>
           </div>
-          <div className="order-2 mt-10 flex min-h-[260px] items-center justify-center md:order-1 md:mt-0 md:min-h-[330px]">
-            <div className="block w-full max-w-[430px] overflow-hidden rounded-[28px] border border-white/15 shadow-2xl shadow-[#675de8]/20">
-              <img src="/e7ketha-cover-square.png" alt="𝐄𝟳𝐤𝐞𝐭𝐡𝐚 — صورة بطاقة الموقع" width={1920} height={1920} fetchPriority="high" decoding="async" className="aspect-square h-auto w-full object-cover" />
-            </div>
-          </div>
         </div>
       </section>
       <main className="relative z-0 container py-16 md:py-20">
