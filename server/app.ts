@@ -45,7 +45,7 @@ function readClientTemplate() {
 }
 
 function renderSeoDocument(template: string, input: { title: string; description: string; canonical: string; type?: string; image?: string; jsonLd: unknown; content: string; status?: number }) {
-  const head = `<title>${htmlEscape(input.title)}</title><meta name="description" content="${htmlEscape(input.description)}"><meta name="robots" content="index,follow"><link rel="canonical" href="${htmlEscape(input.canonical)}"><meta property="og:type" content="${htmlEscape(input.type ?? 'website')}"><meta property="og:title" content="${htmlEscape(input.title)}"><meta property="og:description" content="${htmlEscape(input.description)}"><meta property="og:url" content="${htmlEscape(input.canonical)}">${input.image ? `<meta property="og:image" content="${htmlEscape(input.image)}">` : ''}<script type="application/ld+json">${JSON.stringify(input.jsonLd).replace(/</g, '\\u003c')}</script>`;
+  const head = `<title>${htmlEscape(input.title)}</title><meta name="description" content="${htmlEscape(input.description)}"><meta name="robots" content="index,follow"><link rel="canonical" href="${htmlEscape(input.canonical)}"><meta property="og:type" content="${htmlEscape(input.type ?? 'website')}"><meta property="og:title" content="${htmlEscape(input.title)}"><meta property="og:description" content="${htmlEscape(input.description)}"><meta property="og:url" content="${htmlEscape(input.canonical)}">${input.image ? `<meta property="og:image" content="${htmlEscape(input.image)}"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:image" content="${htmlEscape(input.image)}">` : ''}<script type="application/ld+json">${JSON.stringify(input.jsonLd).replace(/</g, '\\u003c')}</script>`;
   const cleanTemplate = template
     .replace(/<title>[\s\S]*?<\/title>/gi, '')
     .replace(/<meta[^>]+(?:name|property)=["'](?:description|robots|twitter:[^"']+|og:[^"']+)["'][^>]*>/gi, '')
@@ -66,7 +66,7 @@ async function renderPublicSeo(pathname: string) {
   if (normalized === '/') {
     const novels = await listNovels(10);
     const novelLinks = novels.map((novel) => `<li><a href="${origin}/books/${htmlEscape(novel.slug)}">${htmlEscape(novel.title)}</a>${novel.author ? ` — ${htmlEscape(novel.author)}` : ''}</li>`).join('');
-    return renderSeoDocument(readClientTemplate(), { title: 'رِواية — اكتشف روايتك القادمة', description: 'رِواية — منصة اكتشاف الروايات العربية. ابحث عن روايتك القادمة واستكشف المؤلفين والتصنيفات والاقتباسات.', canonical: `${origin}/`, jsonLd: { '@context': 'https://schema.org', '@type': 'WebSite', name: 'رِواية', url: `${origin}/`, description: 'منصة اكتشاف الروايات العربية', inLanguage: 'ar', potentialAction: { '@type': 'SearchAction', target: `${origin}/search?q={search_term_string}`, 'query-input': 'required name=search_term_string' } }, content: renderHomepageShell(novels) });
+    return renderSeoDocument(readClientTemplate(), { title: 'رِواية — اكتشف روايتك القادمة', description: 'رِواية — منصة اكتشاف الروايات العربية. ابحث عن روايتك القادمة واستكشف المؤلفين والتصنيفات والاقتباسات.', canonical: `${origin}/`, image: `${origin}/e7ketha-cover-wide.png`, jsonLd: { '@context': 'https://schema.org', '@type': 'WebSite', name: 'رِواية', url: `${origin}/`, description: 'منصة اكتشاف الروايات العربية', inLanguage: 'ar', potentialAction: { '@type': 'SearchAction', target: `${origin}/search?q={search_term_string}`, 'query-input': 'required name=search_term_string' } }, content: renderHomepageShell(novels) });
   }
 
   if (/^\/(?:books|novel|novels)\/[^/]+$/.test(normalized)) {
