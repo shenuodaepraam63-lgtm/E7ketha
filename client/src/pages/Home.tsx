@@ -45,10 +45,9 @@ export default function Home() {
             </div>
           </div>
           <div className="order-2 mt-10 flex min-h-[260px] items-center justify-center md:order-1 md:mt-0 md:min-h-[330px]">
-            <picture className="block w-full max-w-[520px] overflow-hidden rounded-[28px] border border-white/15 shadow-2xl shadow-[#675de8]/20">
-              <source media="(max-width: 767px)" srcSet="/e7ketha-cover-square.png" />
-              <img src="/e7ketha-cover-wide.png" alt="𝐄𝟳𝐤𝐞𝐭𝐡𝐚 — غلاف منصة اكتشاف الروايات" width={2560} height={1440} fetchPriority="high" decoding="async" className="h-auto w-full object-cover" />
-            </picture>
+            <div className="block w-full max-w-[430px] overflow-hidden rounded-[28px] border border-white/15 shadow-2xl shadow-[#675de8]/20">
+              <img src="/e7ketha-cover-square.png" alt="𝐄𝟳𝐤𝐞𝐭𝐡𝐚 — صورة بطاقة الموقع" width={1920} height={1920} fetchPriority="high" decoding="async" className="aspect-square h-auto w-full object-cover" />
+            </div>
           </div>
         </div>
       </section>
