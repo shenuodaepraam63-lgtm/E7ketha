@@ -44,34 +44,11 @@ export default function Home() {
               <GlobalSearch hero />
             </div>
           </div>
-          <div className="order-2 hidden min-h-[330px] md:order-1 md:block">
-            {novels.slice(0, 2).map((novel, index) => (
-              <div
-                key={novel.id}
-                className={`absolute bottom-${index ? '[118px]' : '16'} right-[${index ? '24%' : '8%'}] w-[${index ? '175px' : '230px'}] rotate-[${index ? '12deg' : '-9deg'}] overflow-hidden rounded-[22px] border border-white/20 shadow-2xl`}
-              >
-                <img
-                  src={novel.cover || coverFallback}
-                  alt={`غلاف ${novel.title}`}
-                  width={230}
-                  height={307}
-                  fetchPriority={index === 0 ? 'high' : 'auto'}
-                  decoding="async"
-                  className="aspect-[3/4] w-full object-cover"
-                />
-                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 p-4 pt-14">
-                  <div className="text-sm font-bold">{novel.title}</div>
-                  <div className="mt-1 text-[10px] text-white/60">{novel.author}</div>
-                </div>
-              </div>
-            ))}
-            <div className="absolute right-[10%] top-24 max-w-[180px] rounded-2xl border border-white/10 bg-white/[.08] p-3 backdrop-blur-md">
-              <div className="mb-2 flex size-8 items-center justify-center rounded-lg bg-[#8e84fb]/20 text-[#bcb7ff]">
-                <WandSparkles size={15} />
-              </div>
-              <div className="text-[11px] font-bold">مقترحات أذكى</div>
-              <p className="mt-1 text-[10px] leading-5 text-white/50">اختيارات من المحتوى المحفوظ فعليًا.</p>
-            </div>
+          <div className="order-2 mt-10 flex min-h-[260px] items-center justify-center md:order-1 md:mt-0 md:min-h-[330px]">
+            <picture className="block w-full max-w-[520px] overflow-hidden rounded-[28px] border border-white/15 shadow-2xl shadow-[#675de8]/20">
+              <source media="(max-width: 767px)" srcSet="/e7ketha-cover-square.png" />
+              <img src="/e7ketha-cover-wide.png" alt="𝐄𝟳𝐤𝐞𝐭𝐡𝐚 — غلاف منصة اكتشاف الروايات" width={2560} height={1440} fetchPriority="high" decoding="async" className="h-auto w-full object-cover" />
+            </picture>
           </div>
         </div>
       </section>
