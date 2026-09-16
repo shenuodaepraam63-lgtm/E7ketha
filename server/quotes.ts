@@ -35,7 +35,7 @@ export async function existingQuoteTexts() { return request<Array<{ quote_text: 
 export async function listQuoteAuthors() { if (authorsCache && authorsCache.expires > Date.now()) return authorsCache.data; const data = await request<Array<{ id: number; name: string; slug: string }>>('authors?select=id,name,slug&limit=500'); authorsCache = { data, expires: Date.now() + 5 * 60 * 1000 }; return data; }
 export async function listQuoteBooks() { if (booksCache && booksCache.expires > Date.now()) return booksCache.data; const data = await request<Array<{ id: number; title: string; slug: string; authorId: number }>>('novels?select=id,title,slug,authorId&limit=1000'); booksCache = { data, expires: Date.now() + 5 * 60 * 1000 }; return data; }
 
-function decodeHtml(value: string) { return value.replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&').replace(/&quot;/gi, '"').replace(/&#39;|&apos;/gi, "'").replace(/&ldquo;|&rdquo;|&laquo;|&raquo;/gi, '"').replace(/&lsquo;|&rsquo;|&sbquo;/gi, "'").replace(/&mdash;|&ndash;/gi, '—').replace(/&hellip;/gi, '…').replace(/&lt;/gi, '<').replace(/&gt;/gi, '>').replace(/&#x([0-9a-f]+);/gi, (_, hex) => String.fromCodePoint(parseInt(hex, 16))).replace(/&#(\d+);/g, (_, dec) => String.fromCodePoint(Number(dec))); }
+function decodeHtml(value: string) { return value.replace(/&nbsp;/gi, ' ').replace(/&rlm;|&lrm;|&zwj;|&zwnj;/gi, '').replace(/&amp;/gi, '&').replace(/&quot;/gi, '"').replace(/&#39;|&apos;/gi, "'").replace(/&ldquo;|&rdquo;|&laquo;|&raquo;/gi, '"').replace(/&lsquo;|&rsquo;|&sbquo;/gi, "'").replace(/&mdash;|&ndash;/gi, '—').replace(/&hellip;/gi, '…').replace(/&lt;/gi, '<').replace(/&gt;/gi, '>').replace(/&#x([0-9a-f]+);/gi, (_, hex) => String.fromCodePoint(parseInt(hex, 16))).replace(/&#(\d+);/g, (_, dec) => String.fromCodePoint(Number(dec))); }
 function cleanText(value: string) { return decodeHtml(value.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()).replace(/^\s*[“"«]|[”"»]\s*$/g, '').trim(); }
 function cleanImportedQuote(value: string) { const text = cleanText(value).replace(/^tags\s*:\s*.+$/i, '').trim(); return text.replace(/\s+(?:—|–|―|-{2,})\s+[^\n]{1,180},\s*[^\n,]{1,180}\s*$/, '').replace(/^[\s“"«]+|[\s”"»]+$/g, '').trim(); }
 function comparable(value: string) { return cleanImportedQuote(value).toLowerCase().replace(/[ًٌٍَُِّْـ]/g, '').replace(/[أإآ]/g, 'ا').replace(/ى/g, 'ي').replace(/ة/g, 'ه').replace(/[^\u0600-\u06ff\w\d]+/g, ''); }
@@ -56,6 +56,76 @@ async function extractWithAi(text: string, instructions: string) {
   const content = result.choices[0]?.message.content; if (!content || typeof content !== 'string') throw new Error('لم يُرجع AI نتيجة صالحة'); return JSON.parse(content) as { author: string; book: string; quotes: string[] };
 }
 export type QuoteImportPreview = { sourceUrl: string; author: string; book: string; quotes: Array<{ quote_text: string; speaker: string; book_title: string; category: string; status: 'published' }> };
+
+export type TelegramChannelScan = {
+  sourceUrl: string;
+  pageUrl: string;
+  channel: string;
+  pagesScanned: number;
+  postsScanned: number;
+  quotes: Array<{ quote_text: string; speaker: string; book_title: string; category: string; status: 'published'; source_url: string }>;
+  nextBefore: number | null;
+  done: boolean;
+};
+
+function telegramChannelUrl(value: string) {
+  const parsed = new URL(value);
+  if (!['http:', 'https:'].includes(parsed.protocol) || !['t.me', 'telegram.me'].includes(parsed.hostname.replace(/^www\./, ''))) throw new Error('يجب إدخال رابط قناة تيليجرام عامة مثل https://t.me/channel');
+  const parts = parsed.pathname.split('/').filter(Boolean);
+  const channel = parts[0] === 's' ? parts[1] : parts[0];
+  if (!channel || channel.startsWith('+') || channel.startsWith('joinchat')) throw new Error('القناة يجب أن تكون عامة وليست رابط دعوة خاص');
+  const before = Number(parsed.searchParams.get('before'));
+  return { channel, before: Number.isInteger(before) && before > 0 ? before : null };
+}
+
+function extractTelegramPosts(html: string, channel: string) {
+  const posts: Array<{ id: number; url: string; text: string }> = [];
+  const pattern = /data-post=["']([^"']+\/\d+)["'][\s\S]*?class=["'][^"']*tgme_widget_message_text[^"']*["'][^>]*>([\s\S]*?)<\/div>/gi;
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(html))) {
+    const postPath = match[1];
+    const id = Number(postPath.split('/').pop());
+    const text = cleanText(match[2]).replace(/\s*\[[^\]]*\]\([^)]*\)\s*/g, ' ').trim();
+    if (Number.isInteger(id) && text.length >= 25) posts.push({ id, url: `https://t.me/${postPath}`, text });
+  }
+  return posts.filter((post, index, list) => list.findIndex((item) => item.id === post.id) === index).sort((a, b) => a.id - b.id);
+}
+
+function telegramQuote(post: { id: number; url: string; text: string }, channel: string) {
+  const text = post.text.replace(/\s+/g, ' ').trim();
+  if (/^(تحميل|download|مشاهدة|فيديو|صور|إعلان|اعلان)\b/i.test(text) || /\.pdf\b/i.test(text)) return null;
+  const attribution = text.match(/(?:^|\s)[—–-]\s*([^—–-]{2,120}?)(?:\s*[📘📗📒📓📕📑📃📜♪]|$)/);
+  const speaker = attribution?.[1]?.trim().replace(/[\s،,.]+$/g, '') ?? '';
+  const quote = cleanImportedQuote(attribution ? text.slice(0, attribution.index).trim() : text);
+  if (quote.length < 25 || quote.length > 2000 || /^tags\s*:/i.test(quote)) return null;
+  return { quote_text: quote, speaker, book_title: '', category: '', status: 'published' as const, source_url: post.url };
+}
+
+export async function scanTelegramChannel(input: { url: string; maxPages?: number }): Promise<TelegramChannelScan> {
+  const parsed = telegramChannelUrl(input.url);
+  const pages = Math.min(10, Math.max(1, input.maxPages ?? 1));
+  let before = parsed.before;
+  let pagesScanned = 0;
+  let postsScanned = 0;
+  const quotes: TelegramChannelScan['quotes'] = [];
+  let lastPageUrl = `https://t.me/s/${parsed.channel}`;
+  for (let page = 0; page < pages; page += 1) {
+    const pageUrl = new URL(`https://t.me/s/${parsed.channel}`);
+    if (before) pageUrl.searchParams.set('before', String(before));
+    lastPageUrl = pageUrl.toString();
+    const response = await fetch(pageUrl, { headers: { 'User-Agent': 'RiwayaQuoteImporter/1.0 (+https://e7ketha.vercel.app)' }, signal: AbortSignal.timeout(15_000) });
+    if (!response.ok) throw new Error(`تعذر فتح قناة تيليجرام (${response.status})`);
+    const posts = extractTelegramPosts((await response.text()).slice(0, 5_000_000), parsed.channel);
+    pagesScanned += 1;
+    postsScanned += posts.length;
+    for (const post of posts) { const quote = telegramQuote(post, parsed.channel); if (quote) quotes.push(quote); }
+    const oldest = posts[0]?.id;
+    if (!oldest || posts.length === 0 || (before !== null && oldest >= before)) return { sourceUrl: `https://t.me/${parsed.channel}`, pageUrl: lastPageUrl, channel: parsed.channel, pagesScanned, postsScanned, quotes, nextBefore: null, done: true };
+    before = oldest - 1;
+  }
+  return { sourceUrl: `https://t.me/${parsed.channel}`, pageUrl: lastPageUrl, channel: parsed.channel, pagesScanned, postsScanned, quotes, nextBefore: before, done: false };
+}
+
 export async function previewQuotesFromUrl(input: { url: string; author?: string; book?: string; instructions?: string; useAi?: boolean; language?: 'ar' | 'en' | 'both' }): Promise<QuoteImportPreview> {
   const parsedUrl = new URL(input.url); if (!['http:', 'https:'].includes(parsedUrl.protocol)) throw new Error('الرابط يجب أن يبدأ بـ http أو https');
   const host = parsedUrl.hostname.replace(/^\[|\]$/g, ''); const privateIpv4 = /^(10\.|127\.|169\.254\.|192\.168\.|172\.(1[6-9]|2\d|3[0-1])\.)/.test(host); const privateIpv6 = host === '::1' || host.startsWith('fc') || host.startsWith('fd') || host.startsWith('fe80:');
