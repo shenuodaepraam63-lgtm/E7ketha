@@ -45,6 +45,13 @@ function quoteKeywords(quote: { quote_text: string; author_name?: string | null;
   ].filter(Boolean))).slice(0, 18);
 }
 
+const topicalPages = [
+  { slug: 'arabic-novels', title: 'الروايات العربية', eyebrow: 'دليل القراءة العربي', description: 'دليل شامل لاكتشاف الروايات العربية، من الأعمال الاجتماعية والتاريخية إلى الخيال والرعب والفانتازيا.', intro: 'ابدأ من الخريطة العامة للرواية العربية، ثم انتقل إلى التصنيف أو المؤلف أو السلسلة أو الاقتباس الذي يناسب ذائقتك.', links: [['/explore', 'كل الروايات'], ['/genres/social', 'الروايات الاجتماعية'], ['/genres/historical', 'الروايات التاريخية'], ['/authors/amr-abdel-hamid', 'أعمال المؤلفين'], ['/series/zikola', 'السلاسل الروائية']] },
+  { slug: 'horror-novels', title: 'روايات الرعب والغموض', eyebrow: 'أجواء مشوقة ومقلقة', description: 'استكشف روايات الرعب والغموض والقصص النفسية، وانتقل من التصنيف إلى الكتب والاقتباسات ذات الصلة.', intro: 'تصفح الرعب أولًا، ثم وسّع القراءة إلى الغموض والتشويق والروايات النفسية القريبة من هذا المزاج.', links: [['/genres/horror', 'روايات الرعب'], ['/genres/mystery', 'روايات الغموض'], ['/genres/suspense', 'روايات التشويق'], ['/genres/psychological', 'الروايات النفسية'], ['/quotes/categories', 'اقتباسات حسب الموضوع']] },
+  { slug: 'fantasy-novels', title: 'روايات الخيال والفانتازيا', eyebrow: 'عوالم تتجاوز المألوف', description: 'دليل للروايات الفانتازية والخيال العلمي والخيال الرمزي، مع روابط مباشرة إلى التصنيفات والكتب والسلاسل.', intro: 'ابدأ بالفانتازيا، ثم انتقل إلى الخيال العلمي والرمزية والأعمال التي تبني عوالم وقوانين مختلفة.', links: [['/genres/fantasy', 'روايات الفانتازيا'], ['/genres/sci-fi', 'الخيال العلمي'], ['/genres/symbolic', 'الخيال والرمزية'], ['/genres/philosophical', 'الخيال الفلسفي'], ['/series/zikola', 'السلاسل المرتبطة']] },
+  { slug: 'egyptian-literature', title: 'الأدب المصري والرواية الاجتماعية', eyebrow: 'المكان والذاكرة والمجتمع', description: 'مسار موضوعي لاكتشاف الروايات التي تقترب من المجتمع والهوية والتاريخ والتجربة المصرية عبر أعمال المؤلفين المتاحة.', intro: 'استخدم التصنيفات الاجتماعية والتاريخية، ثم افتح صفحات المؤلفين والاقتباسات للوصول إلى الأعمال المرتبطة.', links: [['/genres/social', 'الروايات الاجتماعية'], ['/genres/historical', 'الروايات التاريخية'], ['/authors/ahmed-khaled-tawfik', 'أعمال المؤلفين'], ['/quotes', 'اقتباسات الروايات'], ['/explore', 'استكشف المكتبة']] },
+] as const;
+
 function readClientTemplate() {
   const candidates = [
     path.resolve(process.cwd(), 'dist/public/index.html'),
@@ -81,6 +88,18 @@ async function renderPublicSeo(pathname: string) {
     const novels = await listNovels(10);
     const novelLinks = novels.map((novel) => `<li><a href="${origin}/books/${htmlEscape(novel.slug)}">${htmlEscape(novel.title)}</a>${novel.author ? ` — ${htmlEscape(novel.author)}` : ''}</li>`).join('');
     return renderSeoDocument(readClientTemplate(), { title: '𝐄𝟳𝐤𝐞𝐭𝐡𝐚 📖 | كُـل رِوَايـة لَهـا حِڪَايـة ✍︎', description: '𝐄𝟳𝐤𝐞𝐭𝐡𝐚 — منصة اكتشاف الروايات العربية. ابحث عن روايتك القادمة واستكشف المؤلفين والتصنيفات والاقتباسات.', canonical: `${origin}/`, image: `${origin}/e7ketha-cover-wide.png`, jsonLd: { '@context': 'https://schema.org', '@type': 'WebSite', name: '𝐄𝟳𝐤𝐞𝐭𝐡𝐚', url: `${origin}/`, description: 'منصة اكتشاف الروايات العربية', inLanguage: 'ar', potentialAction: { '@type': 'SearchAction', target: `${origin}/search?q={search_term_string}`, 'query-input': 'required name=search_term_string' } }, content: renderHomepageShell(novels) });
+  }
+
+  if (normalized === '/topics' || /^\/topics\/[^/]+$/.test(normalized)) {
+    const slug = normalized === '/topics' ? null : decodeURIComponent(normalized.split('/').pop() ?? '');
+    const selected = slug ? topicalPages.find((topic) => topic.slug === slug) : null;
+    if (slug && !selected) return { html: '<!doctype html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="robots" content="noindex"><title>الموضوع غير موجود | 𝐄𝟳𝐤𝐞𝐭𝐡𝐚</title></head><body><h1>الموضوع غير موجود</h1></body></html>', status: 404 };
+    const canonical = `${origin}${selected ? `/topics/${selected.slug}` : '/topics'}`;
+    const title = selected ? `${selected.title} | 𝐄𝟳𝐤𝐞𝐭𝐡𝐚` : 'موضوعات الروايات العربية | 𝐄𝟳𝐤𝐞𝐭𝐡𝐚';
+    const description = selected?.description ?? 'مركز مترابط لاكتشاف الروايات العربية حسب الموضوع والتصنيف والمؤلف والسلسلة والاقتباس.';
+    const cards = (selected ? selected.links : topicalPages.map((topic) => [`/topics/${topic.slug}`, topic.title] as const)).map(([href, label]) => `<li><a href="${origin}${href}">${htmlEscape(label)}</a></li>`).join('');
+    const content = selected ? `<main lang="ar" dir="rtl"><nav><a href="${origin}/">الرئيسية</a> / <a href="${origin}/topics">الموضوعات</a></nav><article><h1>${htmlEscape(selected.title)}</h1><p>${htmlEscape(selected.description)}</p><p>${htmlEscape(selected.intro)}</p><h2>المسارات المرتبطة</h2><ul>${cards}</ul><p><a href="${origin}/explore">استكشف الروايات</a> · <a href="${origin}/quotes">اقتباسات الروايات</a></p></article></main>` : `<main lang="ar" dir="rtl"><nav><a href="${origin}/">الرئيسية</a></nav><article><h1>اكتشف الروايات حسب الموضوع</h1><p>${htmlEscape(description)}</p><h2>الموضوعات الأساسية</h2><ul>${cards}</ul><p><a href="${origin}/explore">كل الروايات</a> · <a href="${origin}/quotes/categories">تصنيفات الاقتباسات</a></p></article></main>`;
+    return renderSeoDocument(readClientTemplate(), { title, description, canonical, type: 'collection', jsonLd: { '@context': 'https://schema.org', '@type': 'CollectionPage', name: selected?.title ?? 'موضوعات الروايات العربية', description, url: canonical, inLanguage: 'ar', mainEntityOfPage: { '@type': 'WebPage', '@id': canonical } }, content });
   }
 
   if (/^\/(?:books|novel|novels)\/[^/]+$/.test(normalized)) {
@@ -166,7 +185,8 @@ export function createApp() {
       const authorQuotePaths = authors.map((item) => `/authors/${item.slug}/quotes`);
       const bookQuotePaths = novels.map((item) => `/books/${item.slug}/quotes`);
       const categoryQuotePaths = quoteCategories.map((category) => `/quotes/category/${quoteCategorySlug(category)}`);
-      const staticPaths = ["/", "/explore", "/quotes", "/quotes/categories", "/discover", "/about", "/how-it-works", "/faq", "/contact", "/privacy", "/terms"];
+      const topicPaths = ['/topics', ...topicalPages.map((item) => `/topics/${item.slug}`)];
+      const staticPaths = ["/", "/explore", "/quotes", "/quotes/categories", "/discover", "/about", "/how-it-works", "/faq", "/contact", "/privacy", "/terms", ...topicPaths];
       const urls = [...staticPaths, ...novels.map((item) => `/books/${item.slug}`), ...bookQuotePaths, ...authors.map((item) => `/authors/${item.slug}`), ...authorQuotePaths, ...genres.map((item) => `/genres/${item.slug}`), ...seriesList.map((item) => `/series/${item.slug}`), ...categoryQuotePaths, ...quotes.map((item) => `/quotes/${item.id}`)];
       const resource = String(_req.query.resource ?? "");
       const sitemap = resource === "index" || resource === "sitemap" ? renderSitemapIndex() : resource === "novels" ? renderUrlset([...novels.map((item) => `/books/${item.slug}`), ...bookQuotePaths]) : resource === "authors" ? renderUrlset([...authors.map((item) => `/authors/${item.slug}`), ...authorQuotePaths]) : resource === "genres" ? renderUrlset(genres.map((item) => `/genres/${item.slug}`)) : resource === "series" ? renderUrlset(seriesList.map((item) => `/series/${item.slug}`)) : resource === "quotes" ? renderUrlset([...categoryQuotePaths, ...quotes.map((item) => `/quotes/${item.id}`)]) : renderUrlset(urls);
@@ -191,7 +211,7 @@ export function createApp() {
       return next(error);
     }
   };
-  app.get(['/books/:slug', '/novel/:slug', '/novels/:slug', '/authors/:slug', '/genres/:slug', '/series/:slug', '/quotes/:id', '/quotes/category/:slug'], directSeoHandler);
+  app.get(['/topics', '/topics/:slug', '/books/:slug', '/novel/:slug', '/novels/:slug', '/authors/:slug', '/genres/:slug', '/series/:slug', '/quotes/:id', '/quotes/category/:slug'], directSeoHandler);
   app.get("/api", async (req, res, next) => {
     if (req.query.resource !== 'seo' || typeof req.query.path !== 'string') return next();
     try {

@@ -5,7 +5,7 @@ export type Genre = { id?: number; name: string; slug: string; count: number; ic
 export type Series = { id?: number; title: string; slug: string; author: string; parts: number; status: string; cover: string; books: Array<{ title: string; slug: string }> };
 
 export const coverFallback = 'https://images.unsplash.com/photo-1543002588-bfa74002ed7e?auto=format&fit=crop&w=700&q=88';
-export const navItems = [{ label: 'الرئيسية', href: '/' }, { label: 'استكشف', href: '/explore' }, { label: 'التصنيفات', href: '/genres/fantasy' }, { label: 'المؤلفون', href: '/authors/amr-abdel-hamid' }, { label: 'السلاسل', href: '/series/zikola' }];
+export const navItems = [{ label: 'الرئيسية', href: '/' }, { label: 'استكشف', href: '/explore' }, { label: 'الموضوعات', href: '/topics' }, { label: 'التصنيفات', href: '/genres/fantasy' }, { label: 'المؤلفون', href: '/authors/amr-abdel-hamid' }, { label: 'السلاسل', href: '/series/zikola' }];
 export const statusStyles: Record<string, string> = { مكتملة: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300', مستمرة: 'bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300', منفردة: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300' };
 export const statusLabels: Record<string, string> = { completed: 'مكتملة', ongoing: 'مستمرة', standalone: 'منفردة' };
 
