@@ -31,7 +31,15 @@ export async function updateQuote(id: number, input: Partial<Omit<QuoteRecord, '
 export async function deleteQuote(id: number) { await request(`quotes?id=eq.${id}`, { method: 'DELETE' }); return { success: true } as const; }
 export async function createQuoteImport(input: { source_url: string; author?: string; book?: string; instructions?: string; quote_count: number }) { return (await request<Array<{ id: number }>>('quote_imports', { method: 'POST', body: JSON.stringify(input) }))[0]; }
 export async function listQuoteImports() { return request<Array<{ id: number; source_url: string; author: string | null; book: string | null; instructions: string | null; quote_count: number; created_at: string }>>('quote_imports?select=*&order=created_at.desc&limit=50'); }
-export async function existingQuoteTexts() { return request<Array<{ quote_text: string }>>('quotes?select=quote_text&limit=5000'); }
+export async function existingQuoteTexts() {
+  const rows: Array<{ quote_text: string }> = [];
+  for (let offset = 0; offset < 10000; offset += 1000) {
+    const page = await request<Array<{ quote_text: string }>>(`quotes?select=quote_text&order=id.asc&limit=1000&offset=${offset}`);
+    rows.push(...page);
+    if (page.length < 1000) break;
+  }
+  return rows;
+}
 type DedupeQuote = { id: number; quote_text: string; created_at: string };
 export type DedupeCandidate = { keep: DedupeQuote; remove: Array<DedupeQuote & { similarity: number }> };
 
@@ -49,12 +57,37 @@ function editSimilarity(left: string, right: string) {
   return 1 - previous[right.length] / maxLength;
 }
 
+function removeSimilarQuotes<T extends { quote_text: string }>(quotes: T[], existing: string[], threshold = 0.95) {
+  const buckets = new Map<string, string[]>();
+  for (const text of existing) {
+    const normalized = comparable(text);
+    const key = `${normalized.slice(0, 16)}:${Math.floor(normalized.length / 25)}`;
+    buckets.set(key, [...(buckets.get(key) ?? []), normalized]);
+  }
+  const accepted: T[] = [];
+  let duplicateCount = 0;
+  for (const quote of quotes) {
+    const normalized = comparable(quote.quote_text);
+    const key = `${normalized.slice(0, 16)}:${Math.floor(normalized.length / 25)}`;
+    const possible = buckets.get(key) ?? [];
+    if (possible.some((item) => editSimilarity(normalized, item) >= threshold)) { duplicateCount += 1; continue; }
+    accepted.push(quote);
+    buckets.set(key, [...possible, normalized]);
+  }
+  return { quotes: accepted, duplicateCount };
+}
+
+export async function removeExistingSimilarQuotes<T extends { quote_text: string }>(quotes: T[], threshold = 0.95) {
+  const existing = (await existingQuoteTexts()).map((row) => row.quote_text);
+  return removeSimilarQuotes(quotes, existing, threshold);
+}
+
 export async function findDuplicateQuotes(threshold = 0.95) {
   const rows = await request<DedupeQuote[]>('quotes?select=id,quote_text,created_at&order=id.asc&limit=10000');
   const candidates = new Map<string, DedupeQuote[]>();
   for (const row of rows) { const key = comparable(row.quote_text).slice(0, 24); const group = candidates.get(key) ?? []; group.push(row); candidates.set(key, group); }
   const result: DedupeCandidate[] = [];
-  for (const group of candidates.values()) {
+  for (const group of Array.from(candidates.values())) {
     if (group.length < 2) continue;
     const keep = group[0];
     const remove = group.slice(1).map((row) => ({ ...row, similarity: Number(editSimilarity(comparable(keep.quote_text), comparable(row.quote_text)).toFixed(4)) })).filter((row) => row.similarity >= threshold);
@@ -93,7 +126,7 @@ async function extractWithAi(text: string, instructions: string) {
   const result = await invokeLLM({ model: 'gpt-5-mini', maxTokens: 4000, messages: [{ role: 'system', content: 'أنت مستخرج اقتباسات عربي دقيق. أخرج JSON فقط ولا تخترع محتوى.' }, { role: 'user', content: prompt }], responseFormat: { type: 'json_schema', json_schema: { name: 'quote_import', strict: true, schema } } });
   const content = result.choices[0]?.message.content; if (!content || typeof content !== 'string') throw new Error('لم يُرجع AI نتيجة صالحة'); return JSON.parse(content) as { author: string; book: string; quotes: string[] };
 }
-export type QuoteImportPreview = { sourceUrl: string; author: string; book: string; quotes: Array<{ quote_text: string; speaker: string; book_title: string; category: string; status: 'published' }> };
+export type QuoteImportPreview = { sourceUrl: string; author: string; book: string; quotes: Array<{ quote_text: string; speaker: string; book_title: string; category: string; status: 'published' }>; duplicateCount?: number };
 
 export type TelegramChannelScan = {
   sourceUrl: string;
@@ -158,10 +191,11 @@ export async function scanTelegramChannel(input: { url: string; maxPages?: numbe
     postsScanned += posts.length;
     for (const post of posts) { const quote = telegramQuote(post, parsed.channel); if (quote) quotes.push(quote); }
     const oldest = posts[0]?.id;
-    if (!oldest || posts.length === 0 || (before !== null && oldest >= before)) return { sourceUrl: `https://t.me/${parsed.channel}`, pageUrl: lastPageUrl, channel: parsed.channel, pagesScanned, postsScanned, quotes, nextBefore: null, done: true };
+    if (!oldest || posts.length === 0 || (before !== null && oldest >= before)) { const filtered = await removeExistingSimilarQuotes(quotes); return { sourceUrl: `https://t.me/${parsed.channel}`, pageUrl: lastPageUrl, channel: parsed.channel, pagesScanned, postsScanned, quotes: filtered.quotes, nextBefore: null, done: true }; }
     before = oldest - 1;
   }
-  return { sourceUrl: `https://t.me/${parsed.channel}`, pageUrl: lastPageUrl, channel: parsed.channel, pagesScanned, postsScanned, quotes, nextBefore: before, done: false };
+  const filtered = await removeExistingSimilarQuotes(quotes);
+  return { sourceUrl: `https://t.me/${parsed.channel}`, pageUrl: lastPageUrl, channel: parsed.channel, pagesScanned, postsScanned, quotes: filtered.quotes, nextBefore: before, done: false };
 }
 
 export async function previewQuotesFromUrl(input: { url: string; author?: string; book?: string; instructions?: string; useAi?: boolean; language?: 'ar' | 'en' | 'both' }): Promise<QuoteImportPreview> {
@@ -172,8 +206,8 @@ export async function previewQuotesFromUrl(input: { url: string; author?: string
   const html = (await response.text()).slice(0, 3_000_000); const author = input.author?.trim() || meta(html, 'author') || jsonLdValue(html, 'author'); const book = input.book?.trim() || meta(html, 'book') || meta(html, 'og:title') || jsonLdValue(html, 'isPartOf') || ''; const instruction = (input.instructions ?? '').toLowerCase();
   let extracted = extractElements(html); if (!extracted.length || instruction.includes('كل سطر')) { const visible = cleanText(html.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>|<nav[\s\S]*?<\/nav>|<header[\s\S]*?<\/header>|<footer[\s\S]*?<\/footer>/gi, '\n')); const lines = visible.split(/(?:\n|\r)+/).map((line) => cleanText(line)).filter((line) => line.length >= 25 && line.length <= 2000); extracted = extracted.length && !instruction.includes('كل سطر') ? extracted : lines; }
   let resolvedAuthor = author; let resolvedBook = book; if (input.useAi) { try { const sourceText = cleanText(html.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi, ' ')); const ai = await extractWithAi(sourceText, input.instructions ?? 'استخرج الاقتباسات فقط'); const grounded = keepGroundedQuotes(ai.quotes, sourceText); if (grounded.length < Math.max(1, Math.ceil(ai.quotes.length * 0.5))) throw new Error('AI returned ungrounded quotes'); extracted = grounded; resolvedAuthor ||= ai.author; resolvedBook ||= ai.book; } catch (error) { console.warn('[Quotes] AI extraction unavailable; using deterministic extraction', error); } }
-  const language = input.language ?? 'both'; const unique = Array.from(new Set(extracted.map((quote) => filterByLanguage(quote, language)).filter((quote) => quote.length >= 12 && !/^tags\s*:/i.test(quote)))).slice(0, 500); if (!unique.length) throw new Error('لم أجد اقتباسات مطابقة للغة المختارة. جرّب تغيير اللغة إلى الاثنين أو تعديل التعليمات.');
-  return { sourceUrl: input.url, author: resolvedAuthor, book: resolvedBook, quotes: unique.map((quote_text) => ({ quote_text, speaker: resolvedAuthor, book_title: resolvedBook, category: '', status: 'published' as const })) };
+  const language = input.language ?? 'both'; const unique = Array.from(new Set(extracted.map((quote) => filterByLanguage(quote, language)).filter((quote) => quote.length >= 12 && !/^tags\s*:/i.test(quote)))); const candidates = unique.map((quote_text) => ({ quote_text, speaker: resolvedAuthor, book_title: resolvedBook, category: '', status: 'published' as const })); const filtered = await removeExistingSimilarQuotes(candidates); if (!filtered.quotes.length) throw new Error('كل الاقتباسات الموجودة في الرابط موجودة مسبقًا أو متشابهة بنسبة 95٪.');
+  return { sourceUrl: input.url, author: resolvedAuthor, book: resolvedBook, quotes: filtered.quotes.slice(0, 500), duplicateCount: filtered.duplicateCount + Math.max(0, filtered.quotes.length - 500) };
 }
 
 export async function improveQuote(input: { quote: string; speaker?: string; book?: string }) {
