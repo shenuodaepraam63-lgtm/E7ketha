@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 import { trpc } from '@/lib/trpc';
 import { BookLoader } from '@/components/BookLoader';
 import { ExternalLinksNotice } from '@/components/ExternalLinksNotice';
+import { AdSlot } from '@/components/AdSlot';
 
 export default function NovelPage() {
   const [location, navigate] = useLocation();
