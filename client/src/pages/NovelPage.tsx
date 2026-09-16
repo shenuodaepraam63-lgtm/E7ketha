@@ -34,6 +34,9 @@ export default function NovelPage() {
     setMeta('meta[property="og:title"]', 'property', `${novel.title} — ${novel.author}`);
     setMeta('meta[property="og:description"]', 'property', description);
     if (novel.cover) setMeta('meta[property="og:image"]', 'property', novel.cover);
+    let schema = document.head.querySelector('#page-structured-data') as HTMLScriptElement | null; if (!schema) { schema = document.createElement('script'); schema.id = 'page-structured-data'; schema.type = 'application/ld+json'; document.head.appendChild(schema); }
+    const pageUrl = `${window.location.origin}/books/${novel.slug}`; const authorUrl = `${window.location.origin}/authors/${novel.authorSlug}`;
+    schema.textContent = JSON.stringify({ '@context': 'https://schema.org', '@graph': [{ '@type': 'Book', '@id': `${pageUrl}#book`, name: novel.title, description, image: novel.cover || undefined, inLanguage: novel.language || 'ar', author: { '@type': 'Person', '@id': `${authorUrl}#person`, name: novel.author, url: authorUrl }, mainEntityOfPage: { '@id': pageUrl }, url: pageUrl, potentialAction: { '@type': 'ReadAction', target: pageUrl } }, { '@type': 'BreadcrumbList', itemListElement: [{ '@type': 'ListItem', position: 1, name: 'الرئيسية', item: `${window.location.origin}/` }, { '@type': 'ListItem', position: 2, name: 'الروايات', item: `${window.location.origin}/explore` }, { '@type': 'ListItem', position: 3, name: novel.title, item: pageUrl }] }] });
   }, [novel]);
   if (query.isLoading) return <div className="container py-24"><BookLoader /></div>;
   if (!novel) return <div className="container py-16"><EmptyState title="الرواية غير موجودة" description="تحقق من الرابط أو ابحث من صفحة الاستكشاف." action="استكشف الروايات" href="/explore" /></div>;
