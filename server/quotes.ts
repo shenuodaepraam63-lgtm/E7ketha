@@ -32,6 +32,44 @@ export async function deleteQuote(id: number) { await request(`quotes?id=eq.${id
 export async function createQuoteImport(input: { source_url: string; author?: string; book?: string; instructions?: string; quote_count: number }) { return (await request<Array<{ id: number }>>('quote_imports', { method: 'POST', body: JSON.stringify(input) }))[0]; }
 export async function listQuoteImports() { return request<Array<{ id: number; source_url: string; author: string | null; book: string | null; instructions: string | null; quote_count: number; created_at: string }>>('quote_imports?select=*&order=created_at.desc&limit=50'); }
 export async function existingQuoteTexts() { return request<Array<{ quote_text: string }>>('quotes?select=quote_text&limit=5000'); }
+type DedupeQuote = { id: number; quote_text: string; created_at: string };
+export type DedupeCandidate = { keep: DedupeQuote; remove: Array<DedupeQuote & { similarity: number }> };
+
+function editSimilarity(left: string, right: string) {
+  if (left === right) return 1;
+  if (!left || !right) return 0;
+  const maxLength = Math.max(left.length, right.length);
+  if (Math.abs(left.length - right.length) / maxLength > 0.08) return 0;
+  let previous = Array.from({ length: right.length + 1 }, (_, index) => index);
+  for (let row = 1; row <= left.length; row += 1) {
+    const current = [row];
+    for (let column = 1; column <= right.length; column += 1) current[column] = Math.min(current[column - 1] + 1, previous[column] + 1, previous[column - 1] + (left[row - 1] === right[column - 1] ? 0 : 1));
+    previous = current;
+  }
+  return 1 - previous[right.length] / maxLength;
+}
+
+export async function findDuplicateQuotes(threshold = 0.95) {
+  const rows = await request<DedupeQuote[]>('quotes?select=id,quote_text,created_at&order=id.asc&limit=10000');
+  const candidates = new Map<string, DedupeQuote[]>();
+  for (const row of rows) { const key = comparable(row.quote_text).slice(0, 24); const group = candidates.get(key) ?? []; group.push(row); candidates.set(key, group); }
+  const result: DedupeCandidate[] = [];
+  for (const group of candidates.values()) {
+    if (group.length < 2) continue;
+    const keep = group[0];
+    const remove = group.slice(1).map((row) => ({ ...row, similarity: Number(editSimilarity(comparable(keep.quote_text), comparable(row.quote_text)).toFixed(4)) })).filter((row) => row.similarity >= threshold);
+    if (remove.length) result.push({ keep, remove });
+  }
+  return { threshold, groups: result, removeCount: result.reduce((sum, group) => sum + group.remove.length, 0) };
+}
+
+export async function deleteDuplicateQuotes(ids: number[]) {
+  const uniqueIds = Array.from(new Set(ids.filter((id) => Number.isInteger(id) && id > 0)));
+  if (!uniqueIds.length) return { deleted: 0 };
+  await request(`quotes?id=in.(${uniqueIds.join(',')})`, { method: 'DELETE' });
+  return { deleted: uniqueIds.length };
+}
+
 export async function listQuoteAuthors() { if (authorsCache && authorsCache.expires > Date.now()) return authorsCache.data; const data = await request<Array<{ id: number; name: string; slug: string }>>('authors?select=id,name,slug&limit=500'); authorsCache = { data, expires: Date.now() + 5 * 60 * 1000 }; return data; }
 export async function listQuoteBooks() { if (booksCache && booksCache.expires > Date.now()) return booksCache.data; const data = await request<Array<{ id: number; title: string; slug: string; authorId: number }>>('novels?select=id,title,slug,authorId&limit=1000'); booksCache = { data, expires: Date.now() + 5 * 60 * 1000 }; return data; }
 
