@@ -1,6 +1,6 @@
-import { ArrowLeft, ArrowRight, BookOpen, Copy, Link2, Quote, Loader2, Search, Share2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, BookOpen, Copy, Link2, Quote, Loader2, Search, Share2, SlidersHorizontal } from 'lucide-react';
 import { Link, useRoute } from 'wouter';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { PageIntro, Breadcrumbs, EmptyState } from '@/components/SiteShell';
 import { trpc } from '@/lib/trpc';
 import { toast } from 'sonner';
@@ -33,11 +33,13 @@ function playQuoteOpenSound() {
 export default function QuotesPage() {
   const [visibleCount, setVisibleCount] = useState(10);
   const query = trpc.quotes.list.useQuery({ limit: visibleCount, offset: 0 }, { placeholderData: (previous) => previous });
+  const categories = trpc.quotes.categories.useQuery(undefined, { staleTime: 10 * 60 * 1000 });
   const [search, setSearch] = useState('');
-  const filtered = useMemo(() => (query.data ?? []).filter((item) => `${item.quote_text} ${item.author_name ?? item.speaker ?? ''} ${item.book_title ?? ''} ${item.category ?? ''}`.toLowerCase().includes(search.toLowerCase().trim())), [query.data, search]);
+  const [category, setCategory] = useState('');
+  const filtered = useMemo(() => (query.data ?? []).filter((item) => (!category || item.category === category) && `${item.quote_text} ${item.author_name ?? item.speaker ?? ''} ${item.book_title ?? ''} ${item.category ?? ''}`.toLowerCase().includes(search.toLowerCase().trim())), [query.data, search, category]);
   return <div className="container py-10 md:py-16">
     <Breadcrumbs items={['اقتباسات الكتب']} />
-    <PageIntro eyebrow="بين السطور" title="اقتباسات الكتب" description="اكتشف اقتباسات عن الحياة والحب والنجاح والفلسفة من كتّاب وروايات مختلفة." /><div className="mb-8 flex flex-wrap items-center gap-3"><div className="flex min-w-[240px] flex-1 items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3"><Search size={18} className="text-[#675de8]" /><input value={search} onChange={(event) => setSearch(event.target.value)} className="min-w-0 flex-1 bg-transparent text-sm outline-none" placeholder="ابحث عن اقتباس أو كاتب أو كتاب..." /></div><Link href="/quotes/categories" className="rounded-2xl border border-[#675de8]/30 bg-[#f0eeff] px-4 py-3 text-xs font-extrabold text-[#675de8]">تصفح التصنيفات</Link></div>
+    <PageIntro eyebrow="بين السطور" title="اقتباسات عربية تستحق الحفظ" description="اكتشف اقتباسات مؤثرة عن الحب والحياة والفلسفة والقراءة من أشهر الروايات والكتّاب العرب." /><div className="mb-8 rounded-[26px] border border-border bg-card p-3 shadow-[0_18px_50px_-42px_rgba(22,30,70,.55)]"><div className="flex flex-wrap items-center gap-3"><div className="flex min-w-[240px] flex-1 items-center gap-3 rounded-2xl bg-muted/40 px-4 py-3"><Search size={18} className="text-[#675de8]" /><input value={search} onChange={(event) => setSearch(event.target.value)} className="min-w-0 flex-1 bg-transparent text-sm outline-none" placeholder="ابحث في النص أو الكاتب أو الرواية..." aria-label="ابحث في الاقتباسات" /></div><label className="flex items-center gap-2 rounded-2xl border border-border px-4 py-3 text-xs font-bold"><SlidersHorizontal size={15} className="text-[#675de8]" /><span className="sr-only">التصنيف</span><select value={category} onChange={(event) => setCategory(event.target.value)} className="bg-transparent outline-none"><option value="">كل التصنيفات</option>{(categories.data ?? []).map((item) => <option key={item} value={item}>{item}</option>)}</select></label><Link href="/quotes/categories" className="rounded-2xl bg-[#171e42] px-4 py-3 text-xs font-extrabold text-white">تصفح التصنيفات</Link></div><p className="px-2 pt-3 text-[11px] text-muted-foreground">{filtered.length ? `نعرض ${filtered.length} اقتباس${filtered.length === 1 ? '' : 'ات'} في هذه الصفحة` : 'جرّب كلمة بحث أو تصنيفًا آخر'}</p></div>
     {query.isLoading ? <div className="flex min-h-56 items-center justify-center gap-2 text-sm text-muted-foreground"><Loader2 className="animate-spin" size={18} /> جارٍ تحميل الاقتباسات...</div> : <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
       {filtered.map((item, index) => <Link key={item.id} href={`/quotes/${item.id}`} onClick={playQuoteOpenSound} className="quote-card group relative overflow-hidden rounded-[26px] border border-border bg-card p-6 shadow-[0_18px_50px_-38px_rgba(22,30,70,.5)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_24px_58px_-34px_rgba(91,77,232,.35)]">
         <div className="mb-8 flex items-center justify-between"><span className="grid size-11 place-items-center rounded-2xl bg-[#f0eeff] text-[#675de8] dark:bg-[#24224c] dark:text-[#bcb7ff]"><Quote size={20} /></span><span className="text-[11px] font-bold text-muted-foreground">{String(index + 1).padStart(2, '0')}</span></div>
@@ -69,6 +71,21 @@ export function QuotePage() {
   const id = Number(params?.id);
   const query = trpc.quotes.byId.useQuery({ id }, { enabled: Number.isInteger(id) && id > 0 });
   const item = query.data;
+  useEffect(() => {
+    if (!item) return;
+    const text = item.quote_text.trim();
+    const title = `${text.slice(0, 72)}${text.length > 72 ? '…' : ''} | اقتباس${item.book_title ? ` من ${item.book_title}` : ''} | رِواية`;
+    const description = `${text.slice(0, 150)}${text.length > 150 ? '…' : ''}${item.author_name ? ` — ${item.author_name}` : ''}${item.book_title ? ` من ${item.book_title}` : ''}`;
+    document.title = title;
+    const setMeta = (selector: string, attributes: Record<string, string>, content: string) => { let element = document.head.querySelector(selector) as HTMLMetaElement | null; if (!element) { element = document.createElement('meta'); document.head.appendChild(element); } Object.entries(attributes).forEach(([key, value]) => element!.setAttribute(key, value)); element.setAttribute('content', content); };
+    setMeta('meta[name="description"]', { name: 'description' }, description);
+    setMeta('meta[property="og:title"]', { property: 'og:title' }, title);
+    setMeta('meta[property="og:description"]', { property: 'og:description' }, description);
+    setMeta('meta[property="og:type"]', { property: 'og:type' }, 'article');
+    setMeta('meta[property="og:url"]', { property: 'og:url' }, window.location.href);
+    setMeta('meta[name="twitter:card"]', { name: 'twitter:card' }, 'summary');
+    let canonical = document.head.querySelector('link[rel="canonical"]') as HTMLLinkElement | null; if (!canonical) { canonical = document.createElement('link'); canonical.rel = 'canonical'; document.head.appendChild(canonical); } canonical.href = `${window.location.origin}/quotes/${item.id}`;
+  }, [item]);
   const share = async () => { if (navigator.share) await navigator.share({ title: 'اقتباس من رِواية', text: item?.quote_text, url: window.location.href }); else { await navigator.clipboard.writeText(window.location.href); toast.success('تم نسخ الرابط'); } };
   const neighbors = trpc.quotes.neighbors.useQuery({ id }, { enabled: Number.isInteger(id) && id > 0, staleTime: 5 * 60 * 1000 });
   if (query.isLoading) return <div className="container py-20 text-center text-muted-foreground">جارٍ تحميل الاقتباس...</div>;

@@ -15,7 +15,7 @@ function xmlEscape(value: unknown) {
 }
 function renderUrlset(paths: string[]) {
   const uniquePaths = Array.from(new Set(paths));
-  const body = uniquePaths.map((urlPath) => `<url><loc>${xmlEscape(`${SITE_URL}${urlPath}`)}</loc><changefreq>${urlPath === "/" ? "daily" : "weekly"}</changefreq><priority>${urlPath === "/" ? "1.0" : "0.7"}</priority></url>`).join("");
+  const body = uniquePaths.map((urlPath) => `<url><loc>${xmlEscape(`${SITE_URL}${urlPath}`)}</loc><changefreq>${urlPath === "/" ? "daily" : "weekly"}</changefreq><priority>${urlPath === "/" ? "1.0" : urlPath.startsWith("/quotes/") ? "0.8" : "0.7"}</priority></url>`).join("");
   return `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${body}</urlset>`;
 }
 function renderSitemapIndex() {
@@ -114,20 +114,24 @@ async function renderPublicSeo(pathname: string) {
   if (/^\/quotes\/\d+$/.test(normalized)) {
     const quote = await getQuote(Number(normalized.split('/').pop()));
     if (!quote) return { html: '<!doctype html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="robots" content="noindex"><title>الاقتباس غير موجود | رِواية</title></head><body><h1>الاقتباس غير موجود</h1></body></html>', status: 404 };
-    const description = stripHtml(quote.quote_text);
+    const quoteText = stripHtml(quote.quote_text, 220);
+    const context = [quote.author_name || quote.speaker, quote.book_title, quote.category].filter(Boolean).join(' — ');
+    const description = stripHtml(`${quoteText}${context ? ` — ${context}` : ''}`, 180);
     const canonical = `${origin}/quotes/${quote.id}`;
-    return renderSeoDocument(readClientTemplate(), { title: `اقتباس من ${quote.book_title || 'رواية'} | رِواية`, description, canonical, jsonLd: { '@context': 'https://schema.org', '@type': 'Quotation', text: quote.quote_text, author: quote.author_name ? { '@type': 'Person', name: quote.author_name } : undefined, isPartOf: quote.book_title ? { '@type': 'Book', name: quote.book_title } : undefined, url: canonical }, content: `<main lang="ar" dir="rtl"><nav><a href="${origin}/">الرئيسية</a> / <a href="${origin}/quotes">الاقتباسات</a></nav><article><h1>اقتباس من ${htmlEscape(quote.book_title || 'رواية')}</h1><blockquote>${htmlEscape(quote.quote_text)}</blockquote>${quote.author_name ? `<p>— <a href="${origin}/authors/${htmlEscape(quote.author_slug || '')}">${htmlEscape(quote.author_name)}</a></p>` : ''}</article></main>` });
+    const title = `${quoteText.slice(0, 72)}${quoteText.length > 72 ? '…' : ''} | اقتباس${quote.book_title ? ` من ${quote.book_title}` : ''} | رِواية`;
+    const breadcrumbs = { '@type': 'BreadcrumbList', itemListElement: [{ '@type': 'ListItem', position: 1, name: 'الرئيسية', item: `${origin}/` }, { '@type': 'ListItem', position: 2, name: 'الاقتباسات', item: `${origin}/quotes` }, ...(quote.category ? [{ '@type': 'ListItem', position: 3, name: quote.category, item: `${origin}/quotes/category/${quoteCategorySlug(quote.category)}` }] : []), { '@type': 'ListItem', position: quote.category ? 4 : 3, name: 'الاقتباس', item: canonical }] };
+    return renderSeoDocument(readClientTemplate(), { title, description, canonical, type: 'article', jsonLd: { '@context': 'https://schema.org', '@type': 'Article', headline: title, description, articleBody: quote.quote_text, inLanguage: 'ar', isAccessibleForFree: true, author: quote.author_name ? { '@type': 'Person', name: quote.author_name, url: quote.author_slug ? `${origin}/authors/${encodeURIComponent(quote.author_slug)}` : undefined } : undefined, about: quote.category ? { '@type': 'Thing', name: quote.category } : undefined, isPartOf: quote.book_title ? { '@type': 'Book', name: quote.book_title, url: quote.book_slug ? `${origin}/books/${encodeURIComponent(quote.book_slug)}` : undefined } : undefined, mainEntity: { '@type': 'Quotation', text: quote.quote_text }, breadcrumb: breadcrumbs, url: canonical }, content: `<main lang="ar" dir="rtl"><nav aria-label="مسار التنقل"><a href="${origin}/">الرئيسية</a> / <a href="${origin}/quotes">الاقتباسات</a>${quote.category ? ` / <a href="${origin}/quotes/category/${quoteCategorySlug(quote.category)}">${htmlEscape(quote.category)}</a>` : ''}</nav><article><h1>${htmlEscape(title.replace(' | رِواية', ''))}</h1><blockquote>${htmlEscape(quote.quote_text)}</blockquote>${quote.author_name ? `<p>— <a href="${origin}/authors/${htmlEscape(quote.author_slug || '')}">${htmlEscape(quote.author_name)}</a></p>` : ''}${quote.book_title ? `<p><a href="${origin}/books/${htmlEscape(quote.book_slug || '')}">${htmlEscape(quote.book_title)}</a></p>` : ''}${quote.category ? `<p>التصنيف: <a href="${origin}/quotes/category/${quoteCategorySlug(quote.category)}">${htmlEscape(quote.category)}</a></p>` : ''}</article></main>` });
   }
 
   if (/^\/quotes\/category\/[^/]+$/.test(normalized)) {
     const slug = decodeURIComponent(normalized.split('/').pop() ?? '');
-    const category = slug.replace(/-/g, ' ').trim();
+      const category = slug.replace(/-/g, ' ').trim();
     const quotes = await listQuotesByCategory(slug);
     if (!quotes.length) return { html: '<!doctype html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="robots" content="noindex"><title>تصنيف الاقتباسات غير موجود | رِواية</title></head><body><h1>تصنيف الاقتباسات غير موجود</h1></body></html>', status: 404 };
-    const description = `اقرأ أجمل الاقتباسات عن ${category} من كتاب ومؤلفين مختلفين في رِواية.`;
+      const description = `اقرأ ${quotes.length} اقتباسًا عربيًا عن ${category} من روايات وكتّاب مختلفين في رِواية. اكتشف اقتباسات مشابهة عن ${category} واحفظ ما يلهمك.`;
     const canonical = `${origin}/quotes/category/${encodeURIComponent(slug)}`;
     const quoteItems = quotes.slice(0, 50).map((quote) => `<li><blockquote>${htmlEscape(quote.quote_text)}</blockquote>${quote.author_slug ? `<a href="${origin}/authors/${htmlEscape(quote.author_slug)}">${htmlEscape(quote.author_name)}</a>` : ''}${quote.book_slug ? ` · <a href="${origin}/books/${htmlEscape(quote.book_slug)}">${htmlEscape(quote.book_title)}</a>` : ''}</li>`).join('');
-    return renderSeoDocument(readClientTemplate(), { title: `اقتباسات ${category} | رِواية`, description, canonical, type: 'collection', jsonLd: { '@context': 'https://schema.org', '@type': 'CollectionPage', name: `اقتباسات ${category}`, description, url: canonical }, content: `<main lang="ar" dir="rtl"><nav><a href="${origin}/">الرئيسية</a> / <a href="${origin}/quotes">الاقتباسات</a></nav><article><h1>اقتباسات ${htmlEscape(category)}</h1><p>${htmlEscape(description)}</p><ul>${quoteItems}</ul></article></main>` });
+      return renderSeoDocument(readClientTemplate(), { title: `اقتباسات ${category} — أجمل الاقتباسات العربية | رِواية`, description, canonical, type: 'collection', jsonLd: { '@context': 'https://schema.org', '@type': 'CollectionPage', name: `اقتباسات ${category}`, description, inLanguage: 'ar', numberOfItems: quotes.length, url: canonical, breadcrumb: { '@type': 'BreadcrumbList', itemListElement: [{ '@type': 'ListItem', position: 1, name: 'الرئيسية', item: `${origin}/` }, { '@type': 'ListItem', position: 2, name: 'الاقتباسات', item: `${origin}/quotes` }, { '@type': 'ListItem', position: 3, name: category, item: canonical }] } }, content: `<main lang="ar" dir="rtl"><nav aria-label="مسار التنقل"><a href="${origin}/">الرئيسية</a> / <a href="${origin}/quotes">الاقتباسات</a></nav><article><h1>اقتباسات ${htmlEscape(category)}</h1><p>${htmlEscape(description)}</p><ul>${quoteItems}</ul></article></main>` });
   }
   return null;
 }

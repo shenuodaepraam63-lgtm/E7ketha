@@ -43,13 +43,14 @@ function SeoManager({ location }: { location: string }) {
   useEffect(() => {
     const pathname = location.split('?')[0] || '/';
     const isPrivate = /^\/(admin|login|register|auth|reset-password|my-list|profile)(\/|$)/.test(pathname);
+    const isSearch = pathname === '/search';
     const titles: Record<string, string> = {
-      '/': 'رِواية — اكتشف روايتك القادمة', '/explore': 'استكشف الروايات العربية | رِواية', '/quotes': 'اقتباسات ملهمة من الروايات | رِواية',
+      '/': 'رِواية — اكتشف روايتك القادمة', '/explore': 'استكشف الروايات العربية | رِواية', '/quotes': 'اقتباسات عربية ملهمة من الروايات | رِواية', '/quotes/categories': 'تصنيفات الاقتباسات العربية | رِواية',
       '/discover': 'اكتشف قراءتك القادمة | رِواية', '/about': 'عن رِواية | منصة اكتشاف الروايات العربية', '/how-it-works': 'كيف تعمل رِواية؟',
       '/faq': 'الأسئلة الشائعة | رِواية', '/contact': 'تواصل معنا | رِواية', '/privacy': 'سياسة الخصوصية | رِواية', '/terms': 'شروط الاستخدام | رِواية',
     };
     const title = titles[pathname] ?? (pathname.startsWith('/books/') || pathname.startsWith('/novel/') || pathname.startsWith('/novels/') ? 'تفاصيل الرواية | رِواية' : pathname.startsWith('/authors/') ? 'المؤلفون العرب | رِواية' : pathname.startsWith('/genres/') ? 'تصنيفات الروايات | رِواية' : pathname.startsWith('/series/') ? 'سلاسل روائية | رِواية' : 'رِواية — اكتشف روايتك القادمة');
-    const description = isPrivate ? 'هذه الصفحة مخصصة للمستخدمين المسجلين في رِواية.' : DEFAULT_DESCRIPTION;
+    const description = isPrivate ? 'هذه الصفحة مخصصة للمستخدمين المسجلين في رِواية.' : pathname === '/quotes' ? 'اقرأ واقتبس وشارك أجمل الاقتباسات العربية عن الحب والحياة والفلسفة والقراءة من الروايات والكتّاب.' : DEFAULT_DESCRIPTION;
     const canonical = `${SITE_URL}${pathname === '/' ? '/' : pathname.replace(/\/$/, '')}`;
     document.title = title;
     const setMeta = (selector: string, attributes: Record<string, string>, content: string) => {
@@ -59,7 +60,7 @@ function SeoManager({ location }: { location: string }) {
     };
     setMeta('meta[name="description"]', { name: 'description' }, description); setMeta('meta[property="og:title"]', { property: 'og:title' }, title);
     setMeta('meta[property="og:description"]', { property: 'og:description' }, description); setMeta('meta[property="og:url"]', { property: 'og:url' }, canonical);
-    setMeta('meta[name="robots"]', { name: 'robots' }, isPrivate ? 'noindex,nofollow' : 'index,follow');
+    setMeta('meta[name="robots"]', { name: 'robots' }, isPrivate || isSearch ? 'noindex,nofollow' : 'index,follow');
     let link = document.head.querySelector('link[rel="canonical"]') as HTMLLinkElement | null;
     if (!link) { link = document.createElement('link'); link.rel = 'canonical'; document.head.appendChild(link); } link.href = canonical;
     let jsonLd = document.head.querySelector('#site-structured-data') as HTMLScriptElement | null;
