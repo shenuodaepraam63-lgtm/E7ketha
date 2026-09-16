@@ -34,12 +34,13 @@ function playQuoteOpenSound() {
 
 export default function QuotesPage() {
   const [visibleCount, setVisibleCount] = useState(10);
-  const query = trpc.quotes.list.useQuery({ limit: visibleCount, offset: 0 }, { placeholderData: (previous) => previous });
+  const [quoteOffset, setQuoteOffset] = useState(0);
+  const query = trpc.quotes.list.useQuery({ limit: visibleCount, offset: quoteOffset }, { placeholderData: (previous) => previous });
   const categories = trpc.quotes.categories.useQuery(undefined, { staleTime: 10 * 60 * 1000 });
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('');
   const filtered = useMemo(() => (query.data ?? []).filter((item) => (!category || item.category === category) && `${item.quote_text} ${item.author_name ?? item.speaker ?? ''} ${item.book_title ?? ''} ${item.category ?? ''}`.toLowerCase().includes(search.toLowerCase().trim())), [query.data, search, category]);
-  const refreshQuotes = async () => { await query.refetch(); toast.success('وصلت اقتباسات جديدة لك'); };
+  const refreshQuotes = () => { setQuoteOffset((current) => { const maxOffset = Math.max(0, 7695 - visibleCount); let next = Math.floor(Math.random() * (maxOffset + 1)); if (next === current) next = (next + visibleCount) % (maxOffset + 1); return next; }); setVisibleCount(10); setSearch(''); toast.success('غيّرنا لك المجموعة بالكامل باقتباسات مختلفة'); };
   return <div className="container py-10 md:py-16">
     <Breadcrumbs items={['اقتباسات الكتب']} />
     <PageIntro eyebrow="بين السطور" title="اقتباسات عربية تستحق الحفظ" description="اكتشف اقتباسات مؤثرة عن الحب والحياة والفلسفة والقراءة من أشهر الروايات والكتّاب العرب." /><div className="mb-8 rounded-[26px] border border-border bg-card p-3 shadow-[0_18px_50px_-42px_rgba(22,30,70,.55)]"><div className="flex flex-wrap items-center gap-3"><div className="flex min-w-[240px] flex-1 items-center gap-3 rounded-2xl bg-muted/40 px-4 py-3"><Search size={18} className="text-[#675de8]" /><input value={search} onChange={(event) => setSearch(event.target.value)} className="min-w-0 flex-1 bg-transparent text-sm outline-none" placeholder="ابحث في النص أو الكاتب أو الرواية..." aria-label="ابحث في الاقتباسات" /></div><label className="flex items-center gap-2 rounded-2xl border border-border px-4 py-3 text-xs font-bold"><SlidersHorizontal size={15} className="text-[#675de8]" /><span className="sr-only">التصنيف</span><select value={category} onChange={(event) => setCategory(event.target.value)} className="bg-transparent outline-none"><option value="">كل التصنيفات</option>{(categories.data ?? []).map((item) => <option key={item} value={item}>{item}</option>)}</select></label><Link href="/quotes/categories" className="rounded-2xl bg-[#171e42] px-4 py-3 text-xs font-extrabold text-white">تصفح التصنيفات</Link></div><p className="px-2 pt-3 text-[11px] text-muted-foreground">{filtered.length ? `نعرض ${filtered.length} اقتباس${filtered.length === 1 ? '' : 'ات'} في هذه الصفحة` : 'جرّب كلمة بحث أو تصنيفًا آخر'}</p></div>
