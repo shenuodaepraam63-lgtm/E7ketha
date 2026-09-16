@@ -111,6 +111,17 @@ async function renderPublicSeo(pathname: string) {
     return renderSeoDocument(readClientTemplate(), { title: `${selected.title} — رِواية`, description, canonical, type: 'collection', image: selected.coverUrl ?? undefined, jsonLd: { '@context': 'https://schema.org', '@type': 'CollectionPage', name: selected.title, description, url: canonical }, content: `<main lang="ar" dir="rtl"><nav><a href="${origin}/">الرئيسية</a> / <a href="${origin}/explore">استكشف</a></nav><article><h1>${htmlEscape(selected.title)}</h1><p>${htmlEscape(selected.description || '')}</p><h2>ترتيب القراءة</h2><ol>${books}</ol></article></main>` });
   }
 
+  if (normalized === '/quotes' || normalized === '/quotes/categories') {
+    const quotes = await listQuotes(true, 10000);
+    const categories = Array.from(new Set(quotes.map((item) => item.category).filter((category): category is string => Boolean(category?.trim()))));
+    const isCategories = normalized === '/quotes/categories';
+    const title = isCategories ? 'تصنيفات الاقتباسات العربية | رِواية' : 'اقتباسات عربية ملهمة من الروايات | رِواية';
+    const description = isCategories ? 'تصفح تصنيفات الاقتباسات العربية عن الحب والحياة والفلسفة والقراءة واكتشف ما يناسب ذوقك.' : `اقرأ ${quotes.length} اقتباسًا عربيًا مؤثرًا من الروايات والكتّاب، وابحث عن اقتباسات عن الحب والحياة والفلسفة والقراءة.`;
+    const canonical = `${origin}${normalized}`;
+    const links = (isCategories ? categories.map((category) => `<li><a href="${origin}/quotes/category/${quoteCategorySlug(category)}">اقتباسات ${htmlEscape(category)}</a></li>`) : quotes.slice(0, 60).map((quote) => `<li><a href="${origin}/quotes/${quote.id}">${htmlEscape(stripHtml(quote.quote_text, 180))}</a>${quote.author_name ? ` — ${htmlEscape(quote.author_name)}` : ''}</li>`)).join('');
+    return renderSeoDocument(readClientTemplate(), { title, description, canonical, type: 'collection', jsonLd: { '@context': 'https://schema.org', '@type': 'CollectionPage', name: title, description, inLanguage: 'ar', numberOfItems: isCategories ? categories.length : quotes.length, url: canonical, breadcrumb: { '@type': 'BreadcrumbList', itemListElement: [{ '@type': 'ListItem', position: 1, name: 'الرئيسية', item: `${origin}/` }, { '@type': 'ListItem', position: 2, name: 'الاقتباسات', item: canonical }] } }, content: `<main lang="ar" dir="rtl"><nav aria-label="مسار التنقل"><a href="${origin}/">الرئيسية</a> / <a href="${origin}/quotes">الاقتباسات</a></nav><article><h1>${htmlEscape(title.replace(' | رِواية', ''))}</h1><p>${htmlEscape(description)}</p><ul>${links}</ul></article></main>` });
+  }
+
   if (/^\/quotes\/\d+$/.test(normalized)) {
     const quote = await getQuote(Number(normalized.split('/').pop()));
     if (!quote) return { html: '<!doctype html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="robots" content="noindex"><title>الاقتباس غير موجود | رِواية</title></head><body><h1>الاقتباس غير موجود</h1></body></html>', status: 404 };
@@ -144,7 +155,7 @@ export function createApp() {
   registerOAuthRoutes(app);
   const sitemapHandler = async (_req: express.Request, res: express.Response) => {
     try {
-      const [novels, authors, genres, seriesList, quotes] = await Promise.all([listNovels(10000), listAuthors(), listGenres(), listSeries(), listQuotes(true)]);
+      const [novels, authors, genres, seriesList, quotes] = await Promise.all([listNovels(10000), listAuthors(), listGenres(), listSeries(), listQuotes(true, 10000)]);
       const quoteCategories = Array.from(new Set(quotes.map((item) => item.category).filter((category): category is string => Boolean(category?.trim()))));
       const authorQuotePaths = authors.map((item) => `/authors/${item.slug}/quotes`);
       const bookQuotePaths = novels.map((item) => `/books/${item.slug}/quotes`);
