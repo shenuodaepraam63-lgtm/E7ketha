@@ -32,6 +32,15 @@ function stripHtml(value: unknown, max = 180) {
   return String(value ?? '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
 }
 
+function quoteKeywords(quote: { quote_text: string; author_name?: string | null; speaker?: string | null; book_title?: string | null; category?: string | null }) {
+  const stopWords = new Set(['من', 'في', 'عن', 'على', 'إلى', 'الى', 'هذا', 'هذه', 'ذلك', 'تلك', 'الذي', 'التي', 'هو', 'هي', 'و', 'يا', 'the', 'and', 'of', 'in', 'to']);
+  const terms = String(quote.quote_text || '').replace(/[“”"'،؛.!؟:()[\]{}]/g, ' ').split(/\s+/).map((term) => term.trim()).filter((term) => term.length >= 3 && !stopWords.has(term.toLowerCase()));
+  return Array.from(new Set([
+    'اقتباسات عربية', 'اقتباسات ملهمة', 'اقتباسات من الروايات', 'اقتباسات كتب',
+    quote.author_name || quote.speaker || '', quote.book_title || '', quote.category || '', ...terms.slice(0, 8),
+  ].filter(Boolean))).slice(0, 18);
+}
+
 function readClientTemplate() {
   const candidates = [
     path.resolve(process.cwd(), 'dist/public/index.html'),
@@ -44,11 +53,12 @@ function readClientTemplate() {
   return '<!doctype html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>𝐄𝟳𝐤𝐞𝐭𝐡𝐚</title></head><body><div id="root"></div></body></html>';
 }
 
-function renderSeoDocument(template: string, input: { title: string; description: string; canonical: string; type?: string; image?: string; jsonLd: unknown; content: string; status?: number }) {
-  const head = `<title>${htmlEscape(input.title)}</title><meta name="description" content="${htmlEscape(input.description)}"><meta name="robots" content="index,follow"><link rel="canonical" href="${htmlEscape(input.canonical)}"><meta property="og:type" content="${htmlEscape(input.type ?? 'website')}"><meta property="og:title" content="${htmlEscape(input.title)}"><meta property="og:description" content="${htmlEscape(input.description)}"><meta property="og:url" content="${htmlEscape(input.canonical)}">${input.image ? `<meta property="og:image" content="${htmlEscape(input.image)}">` : ''}<script type="application/ld+json">${JSON.stringify(input.jsonLd).replace(/</g, '\\u003c')}</script>`;
+function renderSeoDocument(template: string, input: { title: string; description: string; canonical: string; type?: string; image?: string; keywords?: string[]; jsonLd: unknown; content: string; status?: number }) {
+  const keywords = input.keywords?.length ? `<meta name="keywords" content="${htmlEscape(input.keywords.join(', '))}">` : '';
+  const head = `<title>${htmlEscape(input.title)}</title><meta name="description" content="${htmlEscape(input.description)}"><meta name="robots" content="index,follow">${keywords}<link rel="canonical" href="${htmlEscape(input.canonical)}"><meta property="og:type" content="${htmlEscape(input.type ?? 'website')}"><meta property="og:title" content="${htmlEscape(input.title)}"><meta property="og:description" content="${htmlEscape(input.description)}"><meta property="og:url" content="${htmlEscape(input.canonical)}">${input.image ? `<meta property="og:image" content="${htmlEscape(input.image)}">` : ''}<script type="application/ld+json">${JSON.stringify(input.jsonLd).replace(/</g, '\\u003c')}</script>`;
   const cleanTemplate = template
     .replace(/<title>[\s\S]*?<\/title>/gi, '')
-    .replace(/<meta[^>]+(?:name|property)=["'](?:description|robots|twitter:[^"']+|og:[^"']+)["'][^>]*>/gi, '')
+    .replace(/<meta[^>]+(?:name|property)=["'](?:description|robots|keywords|twitter:[^"']+|og:[^"']+)["'][^>]*>/gi, '')
     .replace(/<link[^>]+rel=["']canonical["'][^>]*>/gi, '')
     .replace(/<script[^>]+type=["']application\/ld\+json["'][\s\S]*?<\/script>/gi, '');
   const withContent = cleanTemplate.replace('</head>', `${head}</head>`).replace('<div id="root"></div>', `<div id="root">${input.content}</div>`);
@@ -116,7 +126,7 @@ async function renderPublicSeo(pathname: string) {
     if (!quote) return { html: '<!doctype html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="robots" content="noindex"><title>الاقتباس غير موجود | 𝐄𝟳𝐤𝐞𝐭𝐡𝐚</title></head><body><h1>الاقتباس غير موجود</h1></body></html>', status: 404 };
     const description = stripHtml(quote.quote_text);
     const canonical = `${origin}/quotes/${quote.id}`;
-    return renderSeoDocument(readClientTemplate(), { title: `اقتباس من ${quote.book_title || 'رواية'} | 𝐄𝟳𝐤𝐞𝐭𝐡𝐚`, description, canonical, jsonLd: { '@context': 'https://schema.org', '@type': 'Quotation', text: quote.quote_text, author: quote.author_name ? { '@type': 'Person', name: quote.author_name } : undefined, isPartOf: quote.book_title ? { '@type': 'Book', name: quote.book_title } : undefined, url: canonical }, content: `<main lang="ar" dir="rtl"><nav><a href="${origin}/">الرئيسية</a> / <a href="${origin}/quotes">الاقتباسات</a></nav><article><h1>اقتباس من ${htmlEscape(quote.book_title || 'رواية')}</h1><blockquote>${htmlEscape(quote.quote_text)}</blockquote>${quote.author_name ? `<p>— <a href="${origin}/authors/${htmlEscape(quote.author_slug || '')}">${htmlEscape(quote.author_name)}</a></p>` : ''}</article></main>` });
+    return renderSeoDocument(readClientTemplate(), { title: `اقتباس من ${quote.book_title || 'رواية'} | 𝐄𝟳𝐤𝐞𝐭𝐡𝐚`, description, canonical, keywords: quoteKeywords(quote), jsonLd: { '@context': 'https://schema.org', '@type': 'Quotation', text: quote.quote_text, author: quote.author_name ? { '@type': 'Person', name: quote.author_name } : undefined, isPartOf: quote.book_title ? { '@type': 'Book', name: quote.book_title } : undefined, url: canonical }, content: `<main lang="ar" dir="rtl"><nav><a href="${origin}/">الرئيسية</a> / <a href="${origin}/quotes">الاقتباسات</a></nav><article><h1>اقتباس من ${htmlEscape(quote.book_title || 'رواية')}</h1><blockquote>${htmlEscape(quote.quote_text)}</blockquote>${quote.author_name ? `<p>— <a href="${origin}/authors/${htmlEscape(quote.author_slug || '')}">${htmlEscape(quote.author_name)}</a></p>` : ''}</article></main>` });
   }
 
   if (/^\/quotes\/category\/[^/]+$/.test(normalized)) {

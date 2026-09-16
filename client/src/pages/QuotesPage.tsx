@@ -91,11 +91,13 @@ export function QuotePage() {
   useEffect(() => {
     if (!item) return;
     const text = item.quote_text.trim();
-    const title = `${text.slice(0, 72)}${text.length > 72 ? '…' : ''} | اقتباس${item.book_title ? ` من ${item.book_title}` : ''} | رِواية`;
+    const title = `${text.slice(0, 72)}${text.length > 72 ? '…' : ''} | اقتباس${item.book_title ? ` من ${item.book_title}` : ''} | 𝐄𝟳𝐤𝐞𝐭𝐡𝐚`;
     const description = `${text.slice(0, 150)}${text.length > 150 ? '…' : ''}${item.author_name ? ` — ${item.author_name}` : ''}${item.book_title ? ` من ${item.book_title}` : ''}`;
+    const keywords = Array.from(new Set(['اقتباسات عربية', 'اقتباسات ملهمة', 'اقتباسات من الروايات', 'اقتباسات كتب', item.author_name || item.speaker, item.book_title, item.category, ...text.replace(/[“”"'،؛.!؟:()[\]{}]/g, ' ').split(/\s+/).filter((term) => term.length >= 3).slice(0, 8)].filter(Boolean))).slice(0, 18).join(', ');
     document.title = title;
     const setMeta = (selector: string, attributes: Record<string, string>, content: string) => { let element = document.head.querySelector(selector) as HTMLMetaElement | null; if (!element) { element = document.createElement('meta'); document.head.appendChild(element); } Object.entries(attributes).forEach(([key, value]) => element!.setAttribute(key, value)); element.setAttribute('content', content); };
     setMeta('meta[name="description"]', { name: 'description' }, description);
+    setMeta('meta[name="keywords"]', { name: 'keywords' }, keywords);
     setMeta('meta[property="og:title"]', { property: 'og:title' }, title);
     setMeta('meta[property="og:description"]', { property: 'og:description' }, description);
     setMeta('meta[property="og:type"]', { property: 'og:type' }, 'article');
@@ -103,7 +105,7 @@ export function QuotePage() {
     setMeta('meta[name="twitter:card"]', { name: 'twitter:card' }, 'summary');
     let canonical = document.head.querySelector('link[rel="canonical"]') as HTMLLinkElement | null; if (!canonical) { canonical = document.createElement('link'); canonical.rel = 'canonical'; document.head.appendChild(canonical); } canonical.href = `${window.location.origin}/quotes/${item.id}`;
   }, [item]);
-  const share = async () => { if (navigator.share) await navigator.share({ title: 'اقتباس من رِواية', text: item?.quote_text, url: window.location.href }); else { await navigator.clipboard.writeText(window.location.href); toast.success('تم نسخ الرابط'); } };
+  const share = async () => { if (navigator.share) await navigator.share({ title: 'اقتباس من 𝐄𝟳𝐤𝐞𝐭𝐡𝐚', text: item?.quote_text, url: window.location.href }); else { await navigator.clipboard.writeText(window.location.href); toast.success('تم نسخ الرابط'); } };
   const neighbors = trpc.quotes.neighbors.useQuery({ id }, { enabled: Number.isInteger(id) && id > 0, staleTime: 5 * 60 * 1000 });
   if (query.isLoading) return <div className="container py-20 text-center text-muted-foreground">جارٍ تحميل الاقتباس...</div>;
   if (!item) return <div className="container py-16"><EmptyState title="الاقتباس غير موجود" description="قد يكون الاقتباس غير منشور أو أُزيل من الأرشيف." action="تصفح الاقتباسات" /></div>;
