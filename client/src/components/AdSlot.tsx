@@ -81,3 +81,30 @@ export function FeedAdSlot({ className = '' }: { className?: string }) {
     </aside>
   );
 }
+
+export function AutoRelaxedAd({ className = '' }: { className?: string }) {
+  const pushed = useRef(false);
+  useEffect(() => {
+    if (pushed.current) return;
+    const w = window as Window & { adsbygoogle?: unknown[] };
+    const pushAd = () => {
+      if (pushed.current || !w.adsbygoogle) return;
+      try { w.adsbygoogle.push({}); pushed.current = true; } catch { /* AdSense may be blocked or not ready */ }
+    };
+    if (w.adsbygoogle) pushAd();
+    const timer = window.setTimeout(pushAd, 1200);
+    return () => window.clearTimeout(timer);
+  }, []);
+  return (
+    <aside className={`auto-relaxed-ad my-8 overflow-hidden rounded-2xl border border-border/50 bg-card/40 px-2 py-3 ${className}`} aria-label="إعلانات ومحتوى مشابه">
+      <p className="mb-2 text-center text-[10px] font-bold text-muted-foreground">محتوى مشابه</p>
+      <ins
+        className="adsbygoogle block w-full"
+        style={{ display: 'block' }}
+        data-ad-format="autorelaxed"
+        data-ad-client="ca-pub-1874360923595437"
+        data-ad-slot="3969003850"
+      />
+    </aside>
+  );
+}
