@@ -2310,6 +2310,26 @@ async function getQuote(id) {
   const rows = await request(`quotes?id=eq.${id}&status=eq.published&select=*&limit=1`);
   return (await enrichQuotes(rows))[0] ?? null;
 }
+async function listSavedQuotes(userId) {
+  const saved = await request(`saved_quotes?user_id=eq.${userId}&select=quote_id,created_at&order=created_at.desc&limit=500`);
+  if (!saved.length) return [];
+  const ids = saved.map((row) => row.quote_id).join(",");
+  const quotes = await enrichQuotes(await request(`quotes?id=in.(${ids})&status=eq.published&select=*&limit=500`));
+  const order = new Map(saved.map((row, index) => [row.quote_id, index]));
+  return quotes.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
+}
+async function isQuoteSaved(userId, quoteId) {
+  const rows = await request(`saved_quotes?user_id=eq.${userId}&quote_id=eq.${quoteId}&select=id&limit=1`);
+  return Boolean(rows[0]);
+}
+async function saveQuote(userId, quoteId) {
+  await request("saved_quotes", { method: "POST", headers: { Prefer: "resolution=merge-duplicates,return=representation" }, body: JSON.stringify({ user_id: userId, quote_id: quoteId }) });
+  return { success: true };
+}
+async function unsaveQuote(userId, quoteId) {
+  await request(`saved_quotes?user_id=eq.${userId}&quote_id=eq.${quoteId}`, { method: "DELETE" });
+  return { success: true };
+}
 async function getQuoteNeighbors(id) {
   const current = await request(`quotes?id=eq.${id}&status=eq.published&select=id,created_at&limit=1`);
   const row = current[0];
@@ -3016,7 +3036,14 @@ var appRouter = router({
     byAuthor: publicProcedure.input(z3.object({ slug: z3.string().min(1).max(160) })).query(({ input }) => listQuotesByAuthor(input.slug)),
     byBook: publicProcedure.input(z3.object({ slug: z3.string().min(1).max(160) })).query(({ input }) => listQuotesByBook(input.slug)),
     byCategory: publicProcedure.input(z3.object({ category: z3.string().min(1).max(80) })).query(({ input }) => listQuotesByCategory(input.category)),
-    categories: publicProcedure.query(() => listQuoteCategories())
+    categories: publicProcedure.query(() => listQuoteCategories()),
+    saved: protectedProcedure.query(({ ctx }) => listSavedQuotes(ctx.user.id)),
+    savedState: protectedProcedure.input(z3.object({ id: z3.number().int().positive() })).query(({ ctx, input }) => isQuoteSaved(ctx.user.id, input.id)),
+    save: protectedProcedure.input(z3.object({ id: z3.number().int().positive() })).mutation(async ({ ctx, input }) => {
+      if (!await getQuote(input.id)) throw new Error("Quote not found");
+      return saveQuote(ctx.user.id, input.id);
+    }),
+    unsave: protectedProcedure.input(z3.object({ id: z3.number().int().positive() })).mutation(({ ctx, input }) => unsaveQuote(ctx.user.id, input.id))
   }),
   adminQuotes: router({
     list: adminProcedure.query(() => listQuotes(false)),

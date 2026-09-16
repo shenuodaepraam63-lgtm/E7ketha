@@ -18,6 +18,7 @@ const AuthPage = lazy(() => import('@/pages/AccountPages').then((module) => ({ d
 const PasswordResetPage = lazy(() => import('@/pages/AccountPages').then((module) => ({ default: module.PasswordResetPage })));
 const ProfilePage = lazy(() => import('@/pages/AccountPages').then((module) => ({ default: module.ProfilePage })));
 const ReadingListPage = lazy(() => import('@/pages/AccountPages').then((module) => ({ default: module.ReadingListPage })));
+const SavedQuotesPage = lazy(() => import('@/pages/AccountPages').then((module) => ({ default: module.SavedQuotesPage })));
 const AdminPage = lazy(() => import('@/pages/AdminPage'));
 const NotFound = lazy(() => import('@/pages/NotFound'));
 const QuotesPage = lazy(() => import('@/pages/QuotesPage'));
@@ -42,7 +43,7 @@ const DEFAULT_DESCRIPTION = 'رِواية — منصة اكتشاف الرواي
 function SeoManager({ location }: { location: string }) {
   useEffect(() => {
     const pathname = location.split('?')[0] || '/';
-    const isPrivate = /^\/(admin|login|register|auth|reset-password|my-list|profile)(\/|$)/.test(pathname);
+    const isPrivate = /^\/(admin|login|register|auth|reset-password|my-list|saved-quotes|profile)(\/|$)/.test(pathname);
     const isSearch = pathname === '/search';
     const titles: Record<string, string> = {
       '/': 'رِواية — اكتشف روايتك القادمة', '/explore': 'استكشف الروايات العربية | رِواية', '/quotes': 'اقتباسات عربية ملهمة من الروايات | رِواية', '/quotes/categories': 'تصنيفات الاقتباسات العربية | رِواية',
@@ -75,7 +76,7 @@ function PublicRoutes({ theme, onThemeToggle }: { theme: 'light' | 'dark'; onThe
     <Route path="/" component={Home} /><Route path="/explore" component={ExplorePage} /><Route path="/search" component={SearchPage} />
     <Route path="/quotes" component={QuotesPage} /><Route path="/quotes/categories" component={QuoteCategoriesPage} /><Route path="/quotes/category/:slug" component={QuoteCategoryPage} /><Route path="/quotes/:id" component={QuotePage} /><Route path="/books/:slug/quotes" component={BookQuotesPage} /><Route path="/books/:slug" component={NovelPage} /><Route path="/novel/:slug" component={NovelPage} /><Route path="/novels/:slug" component={NovelPage} />
     <Route path="/authors/:slug/quotes" component={AuthorQuotesPage} /><Route path="/authors/:slug" component={AuthorPage} /><Route path="/genres/:slug" component={GenrePage} /><Route path="/series/:slug" component={SeriesPage} />
-    <Route path="/discover" component={DiscoverPage} /><Route path="/my-list" component={ReadingListPage} /><Route path="/profile" component={ProfilePage} />
+    <Route path="/discover" component={DiscoverPage} /><Route path="/my-list" component={ReadingListPage} /><Route path="/saved-quotes" component={SavedQuotesPage} /><Route path="/profile" component={ProfilePage} />
     <Route path="/login">{() => <AuthPage />}</Route><Route path="/register">{() => <AuthPage register />}</Route><Route path="/auth/callback" component={AuthCallbackPage} /><Route path="/reset-password" component={PasswordResetPage} />
     <Route path="/about" component={AboutPage} /><Route path="/how-it-works" component={HowItWorksPage} /><Route path="/privacy" component={PrivacyPage} /><Route path="/terms" component={TermsPage} />
     <Route path="/contact" component={ContactPage} /><Route path="/report" component={ReportPage} /><Route path="/faq" component={FaqPage} />

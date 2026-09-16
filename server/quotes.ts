@@ -28,6 +28,26 @@ export async function getQuote(id: number) {
   const rows = await request<QuoteRecord[]>(`quotes?id=eq.${id}&status=eq.published&select=*&limit=1`);
   return (await enrichQuotes(rows))[0] ?? null;
 }
+export async function listSavedQuotes(userId: number) {
+  const saved = await request<Array<{ quote_id: number; created_at: string }>>(`saved_quotes?user_id=eq.${userId}&select=quote_id,created_at&order=created_at.desc&limit=500`);
+  if (!saved.length) return [];
+  const ids = saved.map((row) => row.quote_id).join(',');
+  const quotes = await enrichQuotes(await request<QuoteRecord[]>(`quotes?id=in.(${ids})&status=eq.published&select=*&limit=500`));
+  const order = new Map(saved.map((row, index) => [row.quote_id, index]));
+  return quotes.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
+}
+export async function isQuoteSaved(userId: number, quoteId: number) {
+  const rows = await request<Array<{ id: number }>>(`saved_quotes?user_id=eq.${userId}&quote_id=eq.${quoteId}&select=id&limit=1`);
+  return Boolean(rows[0]);
+}
+export async function saveQuote(userId: number, quoteId: number) {
+  await request('saved_quotes', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=representation' }, body: JSON.stringify({ user_id: userId, quote_id: quoteId }) });
+  return { success: true } as const;
+}
+export async function unsaveQuote(userId: number, quoteId: number) {
+  await request(`saved_quotes?user_id=eq.${userId}&quote_id=eq.${quoteId}`, { method: 'DELETE' });
+  return { success: true } as const;
+}
 export async function getQuoteNeighbors(id: number) { const current = await request<Array<{ id: number; created_at: string }>>(`quotes?id=eq.${id}&status=eq.published&select=id,created_at&limit=1`); const row = current[0]; if (!row) return { previous: null, next: null }; const timestamp = encodeURIComponent(row.created_at); const [previous, next] = await Promise.all([request<Array<{ id: number }>>(`quotes?status=eq.published&created_at=gt.${timestamp}&select=id&order=created_at.asc&limit=1`), request<Array<{ id: number }>>(`quotes?status=eq.published&created_at=lt.${timestamp}&select=id&order=created_at.desc&limit=1`)]); return { previous: previous[0] ?? null, next: next[0] ?? null }; }
 export async function listQuotesByAuthor(slug: string) { return (await listQuotes(true, 10000)).filter((quote) => quote.author_slug === slug); }
 export async function listQuotesByBook(slug: string) { return (await listQuotes(true, 10000)).filter((quote) => quote.book_slug === slug); }
