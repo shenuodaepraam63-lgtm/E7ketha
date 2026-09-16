@@ -6,7 +6,7 @@ import { registerOAuthRoutes } from "./_core/oauth";
 import { registerStorageProxy } from "./_core/storageProxy";
 import { appRouter } from "./routers";
 import { createContext } from "./_core/context";
-import { getAuthorBySlug, getGenreBySlug, getNovelBySlug, getSeriesBySlug, listAuthors, listGenres, listNovels, listSeries } from "./db";
+import { getAuthorBySlug, getGenreBySlug, getNovelBySlug, getSeriesBySlug, listAuthors, listGenres, listNovels, listSeries, searchNovels } from "./db";
 import { getQuote, listQuotes, listQuotesByCategory } from "./quotes";
 
 const SITE_URL = "https://e7ketha.vercel.app";
@@ -120,9 +120,12 @@ async function renderPublicSeo(pathname: string) {
     const slug = decodeURIComponent(normalized.split('/').pop() ?? '');
     const author = await getAuthorBySlug(slug);
     if (!author) return { html: '<!doctype html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="robots" content="noindex"><title>المؤلف غير موجود | 𝐄𝟳𝐤𝐞𝐭𝐡𝐚</title></head><body><h1>المؤلف غير موجود</h1></body></html>', status: 404 };
+    const works = await searchNovels({ authorSlug: author.slug, sort: 'popular', limit: 50 });
     const description = `${author.name} — مؤلف ورواياته على منصة 𝐄𝟳𝐤𝐞𝐭𝐡𝐚. ${stripHtml(author.bio || '')}`.slice(0, 180);
     const canonical = `${origin}/authors/${encodeURIComponent(author.slug)}`;
-    return renderSeoDocument(readClientTemplate(), { title: `${author.name} — روايات واقتباسات | 𝐄𝟳𝐤𝐞𝐭𝐡𝐚`, description, canonical, type: 'profile', jsonLd: { '@context': 'https://schema.org', '@type': 'Person', name: author.name, description, image: author.avatarUrl || undefined, url: canonical }, content: `<main lang="ar" dir="rtl"><nav><a href="${origin}/">الرئيسية</a> / <a href="${origin}/explore">الروايات</a></nav><article><h1>${htmlEscape(author.name)}</h1><p>${htmlEscape(author.bio || '')}</p><a href="${origin}/authors/${htmlEscape(author.slug)}/quotes">اقتباسات ${htmlEscape(author.name)}</a></article></main>` });
+    const workItems = works.map((work, index) => ({ '@type': 'ListItem', position: index + 1, item: { '@type': 'Book', '@id': `${origin}/books/${encodeURIComponent(work.slug)}#book`, name: work.title, url: `${origin}/books/${encodeURIComponent(work.slug)}`, author: { '@id': `${canonical}#person` } } }));
+    const workLinks = works.slice(0, 12).map((work) => `<li><a href="${origin}/books/${htmlEscape(work.slug)}">${htmlEscape(work.title)}</a></li>`).join('');
+    return renderSeoDocument(readClientTemplate(), { title: `${author.name} — روايات واقتباسات | 𝐄𝟳𝐤𝐞𝐭𝐡𝐚`, description, canonical, type: 'profile', jsonLd: { '@context': 'https://schema.org', '@graph': [{ '@type': 'Person', '@id': `${canonical}#person`, name: author.name, description, image: author.avatarUrl || undefined, url: canonical, jobTitle: 'مؤلف', hasOccupation: { '@type': 'Occupation', name: 'مؤلف' }, subjectOf: { '@id': `${canonical}#works` } }, { '@type': 'ItemList', '@id': `${canonical}#works`, name: `أعمال ${author.name}`, numberOfItems: workItems.length, itemListElement: workItems }, breadcrumbSchema(origin, [{ name: 'الرئيسية', url: `${origin}/` }, { name: 'المؤلفون', url: `${origin}/explore` }, { name: author.name, url: canonical }]) ] }, content: `<main lang="ar" dir="rtl"><nav><a href="${origin}/">الرئيسية</a> / <a href="${origin}/explore">الروايات</a></nav><article><h1>${htmlEscape(author.name)}</h1><p><strong>مؤلف</strong> — ${htmlEscape(author.bio || '')}</p><h2>أعمال ${htmlEscape(author.name)}</h2><ul>${workLinks || '<li>لا توجد أعمال منشورة بعد.</li>'}</ul><a href="${origin}/authors/${htmlEscape(author.slug)}/quotes">اقتباسات ${htmlEscape(author.name)}</a></article></main>` });
   }
 
   if (/^\/genres\/[^/]+$/.test(normalized)) {
@@ -141,7 +144,8 @@ async function renderPublicSeo(pathname: string) {
     const description = stripHtml(selected.description || `سلسلة ${selected.title} والروايات المرتبطة بها على منصة 𝐄𝟳𝐤𝐞𝐭𝐡𝐚.`);
     const canonical = `${origin}/series/${encodeURIComponent(selected.slug)}`;
     const books = (selected.books as Array<{ title: string; slug: string; author?: string | null }>).map((book) => `<li><a href="${origin}/books/${htmlEscape(book.slug)}">${htmlEscape(book.title)}</a>${book.author ? ` — ${htmlEscape(book.author)}` : ''}</li>`).join('');
-    return renderSeoDocument(readClientTemplate(), { title: `${selected.title} — 𝐄𝟳𝐤𝐞𝐭𝐡𝐚`, description, canonical, type: 'collection', image: selected.coverUrl ?? undefined, jsonLd: { '@context': 'https://schema.org', '@type': 'CollectionPage', name: selected.title, description, url: canonical }, content: `<main lang="ar" dir="rtl"><nav><a href="${origin}/">الرئيسية</a> / <a href="${origin}/explore">استكشف</a></nav><article><h1>${htmlEscape(selected.title)}</h1><p>${htmlEscape(selected.description || '')}</p><h2>ترتيب القراءة</h2><ol>${books}</ol></article></main>` });
+    const seriesBooks = (selected.books as Array<{ title: string; slug: string; author?: string | null }>).map((book, index) => ({ '@type': 'ListItem', position: index + 1, item: { '@type': 'Book', '@id': `${origin}/books/${encodeURIComponent(book.slug)}#book`, name: book.title, url: `${origin}/books/${encodeURIComponent(book.slug)}` } }));
+    return renderSeoDocument(readClientTemplate(), { title: `${selected.title} — 𝐄𝟳𝐤𝐞𝐭𝐡𝐚`, description, canonical, type: 'collection', image: selected.coverUrl ?? undefined, jsonLd: { '@context': 'https://schema.org', '@graph': [{ '@type': 'BookSeries', '@id': `${canonical}#series`, name: selected.title, description, image: selected.coverUrl || undefined, url: canonical, numberOfItems: seriesBooks.length, hasPart: { '@type': 'ItemList', itemListElement: seriesBooks } }, breadcrumbSchema(origin, [{ name: 'الرئيسية', url: `${origin}/` }, { name: 'السلاسل', url: `${origin}/explore` }, { name: selected.title, url: canonical }]) ] }, content: `<main lang="ar" dir="rtl"><nav><a href="${origin}/">الرئيسية</a> / <a href="${origin}/explore">استكشف</a></nav><article><h1>${htmlEscape(selected.title)}</h1><p><strong>سلسلة روائية</strong> — ${htmlEscape(selected.description || '')}</p><h2>ترتيب القراءة والأعمال المرتبطة</h2><ol>${books}</ol></article></main>` });
   }
 
   if (/^\/quotes\/\d+$/.test(normalized)) {
