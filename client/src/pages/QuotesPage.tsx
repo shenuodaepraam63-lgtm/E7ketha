@@ -2,7 +2,7 @@ import { ArrowLeft, ArrowRight, BookOpen, Copy, Link2, Quote, Loader2, Search, S
 import { Link, useRoute } from 'wouter';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { PageIntro, Breadcrumbs, EmptyState } from '@/components/SiteShell';
-import { AdSlot } from '@/components/AdSlot';
+import { AdSlot, FeedAdSlot } from '@/components/AdSlot';
 import { trpc } from '@/lib/trpc';
 import { toast } from 'sonner';
 
@@ -42,6 +42,7 @@ export default function QuotesPage() {
     <Breadcrumbs items={['اقتباسات الكتب']} />
     <PageIntro eyebrow="بين السطور" title="اقتباسات عربية تستحق الحفظ" description="اكتشف اقتباسات مؤثرة عن الحب والحياة والفلسفة والقراءة من أشهر الروايات والكتّاب العرب." /><div className="mb-8 rounded-[26px] border border-border bg-card p-3 shadow-[0_18px_50px_-42px_rgba(22,30,70,.55)]"><div className="flex flex-wrap items-center gap-3"><div className="flex min-w-[240px] flex-1 items-center gap-3 rounded-2xl bg-muted/40 px-4 py-3"><Search size={18} className="text-[#675de8]" /><input value={search} onChange={(event) => setSearch(event.target.value)} className="min-w-0 flex-1 bg-transparent text-sm outline-none" placeholder="ابحث في النص أو الكاتب أو الرواية..." aria-label="ابحث في الاقتباسات" /></div><label className="flex items-center gap-2 rounded-2xl border border-border px-4 py-3 text-xs font-bold"><SlidersHorizontal size={15} className="text-[#675de8]" /><span className="sr-only">التصنيف</span><select value={category} onChange={(event) => setCategory(event.target.value)} className="bg-transparent outline-none"><option value="">كل التصنيفات</option>{(categories.data ?? []).map((item) => <option key={item} value={item}>{item}</option>)}</select></label><Link href="/quotes/categories" className="rounded-2xl bg-[#171e42] px-4 py-3 text-xs font-extrabold text-white">تصفح التصنيفات</Link></div><p className="px-2 pt-3 text-[11px] text-muted-foreground">{filtered.length ? `نعرض ${filtered.length} اقتباس${filtered.length === 1 ? '' : 'ات'} في هذه الصفحة` : 'جرّب كلمة بحث أو تصنيفًا آخر'}</p></div>
     <AdSlot slot="4836372120" format="horizontal" className="mx-auto max-w-4xl" />
+    <FeedAdSlot className="mx-auto max-w-4xl" />
     {query.isLoading ? <div className="flex min-h-56 items-center justify-center gap-2 text-sm text-muted-foreground"><Loader2 className="animate-spin" size={18} /> جارٍ تحميل الاقتباسات...</div> : <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
       {filtered.map((item, index) => <Link key={item.id} href={`/quotes/${item.id}`} onClick={playQuoteOpenSound} className="quote-card group relative overflow-hidden rounded-[26px] border border-border bg-card p-6 shadow-[0_18px_50px_-38px_rgba(22,30,70,.5)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_24px_58px_-34px_rgba(91,77,232,.35)]">
         <div className="mb-8 flex items-center justify-between"><span className="grid size-11 place-items-center rounded-2xl bg-[#f0eeff] text-[#675de8] dark:bg-[#24224c] dark:text-[#bcb7ff]"><Quote size={20} /></span><span className="text-[11px] font-bold text-muted-foreground">{String(index + 1).padStart(2, '0')}</span></div>
