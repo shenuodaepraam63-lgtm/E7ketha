@@ -19,4 +19,7 @@ export const ENV = {
   forgeApiUrl: process.env.BUILT_IN_FORGE_API_URL ?? "",
   forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? "",
   geminiApiKey: process.env.GEMINI_API_KEY ?? process.env.GOOGLE_AI_API_KEY ?? "",
+  /** Upstash Redis REST — used for distributed rate limiting on Vercel */
+  upstashRedisRestUrl: process.env.UPSTASH_REDIS_REST_URL ?? "",
+  upstashRedisRestToken: process.env.UPSTASH_REDIS_REST_TOKEN ?? "",
 };

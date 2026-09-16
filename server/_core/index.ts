@@ -9,6 +9,7 @@ import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { getPerformanceSnapshot, recordRequest } from "./performance";
+import { apiRateLimit, authRateLimit } from "./rateLimit";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -50,6 +51,10 @@ export function createApp() {
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   registerStorageProxy(app);
   registerOAuthRoutes(app);
+  // Distributed rate limiting (Upstash Redis when configured; in-memory fallback)
+  app.use("/api/auth", authRateLimit);
+  app.use("/api/trpc", apiRateLimit);
+  app.use("/api", apiRateLimit);
   app.get("/api/performance", (_req, res) => res.json({ generatedAt: new Date().toISOString(), routes: getPerformanceSnapshot() }));
   // tRPC API
   app.use(

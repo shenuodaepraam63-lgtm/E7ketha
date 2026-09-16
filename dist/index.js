@@ -97,6 +97,7 @@ var novels = pgTable("novels", {
   seriesId: integer("seriesId"),
   coverUrl: varchar("coverUrl", { length: 500 }),
   description: text("description"),
+  rightsNote: text("rightsNote"),
   rating: integer("rating").default(0).notNull(),
   ratingCount: integer("ratingCount").default(0).notNull(),
   parts: integer("parts").default(1).notNull(),
@@ -171,7 +172,8 @@ import "dotenv/config";
 var ENV = {
   appId: process.env.VITE_APP_ID ?? "",
   cookieSecret: process.env.JWT_SECRET ?? "",
-  databaseUrl: process.env.SUPABASE_DATABASE_URL ?? process.env.SUPABASE_DB_URL ?? process.env.DATABASE_URL ?? "",
+  // Prefer Supavisor/Pooler URL for Vercel serverless connections.
+  databaseUrl: process.env.SUPABASE_POOLER_URL ?? process.env.SUPABASE_DATABASE_URL ?? process.env.SUPABASE_DB_URL ?? process.env.DATABASE_URL ?? "",
   supabaseUrl: process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL ?? "",
   supabasePublishableKey: process.env.SUPABASE_PUBLISHABLE_KEY ?? process.env.VITE_SUPABASE_PUBLISHABLE_KEY ?? "",
   supabaseSecretKey: process.env.SUPABASE_SECRET_KEY ?? "",
@@ -197,7 +199,11 @@ async function getDb() {
       _pool = new Pool({
         connectionString: ENV.databaseUrl,
         ssl: { rejectUnauthorized: false },
-        max: 10
+        // Vercel functions are short-lived; keep the per-instance pool small.
+        max: Number(process.env.DB_POOL_MAX ?? 2),
+        connectionTimeoutMillis: Number(process.env.DB_CONNECTION_TIMEOUT_MS ?? 5e3),
+        idleTimeoutMillis: Number(process.env.DB_IDLE_TIMEOUT_MS ?? 1e4),
+        maxUses: Number(process.env.DB_POOL_MAX_USES ?? 500)
       });
       _db = drizzle(_pool);
     } catch (error) {
@@ -216,7 +222,7 @@ function requireDb() {
 }
 async function supabaseRest(table, params) {
   if (!ENV.supabaseUrl || !ENV.supabasePublishableKey) throw new Error("Supabase REST is not configured");
-  const response = await fetch(`${ENV.supabaseUrl}/rest/v1/${table}?${params}`, { headers: { apikey: ENV.supabaseSecretKey || ENV.supabasePublishableKey, Authorization: `Bearer ${ENV.supabaseSecretKey || ENV.supabasePublishableKey}` } });
+  const response = await fetch(`${ENV.supabaseUrl}/rest/v1/${table}?${params}`, { signal: AbortSignal.timeout(1e4), headers: { apikey: ENV.supabaseSecretKey || ENV.supabasePublishableKey, Authorization: `Bearer ${ENV.supabaseSecretKey || ENV.supabasePublishableKey}` } });
   if (!response.ok) throw new Error(`Supabase REST ${response.status}: ${await response.text()}`);
   return response.json();
 }
@@ -258,23 +264,23 @@ async function getNovelBySlugFromRest(slug) {
       const row2 = numericRows[0];
       const authorsRows2 = await supabaseRest("authors", `select=name,slug&id=eq.${row2.authorId}&limit=1`);
       const author2 = authorsRows2[0];
-      return { id: row2.id, slug: normalizeNovelSlug(row2.slug, row2.title), title: row2.title, coverUrl: row2.coverUrl, description: row2.description, rating: row2.rating, ratingCount: row2.ratingCount, parts: row2.parts, status: row2.status, publicationYear: row2.publicationYear, language: row2.language, author: author2?.name ?? "\u0645\u0624\u0644\u0641 \u063A\u064A\u0631 \u0645\u0639\u0631\u0648\u0641", authorSlug: author2?.slug ?? "", authorId: row2.authorId };
+      return { id: row2.id, slug: normalizeNovelSlug(row2.slug, row2.title), title: row2.title, coverUrl: row2.coverUrl, description: row2.description, rightsNote: row2.rightsNote, rating: row2.rating, ratingCount: row2.ratingCount, parts: row2.parts, status: row2.status, publicationYear: row2.publicationYear, language: row2.language, author: author2?.name ?? "\u0645\u0624\u0644\u0641 \u063A\u064A\u0631 \u0645\u0639\u0631\u0648\u0641", authorSlug: author2?.slug ?? "", authorId: row2.authorId, links: await listNovelLinks(Number(row2.id)) };
     }
   }
   const candidates = Array.from(/* @__PURE__ */ new Set([slug, decoded, normalizeNovelSlug(decoded)])).filter(Boolean);
-  const rows = await supabaseRest("novels", `select=*&or=(${candidates.map((value) => `slug.eq.${encodeURIComponent(value)}`).join(",")})&limit=1`);
-  const row = rows[0] ?? (await supabaseRest("novels", "select=*&limit=1000")).find((item) => normalizeNovelSlug(item.slug, item.title) === normalizeNovelSlug(decoded));
+  const rows = await supabaseRest("novels", `select=id,slug,title,coverUrl,description,rightsNote,rating,ratingCount,parts,status,publicationYear,language,authorId&or=(${candidates.map((value) => `slug.eq.${encodeURIComponent(value)}`).join(",")})&limit=1`);
+  const row = rows[0];
   if (!row) return null;
   const authorsRows = await supabaseRest("authors", `select=name,slug&id=eq.${row.authorId}&limit=1`);
   const author = authorsRows[0];
-  return { id: row.id, slug: normalizeNovelSlug(row.slug, row.title), title: row.title, coverUrl: row.coverUrl, description: row.description, rating: row.rating, ratingCount: row.ratingCount, parts: row.parts, status: row.status, publicationYear: row.publicationYear, language: row.language, author: author?.name ?? "\u0645\u0624\u0644\u0641 \u063A\u064A\u0631 \u0645\u0639\u0631\u0648\u0641", authorSlug: author?.slug ?? "", authorId: row.authorId };
+  return { id: row.id, slug: normalizeNovelSlug(row.slug, row.title), title: row.title, coverUrl: row.coverUrl, description: row.description, rightsNote: row.rightsNote, rating: row.rating, ratingCount: row.ratingCount, parts: row.parts, status: row.status, publicationYear: row.publicationYear, language: row.language, author: author?.name ?? "\u0645\u0624\u0644\u0641 \u063A\u064A\u0631 \u0645\u0639\u0631\u0648\u0641", authorSlug: author?.slug ?? "", authorId: row.authorId, links: await listNovelLinks(Number(row.id)) };
 }
 async function listNovelsFromRest(limit = 50) {
   const rows = await supabaseRest("novels", `select=*&order=createdAt.desc&limit=${Math.min(Math.max(limit, 1), 100)}`);
   const authorIds = Array.from(new Set(rows.map((row) => row.authorId).filter(Boolean)));
   const authorsRows = authorIds.length ? await supabaseRest("authors", `select=id,name,slug&id=in.(${authorIds.join(",")})`) : [];
   const authorsMap = new Map(authorsRows.map((author) => [String(author.id), author]));
-  return rows.map((row) => ({ id: row.id, slug: normalizeNovelSlug(row.slug, row.title), title: row.title, coverUrl: row.coverUrl, description: row.description, rating: row.rating, ratingCount: row.ratingCount, parts: row.parts, status: row.status, publicationYear: row.publicationYear, author: authorsMap.get(String(row.authorId))?.name ?? "\u0645\u0624\u0644\u0641 \u063A\u064A\u0631 \u0645\u0639\u0631\u0648\u0641", authorSlug: authorsMap.get(String(row.authorId))?.slug ?? "" }));
+  return rows.map((row) => ({ id: row.id, slug: normalizeNovelSlug(row.slug, row.title), title: row.title, coverUrl: row.coverUrl, description: row.description, rightsNote: row.rightsNote, rating: row.rating, ratingCount: row.ratingCount, parts: row.parts, status: row.status, publicationYear: row.publicationYear, author: authorsMap.get(String(row.authorId))?.name ?? "\u0645\u0624\u0644\u0641 \u063A\u064A\u0631 \u0645\u0639\u0631\u0648\u0641", authorSlug: authorsMap.get(String(row.authorId))?.slug ?? "" }));
 }
 async function upsertUser(user) {
   if (!user.openId) throw new Error("User openId is required for upsert");
@@ -409,9 +415,14 @@ async function listAuthors() {
   return db.select().from(authors).orderBy(asc(authors.name));
 }
 async function getAuthorBySlug(slug) {
-  const db = await requireDb();
-  const result = await db.select().from(authors).where(eq(authors.slug, slug)).limit(1);
-  return result[0] ?? null;
+  try {
+    const db = await requireDb();
+    const result = await db.select().from(authors).where(eq(authors.slug, slug)).limit(1);
+    return result[0] ?? null;
+  } catch (error) {
+    console.warn("[Database] Falling back to Supabase REST for author lookup:", error instanceof Error ? error.message : error);
+    return (await listAuthors()).find((author) => author.slug === decodeURIComponent(slug).trim()) ?? null;
+  }
 }
 async function listGenres() {
   const db = await getDb();
@@ -419,9 +430,14 @@ async function listGenres() {
   return db.select({ id: genres.id, slug: genres.slug, name: genres.name, description: genres.description, icon: genres.icon, novelCount: sql`COUNT(DISTINCT ${novelGenres.novelId})` }).from(genres).leftJoin(novelGenres, eq(novelGenres.genreId, genres.id)).groupBy(genres.id).orderBy(asc(genres.name));
 }
 async function getGenreBySlug(slug) {
-  const db = await requireDb();
-  const result = await db.select({ id: genres.id, slug: genres.slug, name: genres.name, description: genres.description, icon: genres.icon, novelCount: sql`COUNT(DISTINCT ${novelGenres.novelId})` }).from(genres).leftJoin(novelGenres, eq(novelGenres.genreId, genres.id)).where(eq(genres.slug, slug)).groupBy(genres.id).limit(1);
-  return result[0] ?? null;
+  try {
+    const db = await requireDb();
+    const result = await db.select({ id: genres.id, slug: genres.slug, name: genres.name, description: genres.description, icon: genres.icon, novelCount: sql`COUNT(DISTINCT ${novelGenres.novelId})` }).from(genres).leftJoin(novelGenres, eq(novelGenres.genreId, genres.id)).where(eq(genres.slug, slug)).groupBy(genres.id).limit(1);
+    return result[0] ?? null;
+  } catch (error) {
+    console.warn("[Database] Falling back to Supabase REST for genre lookup:", error instanceof Error ? error.message : error);
+    return (await listGenres()).find((genre) => genre.slug === decodeURIComponent(slug).trim()) ?? null;
+  }
 }
 async function listSeries() {
   const db = await getDb();
@@ -429,34 +445,45 @@ async function listSeries() {
   return db.select({ id: series.id, slug: series.slug, title: series.title, description: series.description, status: series.status, parts: sql`COUNT(DISTINCT ${seriesBooks.novelId})`, coverUrl: sql`MIN(${novels.coverUrl})` }).from(series).leftJoin(seriesBooks, eq(seriesBooks.seriesId, series.id)).leftJoin(novels, eq(seriesBooks.novelId, novels.id)).groupBy(series.id).orderBy(asc(series.title));
 }
 async function getSeriesBySlug(slug) {
-  const db = await requireDb();
-  const rows = await db.select({ id: series.id, slug: series.slug, title: series.title, description: series.description, status: series.status, order: seriesBooks.order, bookTitle: novels.title, bookSlug: novels.slug, coverUrl: novels.coverUrl, author: authors.name }).from(series).leftJoin(seriesBooks, eq(seriesBooks.seriesId, series.id)).leftJoin(novels, eq(seriesBooks.novelId, novels.id)).leftJoin(authors, eq(novels.authorId, authors.id)).where(eq(series.slug, slug)).orderBy(asc(seriesBooks.order));
-  if (!rows.length) return null;
-  const first = rows[0];
-  return { ...first, books: rows.filter((row) => row.bookSlug).map((row) => ({ title: row.bookTitle, slug: row.bookSlug, coverUrl: row.coverUrl, author: row.author })) };
+  try {
+    const db = await requireDb();
+    const rows = await db.select({ id: series.id, slug: series.slug, title: series.title, description: series.description, status: series.status, order: seriesBooks.order, bookTitle: novels.title, bookSlug: novels.slug, coverUrl: novels.coverUrl, author: authors.name }).from(series).leftJoin(seriesBooks, eq(seriesBooks.seriesId, series.id)).leftJoin(novels, eq(seriesBooks.novelId, novels.id)).leftJoin(authors, eq(novels.authorId, authors.id)).where(eq(series.slug, slug)).orderBy(asc(seriesBooks.order));
+    if (!rows.length) return null;
+    const first = rows[0];
+    return { ...first, books: rows.filter((row) => row.bookSlug).map((row) => ({ title: row.bookTitle, slug: row.bookSlug, coverUrl: row.coverUrl, author: row.author })) };
+  } catch (error) {
+    console.warn("[Database] Falling back to Supabase REST for series lookup:", error instanceof Error ? error.message : error);
+    const item = (await listSeries()).find((entry) => entry.slug === decodeURIComponent(slug).trim());
+    return item ? { ...item, books: [] } : null;
+  }
 }
 async function getNovelBySlug(slug) {
-  const db = await requireDb();
   const decodedSlug = decodeURIComponent(slug).trim();
   const normalizedSlug = normalizeNovelSlug(decodedSlug);
   try {
-    const result = await db.select({
-      id: novels.id,
-      slug: novels.slug,
-      title: novels.title,
-      coverUrl: novels.coverUrl,
-      description: novels.description,
-      rating: novels.rating,
-      ratingCount: novels.ratingCount,
-      parts: novels.parts,
-      status: novels.status,
-      publicationYear: novels.publicationYear,
-      language: novels.language,
-      author: authors.name,
-      authorSlug: authors.slug,
-      authorId: authors.id
-    }).from(novels).innerJoin(authors, eq(novels.authorId, authors.id)).where(or(/^\d+$/.test(decodedSlug) ? eq(novels.id, Number(decodedSlug)) : eq(novels.slug, slug), eq(novels.slug, decodedSlug), eq(novels.slug, normalizedSlug))).limit(1);
-    if (result[0]) return { ...result[0], slug: normalizeNovelSlug(result[0].slug, result[0].title) };
+    const db = await requireDb();
+    const numericMatch = /^\d+$/.test(decodedSlug) ? sql`n.id = ${Number(decodedSlug)}` : sql`FALSE`;
+    const result = await db.execute(sql`
+    SELECT
+      n.id, n.slug, n.title, n."coverUrl", n.description, n."rightsNote",
+      n.rating, n."ratingCount", n.parts, n.status, n."publicationYear", n.language,
+      a.name AS author, a.slug AS "authorSlug", a.id AS "authorId",
+      COALESCE(
+        json_agg(
+          json_build_object('id', l.id, 'label', l.label, 'url', l.url, 'type', l.type, 'displayOrder', l."displayOrder")
+          ORDER BY l."displayOrder" ASC
+        ) FILTER (WHERE l.id IS NOT NULL),
+        '[]'::json
+      ) AS links
+    FROM public."novels" n
+    INNER JOIN public."authors" a ON a.id = n."authorId"
+    LEFT JOIN public."novelLinks" l ON l."novelId" = n.id
+    WHERE (${numericMatch} OR n.slug = ${slug} OR n.slug = ${decodedSlug} OR n.slug = ${normalizedSlug})
+    GROUP BY n.id, a.id
+    LIMIT 1
+  `);
+    const row = result.rows[0];
+    if (row) return { ...row, slug: normalizeNovelSlug(row.slug, row.title), links: row.links ?? [] };
     return getNovelBySlugFromRest(slug);
   } catch (error) {
     console.warn("[Database] Falling back to Supabase REST for novel lookup:", error instanceof Error ? error.message : error);
@@ -537,10 +564,13 @@ async function getAdminSummary() {
 async function listAdminNovels() {
   const db = await getDb();
   if (!db) {
-    const rows = await supabaseRest("novels", "select=*&order=updatedAt.desc&limit=1000");
-    return rows;
+    const rows2 = await supabaseRest("novels", "select=id,slug,title,authorId,coverUrl,description,rightsNote,rating,ratingCount,parts,status,publicationYear,language,updatedAt&order=updatedAt.desc&limit=100");
+    const linksByNovel2 = await listNovelLinksBatch(rows2.map((row) => Number(row.id)));
+    return rows2.map((row) => ({ ...row, links: linksByNovel2.get(Number(row.id)) ?? [] }));
   }
-  return db.select({ id: novels.id, slug: novels.slug, title: novels.title, authorId: authors.id, author: authors.name, coverUrl: novels.coverUrl, description: novels.description, rating: novels.rating, ratingCount: novels.ratingCount, parts: novels.parts, status: novels.status, publicationYear: novels.publicationYear, language: novels.language, updatedAt: novels.updatedAt }).from(novels).innerJoin(authors, eq(novels.authorId, authors.id)).orderBy(desc(novels.updatedAt));
+  const rows = await db.select({ id: novels.id, slug: novels.slug, title: novels.title, authorId: authors.id, author: authors.name, coverUrl: novels.coverUrl, description: novels.description, rightsNote: novels.rightsNote, rating: novels.rating, ratingCount: novels.ratingCount, parts: novels.parts, status: novels.status, publicationYear: novels.publicationYear, language: novels.language, updatedAt: novels.updatedAt }).from(novels).innerJoin(authors, eq(novels.authorId, authors.id)).orderBy(desc(novels.updatedAt)).limit(100);
+  const linksByNovel = await listNovelLinksBatch(rows.map((row) => Number(row.id)));
+  return rows.map((row) => ({ ...row, links: linksByNovel.get(Number(row.id)) ?? [] }));
 }
 async function listAdminAuthors() {
   const db = await getDb();
@@ -600,6 +630,33 @@ async function deleteGenre(id) {
   await db.delete(genres).where(eq(genres.id, id));
   return { success: true };
 }
+async function listNovelLinks(novelId) {
+  try {
+    return await supabaseRest("novelLinks", `select=id,label,url,type,displayOrder&novelId=eq.${novelId}&order=displayOrder.asc&limit=50`);
+  } catch {
+    return [];
+  }
+}
+async function listNovelLinksBatch(novelIds) {
+  if (!novelIds.length) return /* @__PURE__ */ new Map();
+  try {
+    const rows = await supabaseRest("novelLinks", `select=id,novelId,label,url,type,displayOrder&novelId=in.(${novelIds.join(",")})&order=displayOrder.asc&limit=2000`);
+    const grouped = /* @__PURE__ */ new Map();
+    for (const row of rows) {
+      const id = Number(row.novelId);
+      const list = grouped.get(id) ?? [];
+      list.push(row);
+      grouped.set(id, list);
+    }
+    return grouped;
+  } catch {
+    return /* @__PURE__ */ new Map();
+  }
+}
+async function replaceNovelLinks(novelId, links = []) {
+  await supabaseWrite("novelLinks", "DELETE", void 0, `novelId=eq.${novelId}`);
+  if (links.length) await supabaseWrite("novelLinks", "POST", links.map((link, index) => ({ novelId, label: link.label, url: link.url, type: link.type, displayOrder: index })));
+}
 function normalizeNovelSlug(value, fallbackTitle) {
   const trimmed = value.trim();
   if (/^https?:\/\//i.test(trimmed) || trimmed.includes("/")) return normalizeNovelSlug(fallbackTitle || "novel");
@@ -649,25 +706,64 @@ function rankSearchRows(rows, query2) {
     return { row, score };
   }).filter((item) => item.score > 0).sort((a, b) => b.score - a.score || Number(b.row.ratingCount ?? 0) - Number(a.row.ratingCount ?? 0)).map((item) => item.row);
 }
+async function resolveCoverUrl(value) {
+  const url = value?.trim();
+  if (!url) return null;
+  try {
+    const parsedUrl = new URL(url);
+    const archiveMatch = parsedUrl.hostname.endsWith("archive.org") ? parsedUrl.pathname.match(/^\/details\/([^/]+)/) : null;
+    if (archiveMatch?.[1]) {
+      const metadataResponse = await fetch(`https://archive.org/metadata/${encodeURIComponent(archiveMatch[1])}`, { signal: AbortSignal.timeout(7e3) });
+      if (metadataResponse.ok) {
+        const metadata = await metadataResponse.json();
+        const imageFiles = (metadata.files ?? []).filter((file) => {
+          const name = (file.name ?? "").toLowerCase();
+          const format = (file.format ?? "").toLowerCase();
+          return /\.(jpe?g|png|webp|gif|avif)$/i.test(name) || /image\/(jpeg|png|webp|gif|avif)/i.test(format);
+        });
+        const selected = imageFiles.find((file) => /cover|front|title/i.test(file.name ?? "")) ?? imageFiles[0];
+        if (selected?.name) return `https://archive.org/download/${encodeURIComponent(archiveMatch[1])}/${selected.name.split("/").map(encodeURIComponent).join("/")}`;
+      }
+    }
+    const response = await fetch(url, { redirect: "follow", signal: AbortSignal.timeout(7e3), headers: { Accept: "image/*, text/html;q=0.9" } });
+    const contentType = response.headers.get("content-type") ?? "";
+    if (contentType.startsWith("image/")) return response.url || url;
+    if (contentType.includes("text/html")) {
+      const html = await response.text();
+      const match = html.match(/<meta[^>]+(?:property|name)=[\"'](?:og:image|twitter:image)[\"'][^>]+content=[\"']([^\"']+)[\"']/i) ?? html.match(/<meta[^>]+content=[\"']([^\"']+)[\"'][^>]+(?:property|name)=[\"'](?:og:image|twitter:image)[\"']/i);
+      if (match?.[1]) return new URL(match[1], response.url || url).toString();
+      const imageSource = html.match(/<img[^>]+(?:src|data-src)=[\"']([^\"']+)[\"']/i)?.[1];
+      if (imageSource) return new URL(imageSource, response.url || url).toString();
+    }
+  } catch {
+  }
+  return url;
+}
 async function createNovel(input) {
   const db = await getDb();
-  const { genreIds = [], ...novelInput } = input;
+  const { genreIds = [], links, ...novelInput } = input;
+  const resolvedCoverUrl = await resolveCoverUrl(input.coverUrl);
   if (!db) {
-    const rows = await supabaseWrite("novels", "POST", { ...novelInput, slug: normalizeNovelSlug(input.slug || input.title), coverUrl: input.coverUrl || null, description: input.description || null });
+    const rows = await supabaseWrite("novels", "POST", { ...novelInput, slug: normalizeNovelSlug(input.slug || input.title), coverUrl: resolvedCoverUrl, description: input.description || null });
     const row2 = rows[0];
+    if (links) await replaceNovelLinks(Number(row2.id), links);
     if (genreIds.length) await supabaseWrite("novelGenres", "POST", genreIds.map((genreId) => ({ novelId: row2.id, genreId })));
     return row2;
   }
-  const [row] = await db.insert(novels).values({ ...novelInput, slug: normalizeNovelSlug(input.slug || input.title), coverUrl: input.coverUrl || null, description: input.description || null }).returning();
+  const [row] = await db.insert(novels).values({ ...novelInput, slug: normalizeNovelSlug(input.slug || input.title), coverUrl: resolvedCoverUrl, description: input.description || null }).returning();
+  if (links) await replaceNovelLinks(Number(row.id), links);
   if (genreIds.length) await db.insert(novelGenres).values(genreIds.map((genreId) => ({ novelId: row.id, genreId }))).onConflictDoNothing();
   return row;
 }
 async function updateNovel(id, input) {
   const db = await getDb();
-  const { genreIds, ...novelInput } = input;
+  const { genreIds, links, ...novelInput } = input;
+  const resolvedCoverUrl = input.coverUrl === void 0 ? void 0 : await resolveCoverUrl(input.coverUrl);
+  if (resolvedCoverUrl !== void 0) novelInput.coverUrl = resolvedCoverUrl ?? "";
   if (!db) {
     const normalizedInput2 = novelInput.slug ? { ...novelInput, slug: normalizeNovelSlug(novelInput.slug) } : novelInput;
     const rows = await supabaseWrite("novels", "PATCH", { ...normalizedInput2, updatedAt: (/* @__PURE__ */ new Date()).toISOString() }, `id=eq.${id}`);
+    if (links) await replaceNovelLinks(id, links);
     if (genreIds) {
       await supabaseWrite("novelGenres", "DELETE", void 0, `novelId=eq.${id}`);
       if (genreIds.length) await supabaseWrite("novelGenres", "POST", genreIds.map((genreId) => ({ novelId: id, genreId })));
@@ -677,6 +773,7 @@ async function updateNovel(id, input) {
   const normalizedInput = novelInput.slug ? { ...novelInput, slug: normalizeNovelSlug(novelInput.slug) } : novelInput;
   const [row] = await db.update(novels).set({ ...normalizedInput, updatedAt: /* @__PURE__ */ new Date() }).where(eq(novels.id, id)).returning();
   if (!row) return null;
+  if (links) await replaceNovelLinks(id, links);
   if (genreIds) {
     await db.delete(novelGenres).where(eq(novelGenres.novelId, id));
     if (genreIds.length) await db.insert(novelGenres).values(genreIds.map((genreId) => ({ novelId: id, genreId }))).onConflictDoNothing();
@@ -686,6 +783,7 @@ async function updateNovel(id, input) {
 async function deleteNovel(id) {
   const db = await getDb();
   if (!db) {
+    await replaceNovelLinks(id);
     for (const [table, column] of [["novelGenres", "novelId"], ["seriesBooks", "novelId"], ["readingListItems", "novelId"], ["ratings", "novelId"], ["reviews", "novelId"]]) await supabaseWrite(table, "DELETE", void 0, `${column}=eq.${id}`);
     await supabaseWrite("novels", "DELETE", void 0, `id=eq.${id}`);
     return { success: true };
@@ -1338,6 +1436,48 @@ var systemRouter = router({
     };
   })
 });
+
+// server/adminSummary.ts
+async function restCount(table, filter = "") {
+  if (!ENV.supabaseUrl || !ENV.supabasePublishableKey) return 0;
+  try {
+    const response = await fetch(
+      `${ENV.supabaseUrl}/rest/v1/${table}?select=id${filter ? `&${filter}` : ""}`,
+      {
+        method: "HEAD",
+        headers: {
+          apikey: ENV.supabaseSecretKey || ENV.supabasePublishableKey,
+          Authorization: `Bearer ${ENV.supabaseSecretKey || ENV.supabasePublishableKey}`,
+          Prefer: "count=exact"
+        },
+        signal: AbortSignal.timeout(8e3)
+      }
+    );
+    if (!response.ok) return 0;
+    const range = response.headers.get("content-range") ?? "*/0";
+    return Number(range.split("/")[1] || 0);
+  } catch {
+    return 0;
+  }
+}
+async function getEnhancedAdminSummary() {
+  const base = await getAdminSummary();
+  const [genresRows, usersRows, quotes, publishedQuotes, draftQuotes] = await Promise.all([
+    listAdminGenres().catch(() => []),
+    listUsers().catch(() => []),
+    restCount("quotes"),
+    restCount("quotes", "status=eq.published"),
+    restCount("quotes", "status=eq.draft")
+  ]);
+  return {
+    ...base,
+    genres: Array.isArray(genresRows) ? genresRows.length : 0,
+    users: Array.isArray(usersRows) ? usersRows.length : 0,
+    quotes,
+    publishedQuotes,
+    draftQuotes
+  };
+}
 
 // server/routers/commerce.ts
 import { z as z2 } from "zod";
@@ -2146,6 +2286,7 @@ async function invokeLLM(params) {
 }
 
 // server/quotes.ts
+import { isIP } from "node:net";
 async function request(path3, init = {}) {
   if (!ENV.supabaseUrl || !ENV.supabaseSecretKey) throw new Error("Supabase admin REST is not configured");
   const response = await fetch(`${ENV.supabaseUrl}/rest/v1/${path3}`, { ...init, headers: { apikey: ENV.supabaseSecretKey, Authorization: `Bearer ${ENV.supabaseSecretKey}`, "Content-Type": "application/json", Prefer: "return=representation", ...init.headers ?? {} } });
@@ -2153,12 +2294,53 @@ async function request(path3, init = {}) {
   const text2 = await response.text();
   return text2 ? JSON.parse(text2) : [];
 }
-async function listQuotes(publicOnly = false) {
-  return request(`quotes?select=*&${publicOnly ? "status=eq.published&" : ""}order=created_at.desc&limit=200`);
+var authorsCache = null;
+var booksCache = null;
+async function listQuotes(publicOnly = false, limit = 200, offset = 0) {
+  const requested = Math.min(1e4, Math.max(1, limit));
+  const pageSize = Math.min(1e3, requested);
+  const rows = [];
+  for (let cursor = Math.max(0, offset); rows.length < requested; cursor += pageSize) {
+    const page = await request(`quotes?select=*&${publicOnly ? "status=eq.published&" : ""}order=created_at.desc&limit=${Math.min(pageSize, requested - rows.length)}&offset=${cursor}`);
+    rows.push(...page);
+    if (page.length < pageSize) break;
+  }
+  return enrichQuotes(rows);
 }
 async function getQuote(id) {
   const rows = await request(`quotes?id=eq.${id}&status=eq.published&select=*&limit=1`);
-  return rows[0] ?? null;
+  return (await enrichQuotes(rows))[0] ?? null;
+}
+async function getQuoteNeighbors(id) {
+  const current = await request(`quotes?id=eq.${id}&status=eq.published&select=id,created_at&limit=1`);
+  const row = current[0];
+  if (!row) return { previous: null, next: null };
+  const timestamp2 = encodeURIComponent(row.created_at);
+  const [previous, next] = await Promise.all([request(`quotes?status=eq.published&created_at=gt.${timestamp2}&select=id&order=created_at.asc&limit=1`), request(`quotes?status=eq.published&created_at=lt.${timestamp2}&select=id&order=created_at.desc&limit=1`)]);
+  return { previous: previous[0] ?? null, next: next[0] ?? null };
+}
+async function listQuotesByAuthor(slug) {
+  return (await listQuotes(true, 1e4)).filter((quote) => quote.author_slug === slug);
+}
+async function listQuotesByBook(slug) {
+  return (await listQuotes(true, 1e4)).filter((quote) => quote.book_slug === slug);
+}
+async function listQuotesByCategory(category) {
+  const wanted = comparable(decodeURIComponent(category).replace(/-/g, " "));
+  return (await listQuotes(true, 1e4)).filter((quote) => quote.category && comparable(quote.category) === wanted);
+}
+async function listQuoteCategories() {
+  return Array.from(new Set((await listQuotes(true, 1e4)).map((quote) => quote.category).filter((category) => Boolean(category?.trim())))).sort((a, b) => a.localeCompare(b, "ar"));
+}
+async function enrichQuotes(rows) {
+  const authorIds = Array.from(new Set(rows.map((row) => row.author_id).filter((id) => Number.isInteger(id))));
+  const bookIds = Array.from(new Set(rows.map((row) => row.novel_id).filter((id) => Number.isInteger(id))));
+  const [authors2, books] = await Promise.all([authorIds.length === rows.length ? request(`authors?select=id,name,slug&id=in.(${authorIds.join(",")})`) : listQuoteAuthors(), bookIds.length === rows.length ? request(`novels?select=id,title,slug,authorId&id=in.(${bookIds.join(",")})`) : listQuoteBooks()]);
+  return rows.map((row) => {
+    const author = authors2.find((item) => item.id === row.author_id) ?? matchEntity(row.speaker, authors2);
+    const book = books.find((item) => item.id === row.novel_id) ?? matchEntity(row.book_title, books);
+    return { ...row, quote_text: cleanImportedQuote(row.quote_text), author_id: author?.id ?? row.author_id ?? null, author_name: author?.name ?? row.speaker, author_slug: author?.slug ?? null, book_id: book?.id ?? row.novel_id ?? null, book_title: book?.title ?? row.book_title, book_slug: book?.slug ?? null };
+  });
 }
 async function createQuote(input) {
   return (await request("quotes", { method: "POST", body: JSON.stringify(input) }))[0];
@@ -2169,6 +2351,279 @@ async function updateQuote(id, input) {
 async function deleteQuote(id) {
   await request(`quotes?id=eq.${id}`, { method: "DELETE" });
   return { success: true };
+}
+async function createQuoteImport(input) {
+  return (await request("quote_imports", { method: "POST", body: JSON.stringify(input) }))[0];
+}
+async function listQuoteImports() {
+  return request("quote_imports?select=*&order=created_at.desc&limit=50");
+}
+async function existingQuoteTexts() {
+  const rows = [];
+  for (let offset = 0; offset < 1e4; offset += 1e3) {
+    const page = await request(`quotes?select=quote_text&order=id.asc&limit=1000&offset=${offset}`);
+    rows.push(...page);
+    if (page.length < 1e3) break;
+  }
+  return rows;
+}
+function editSimilarity(left, right) {
+  if (left === right) return 1;
+  if (!left || !right) return 0;
+  const maxLength = Math.max(left.length, right.length);
+  if (Math.abs(left.length - right.length) / maxLength > 0.08) return 0;
+  let previous = Array.from({ length: right.length + 1 }, (_, index) => index);
+  for (let row = 1; row <= left.length; row += 1) {
+    const current = [row];
+    for (let column = 1; column <= right.length; column += 1) current[column] = Math.min(current[column - 1] + 1, previous[column] + 1, previous[column - 1] + (left[row - 1] === right[column - 1] ? 0 : 1));
+    previous = current;
+  }
+  return 1 - previous[right.length] / maxLength;
+}
+function removeSimilarQuotes(quotes, existing, threshold = 0.95) {
+  const buckets = /* @__PURE__ */ new Map();
+  for (const text2 of existing) {
+    const normalized = comparable(text2);
+    const key = `${normalized.slice(0, 16)}:${Math.floor(normalized.length / 25)}`;
+    buckets.set(key, [...buckets.get(key) ?? [], normalized]);
+  }
+  const accepted = [];
+  let duplicateCount = 0;
+  for (const quote of quotes) {
+    const normalized = comparable(quote.quote_text);
+    const key = `${normalized.slice(0, 16)}:${Math.floor(normalized.length / 25)}`;
+    const possible = buckets.get(key) ?? [];
+    if (possible.some((item) => editSimilarity(normalized, item) >= threshold)) {
+      duplicateCount += 1;
+      continue;
+    }
+    accepted.push(quote);
+    buckets.set(key, [...possible, normalized]);
+  }
+  return { quotes: accepted, duplicateCount };
+}
+async function removeExistingSimilarQuotes(quotes, threshold = 0.95) {
+  const existing = (await existingQuoteTexts()).map((row) => row.quote_text);
+  return removeSimilarQuotes(quotes, existing, threshold);
+}
+async function findDuplicateQuotes(threshold = 0.95) {
+  const rows = await request("quotes?select=id,quote_text,created_at&order=id.asc&limit=10000");
+  const candidates = /* @__PURE__ */ new Map();
+  for (const row of rows) {
+    const key = comparable(row.quote_text).slice(0, 24);
+    const group = candidates.get(key) ?? [];
+    group.push(row);
+    candidates.set(key, group);
+  }
+  const result = [];
+  for (const group of Array.from(candidates.values())) {
+    if (group.length < 2) continue;
+    const keep = group[0];
+    const remove = group.slice(1).map((row) => ({ ...row, similarity: Number(editSimilarity(comparable(keep.quote_text), comparable(row.quote_text)).toFixed(4)) })).filter((row) => row.similarity >= threshold);
+    if (remove.length) result.push({ keep, remove });
+  }
+  return { threshold, groups: result, removeCount: result.reduce((sum, group) => sum + group.remove.length, 0) };
+}
+async function deleteDuplicateQuotes(ids) {
+  const uniqueIds = Array.from(new Set(ids.filter((id) => Number.isInteger(id) && id > 0)));
+  if (!uniqueIds.length) return { deleted: 0 };
+  await request(`quotes?id=in.(${uniqueIds.join(",")})`, { method: "DELETE" });
+  return { deleted: uniqueIds.length };
+}
+async function listQuoteAuthors() {
+  if (authorsCache && authorsCache.expires > Date.now()) return authorsCache.data;
+  const data = await request("authors?select=id,name,slug&limit=500");
+  authorsCache = { data, expires: Date.now() + 5 * 60 * 1e3 };
+  return data;
+}
+async function listQuoteBooks() {
+  if (booksCache && booksCache.expires > Date.now()) return booksCache.data;
+  const data = await request("novels?select=id,title,slug,authorId&limit=1000");
+  booksCache = { data, expires: Date.now() + 5 * 60 * 1e3 };
+  return data;
+}
+function decodeHtml(value) {
+  return value.replace(/&nbsp;/gi, " ").replace(/&rlm;|&lrm;|&zwj;|&zwnj;/gi, "").replace(/&amp;/gi, "&").replace(/&quot;/gi, '"').replace(/&#39;|&apos;/gi, "'").replace(/&ldquo;|&rdquo;|&laquo;|&raquo;/gi, '"').replace(/&lsquo;|&rsquo;|&sbquo;/gi, "'").replace(/&mdash;|&ndash;/gi, "\u2014").replace(/&hellip;/gi, "\u2026").replace(/&lt;/gi, "<").replace(/&gt;/gi, ">").replace(/&#x([0-9a-f]+);/gi, (_, hex) => String.fromCodePoint(parseInt(hex, 16))).replace(/&#(\d+);/g, (_, dec) => String.fromCodePoint(Number(dec)));
+}
+function cleanText(value) {
+  return decodeHtml(value.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim()).replace(/^\s*[“"«]|[”"»]\s*$/g, "").trim();
+}
+function cleanImportedQuote(value) {
+  const text2 = cleanText(value).replace(/^tags\s*:\s*.+$/i, "").trim();
+  return text2.replace(/\s+(?:—|–|―|-{2,})\s+[^\n]{1,180},\s*[^\n,]{1,180}\s*$/, "").replace(/^[\s“"«]+|[\s”"»]+$/g, "").trim();
+}
+function comparable(value) {
+  return cleanImportedQuote(value).toLowerCase().replace(/[ًٌٍَُِّْـ]/g, "").replace(/[أإآ]/g, "\u0627").replace(/ى/g, "\u064A").replace(/ة/g, "\u0647").replace(/[^\u0600-\u06ff\w\d]+/g, "");
+}
+function filterByLanguage(value, language) {
+  const text2 = cleanImportedQuote(value);
+  if (language === "both") return text2;
+  const letters = text2.match(/[A-Za-z\u0600-\u06ff]/g) ?? [];
+  if (letters.length < 3) return "";
+  const wanted = language === "ar" ? /[\u0600-\u06ff]/ : /[A-Za-z]/;
+  const matching = letters.filter((letter) => wanted.test(letter)).length;
+  if (matching / letters.length < 0.55) return "";
+  return text2.replace(language === "ar" ? /[A-Za-z]+/g : /[\u0600-\u06ff]+/g, "").replace(/\s{2,}/g, " ").trim();
+}
+function keepGroundedQuotes(quotes, source) {
+  const sourceText = comparable(source);
+  return quotes.filter((quote) => {
+    const normalized = comparable(quote);
+    return normalized.length >= 30 && (sourceText.includes(normalized) || sourceText.includes(normalized.slice(0, Math.min(100, normalized.length))));
+  });
+}
+function matchEntity(value, entities) {
+  const wanted = comparable(value ?? "");
+  if (!wanted) return null;
+  return entities.find((entity) => comparable(entity.name ?? entity.title ?? "") === wanted) ?? null;
+}
+function meta(html, key) {
+  const direct = new RegExp(`<meta[^>]+(?:property|name)=["']${key}["'][^>]+content=["']([^"']+)["'][^>]*>`, "i");
+  const reverse = new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]+(?:property|name)=["']${key}["'][^>]*>`, "i");
+  return decodeHtml(direct.exec(html)?.[1] ?? reverse.exec(html)?.[1] ?? "").trim();
+}
+function jsonLdValue(html, key) {
+  const pattern = /<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
+  let match;
+  while (match = pattern.exec(html)) {
+    try {
+      const parsed = JSON.parse(match[1]);
+      const item = Array.isArray(parsed) ? parsed[0] : parsed;
+      const value = item?.[key]?.name ?? item?.[key];
+      if (typeof value === "string") return value;
+    } catch {
+    }
+  }
+  return "";
+}
+function extractElements(html) {
+  const pattern = /<(blockquote|p|li|div|article|section)[^>]*(?:class|id)=["'][^"']*(?:quote|اقتباس|quotation|excerpt)[^"']*["'][^>]*>([\s\S]*?)<\/\1>/gi;
+  const result = [];
+  let match;
+  while (match = pattern.exec(html)) {
+    const text2 = cleanImportedQuote(match[2]);
+    if (text2.length >= 12 && text2.length <= 2e3 && !/^tags\s*:/i.test(text2)) result.push(text2);
+  }
+  return result;
+}
+async function extractWithAi(text2, instructions) {
+  const prompt = `\u0627\u0633\u062A\u062E\u0631\u062C \u0627\u0644\u0627\u0642\u062A\u0628\u0627\u0633\u0627\u062A \u0641\u0642\u0637 \u0645\u0646 \u0627\u0644\u0646\u0635 \u0627\u0644\u062A\u0627\u0644\u064A\u060C \u0643\u0644 \u0627\u0642\u062A\u0628\u0627\u0633 \u0639\u0646\u0635\u0631 \u0645\u0633\u062A\u0642\u0644 \u0648\u0628\u0646\u0641\u0633 \u062A\u0631\u062A\u064A\u0628 \u0638\u0647\u0648\u0631\u0647. \u0627\u0633\u062A\u0628\u0639\u062F \u0623\u0633\u0637\u0631 tags \u0648\u0627\u0644\u062A\u0635\u0646\u064A\u0641\u0627\u062A \u0648\u0623\u064A \u0623\u0631\u0642\u0627\u0645 \u0623\u0648 \u0628\u064A\u0627\u0646\u0627\u062A \u0648\u0627\u062C\u0647\u0629. \u0627\u062D\u0630\u0641 \u0631\u0645\u0648\u0632 HTML \u0648\u0646\u0633\u0628\u0629 \u0627\u0644\u0643\u0627\u062A\u0628 \u0648\u0627\u0644\u0643\u062A\u0627\u0628 \u0645\u0646 \u0646\u0647\u0627\u064A\u0629 \u0646\u0635 \u0627\u0644\u0627\u0642\u062A\u0628\u0627\u0633. \u0644\u0627 \u062A\u062E\u062A\u0631\u0639 \u0646\u0635\u064B\u0627 \u0623\u0648 \u0643\u0627\u062A\u0628\u064B\u0627 \u0623\u0648 \u0643\u062A\u0627\u0628\u064B\u0627. \u0627\u0644\u062A\u0639\u0644\u064A\u0645\u0627\u062A: ${instructions}
+\u0627\u0644\u0646\u0635:
+${text2.slice(0, 5e4)}`;
+  const schema = { type: "object", properties: { author: { type: "string" }, book: { type: "string" }, quotes: { type: "array", items: { type: "string" } } }, required: ["author", "book", "quotes"], additionalProperties: false };
+  if (ENV.geminiApiKey) {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${encodeURIComponent(ENV.geminiApiKey)}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ systemInstruction: { parts: [{ text: "\u0623\u0646\u062A \u0645\u0633\u062A\u062E\u0631\u062C \u0627\u0642\u062A\u0628\u0627\u0633\u0627\u062A \u062F\u0642\u064A\u0642. \u0623\u062E\u0631\u062C JSON \u0641\u0642\u0637." }] }, contents: [{ role: "user", parts: [{ text: prompt }] }], generationConfig: { temperature: 0, responseMimeType: "application/json", responseSchema: schema } }) });
+    if (!response.ok) throw new Error(`\u0641\u0634\u0644 \u0627\u0633\u062A\u062E\u0631\u0627\u062C AI (${response.status})`);
+    const payload = await response.json();
+    const content2 = payload.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (content2) return JSON.parse(content2);
+  }
+  const result = await invokeLLM({ model: "gpt-5-mini", maxTokens: 4e3, messages: [{ role: "system", content: "\u0623\u0646\u062A \u0645\u0633\u062A\u062E\u0631\u062C \u0627\u0642\u062A\u0628\u0627\u0633\u0627\u062A \u0639\u0631\u0628\u064A \u062F\u0642\u064A\u0642. \u0623\u062E\u0631\u062C JSON \u0641\u0642\u0637 \u0648\u0644\u0627 \u062A\u062E\u062A\u0631\u0639 \u0645\u062D\u062A\u0648\u0649." }, { role: "user", content: prompt }], responseFormat: { type: "json_schema", json_schema: { name: "quote_import", strict: true, schema } } });
+  const content = result.choices[0]?.message.content;
+  if (!content || typeof content !== "string") throw new Error("\u0644\u0645 \u064A\u064F\u0631\u062C\u0639 AI \u0646\u062A\u064A\u062C\u0629 \u0635\u0627\u0644\u062D\u0629");
+  return JSON.parse(content);
+}
+function telegramChannelUrl(value) {
+  const parsed = new URL(value);
+  if (!["http:", "https:"].includes(parsed.protocol) || !["t.me", "telegram.me"].includes(parsed.hostname.replace(/^www\./, ""))) throw new Error("\u064A\u062C\u0628 \u0625\u062F\u062E\u0627\u0644 \u0631\u0627\u0628\u0637 \u0642\u0646\u0627\u0629 \u062A\u064A\u0644\u064A\u062C\u0631\u0627\u0645 \u0639\u0627\u0645\u0629 \u0645\u062B\u0644 https://t.me/channel");
+  const parts = parsed.pathname.split("/").filter(Boolean);
+  const channel = parts[0] === "s" ? parts[1] : parts[0];
+  if (!channel || channel.startsWith("+") || channel.startsWith("joinchat")) throw new Error("\u0627\u0644\u0642\u0646\u0627\u0629 \u064A\u062C\u0628 \u0623\u0646 \u062A\u0643\u0648\u0646 \u0639\u0627\u0645\u0629 \u0648\u0644\u064A\u0633\u062A \u0631\u0627\u0628\u0637 \u062F\u0639\u0648\u0629 \u062E\u0627\u0635");
+  const before = Number(parsed.searchParams.get("before"));
+  return { channel, before: Number.isInteger(before) && before > 0 ? before : null };
+}
+function extractTelegramPosts(html, channel) {
+  const posts = [];
+  const pattern = /data-post=["']([^"']+\/\d+)["'][\s\S]*?class=["'][^"']*tgme_widget_message_text[^"']*["'][^>]*>([\s\S]*?)<\/div>/gi;
+  let match;
+  while (match = pattern.exec(html)) {
+    const postPath = match[1];
+    const id = Number(postPath.split("/").pop());
+    const text2 = cleanText(match[2]).replace(/\s*\[[^\]]*\]\([^)]*\)\s*/g, " ").trim();
+    if (Number.isInteger(id) && text2.length >= 25) posts.push({ id, url: `https://t.me/${postPath}`, text: text2 });
+  }
+  return posts.filter((post, index, list) => list.findIndex((item) => item.id === post.id) === index).sort((a, b) => a.id - b.id);
+}
+function telegramQuote(post, channel) {
+  const text2 = post.text.replace(/\s+/g, " ").trim();
+  if (/^(تحميل|download|مشاهدة|فيديو|صور|إعلان|اعلان)\b/i.test(text2) || /\.pdf\b/i.test(text2)) return null;
+  const attribution = text2.match(/(?:^|\s)[—–-]\s*([^—–-]{2,120}?)(?:\s*[📘📗📒📓📕📑📃📜♪]|$)/);
+  const speaker = attribution?.[1]?.trim().replace(/[\s،,.]+$/g, "") ?? "";
+  const quote = cleanImportedQuote(attribution ? text2.slice(0, attribution.index).trim() : text2);
+  if (quote.length < 25 || quote.length > 2e3 || /^tags\s*:/i.test(quote)) return null;
+  return { quote_text: quote, speaker, book_title: "", category: "", status: "published", source_url: post.url };
+}
+async function scanTelegramChannel(input) {
+  const parsed = telegramChannelUrl(input.url);
+  const pages = Math.min(10, Math.max(1, input.maxPages ?? 1));
+  let before = parsed.before;
+  let pagesScanned = 0;
+  let postsScanned = 0;
+  const quotes = [];
+  let lastPageUrl = `https://t.me/s/${parsed.channel}`;
+  for (let page = 0; page < pages; page += 1) {
+    const pageUrl = new URL(`https://t.me/s/${parsed.channel}`);
+    if (before) pageUrl.searchParams.set("before", String(before));
+    lastPageUrl = pageUrl.toString();
+    const response = await fetch(pageUrl, { headers: { "User-Agent": "RiwayaQuoteImporter/1.0 (+https://e7ketha.vercel.app)" }, signal: AbortSignal.timeout(15e3) });
+    if (!response.ok) throw new Error(`\u062A\u0639\u0630\u0631 \u0641\u062A\u062D \u0642\u0646\u0627\u0629 \u062A\u064A\u0644\u064A\u062C\u0631\u0627\u0645 (${response.status})`);
+    const posts = extractTelegramPosts((await response.text()).slice(0, 5e6), parsed.channel);
+    pagesScanned += 1;
+    postsScanned += posts.length;
+    for (const post of posts) {
+      const quote = telegramQuote(post, parsed.channel);
+      if (quote) quotes.push(quote);
+    }
+    const oldest = posts[0]?.id;
+    if (!oldest || posts.length === 0 || before !== null && oldest >= before) {
+      const filtered2 = await removeExistingSimilarQuotes(quotes);
+      return { sourceUrl: `https://t.me/${parsed.channel}`, pageUrl: lastPageUrl, channel: parsed.channel, pagesScanned, postsScanned, quotes: filtered2.quotes, nextBefore: null, done: true };
+    }
+    before = oldest - 1;
+  }
+  const filtered = await removeExistingSimilarQuotes(quotes);
+  return { sourceUrl: `https://t.me/${parsed.channel}`, pageUrl: lastPageUrl, channel: parsed.channel, pagesScanned, postsScanned, quotes: filtered.quotes, nextBefore: before, done: false };
+}
+async function previewQuotesFromUrl(input) {
+  const parsedUrl = new URL(input.url);
+  if (!["http:", "https:"].includes(parsedUrl.protocol)) throw new Error("\u0627\u0644\u0631\u0627\u0628\u0637 \u064A\u062C\u0628 \u0623\u0646 \u064A\u0628\u062F\u0623 \u0628\u0640 http \u0623\u0648 https");
+  const host = parsedUrl.hostname.replace(/^\[|\]$/g, "");
+  const privateIpv4 = /^(10\.|127\.|169\.254\.|192\.168\.|172\.(1[6-9]|2\d|3[0-1])\.)/.test(host);
+  const privateIpv6 = host === "::1" || host.startsWith("fc") || host.startsWith("fd") || host.startsWith("fe80:");
+  if (["localhost", "0.0.0.0"].includes(host) || host.endsWith(".local") || isIP(host) === 4 && privateIpv4 || isIP(host) === 6 && privateIpv6) throw new Error("\u0644\u0627 \u064A\u0645\u0643\u0646 \u0641\u062D\u0635 \u0647\u0630\u0627 \u0627\u0644\u0646\u0637\u0627\u0642");
+  const response = await fetch(parsedUrl, { headers: { "User-Agent": "RiwayaQuoteImporter/1.0 (+https://e7ketha.vercel.app)" }, signal: AbortSignal.timeout(15e3) });
+  if (!response.ok) throw new Error(`\u062A\u0639\u0630\u0631 \u0641\u062A\u062D \u0627\u0644\u0631\u0627\u0628\u0637 (${response.status})`);
+  const html = (await response.text()).slice(0, 3e6);
+  const author = input.author?.trim() || meta(html, "author") || jsonLdValue(html, "author");
+  const book = input.book?.trim() || meta(html, "book") || meta(html, "og:title") || jsonLdValue(html, "isPartOf") || "";
+  const instruction = (input.instructions ?? "").toLowerCase();
+  let extracted = extractElements(html);
+  if (!extracted.length || instruction.includes("\u0643\u0644 \u0633\u0637\u0631")) {
+    const visible = cleanText(html.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>|<nav[\s\S]*?<\/nav>|<header[\s\S]*?<\/header>|<footer[\s\S]*?<\/footer>/gi, "\n"));
+    const lines = visible.split(/(?:\n|\r)+/).map((line) => cleanText(line)).filter((line) => line.length >= 25 && line.length <= 2e3);
+    extracted = extracted.length && !instruction.includes("\u0643\u0644 \u0633\u0637\u0631") ? extracted : lines;
+  }
+  let resolvedAuthor = author;
+  let resolvedBook = book;
+  if (input.useAi) {
+    try {
+      const sourceText = cleanText(html.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi, " "));
+      const ai = await extractWithAi(sourceText, input.instructions ?? "\u0627\u0633\u062A\u062E\u0631\u062C \u0627\u0644\u0627\u0642\u062A\u0628\u0627\u0633\u0627\u062A \u0641\u0642\u0637");
+      const grounded = keepGroundedQuotes(ai.quotes, sourceText);
+      if (grounded.length < Math.max(1, Math.ceil(ai.quotes.length * 0.5))) throw new Error("AI returned ungrounded quotes");
+      extracted = grounded;
+      resolvedAuthor ||= ai.author;
+      resolvedBook ||= ai.book;
+    } catch (error) {
+      console.warn("[Quotes] AI extraction unavailable; using deterministic extraction", error);
+    }
+  }
+  const language = input.language ?? "both";
+  const unique = Array.from(new Set(extracted.map((quote) => filterByLanguage(quote, language)).filter((quote) => quote.length >= 12 && !/^tags\s*:/i.test(quote))));
+  const candidates = unique.map((quote_text) => ({ quote_text, speaker: resolvedAuthor, book_title: resolvedBook, category: "", status: "published" }));
+  const filtered = await removeExistingSimilarQuotes(candidates);
+  if (!filtered.quotes.length) throw new Error("\u0643\u0644 \u0627\u0644\u0627\u0642\u062A\u0628\u0627\u0633\u0627\u062A \u0627\u0644\u0645\u0648\u062C\u0648\u062F\u0629 \u0641\u064A \u0627\u0644\u0631\u0627\u0628\u0637 \u0645\u0648\u062C\u0648\u062F\u0629 \u0645\u0633\u0628\u0642\u064B\u0627 \u0623\u0648 \u0645\u062A\u0634\u0627\u0628\u0647\u0629 \u0628\u0646\u0633\u0628\u0629 95\u066A.");
+  return { sourceUrl: input.url, author: resolvedAuthor, book: resolvedBook, quotes: filtered.quotes.slice(0, 500), duplicateCount: filtered.duplicateCount + Math.max(0, filtered.quotes.length - 500) };
 }
 async function improveQuote(input) {
   const prompt = `\u062D\u0633\u0651\u0646 \u0647\u0630\u0627 \u0627\u0644\u0627\u0642\u062A\u0628\u0627\u0633 \u062F\u0648\u0646 \u062A\u063A\u064A\u064A\u0631 \u0645\u0639\u0646\u0627\u0647\u060C \u0648\u0627\u0642\u062A\u0631\u062D \u062A\u0635\u0646\u064A\u0641\u064B\u0627 \u0645\u0646\u0627\u0633\u0628\u064B\u0627. \u0644\u0627 \u062A\u062E\u062A\u0631\u0639 \u0627\u0644\u0642\u0627\u0626\u0644 \u0623\u0648 \u0627\u0644\u0643\u062A\u0627\u0628 \u0625\u0630\u0627 \u0644\u0645 \u064A\u0630\u0643\u0631\u0647\u0645\u0627 \u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645. \u0623\u062E\u0631\u062C JSON \u0641\u0642\u0637 \u0628\u0627\u0644\u0645\u0641\u0627\u062A\u064A\u062D quote, speaker, book, category, note.
@@ -2192,12 +2647,229 @@ async function improveQuote(input) {
   return JSON.parse(content);
 }
 
+// server/reviews.ts
+import { and as and2, desc as desc2, eq as eq2, sql as sql3 } from "drizzle-orm";
+async function rest(table, params, init) {
+  if (!ENV.supabaseUrl || !(ENV.supabaseSecretKey || ENV.supabasePublishableKey)) {
+    throw new Error("Supabase is not configured");
+  }
+  const key = ENV.supabaseSecretKey || ENV.supabasePublishableKey;
+  const response = await fetch(`${ENV.supabaseUrl}/rest/v1/${table}?${params}`, {
+    ...init,
+    signal: AbortSignal.timeout(1e4),
+    headers: {
+      apikey: key,
+      Authorization: `Bearer ${key}`,
+      "Content-Type": "application/json",
+      Prefer: "return=representation",
+      ...init?.headers ?? {}
+    }
+  });
+  if (!response.ok) throw new Error(`Reviews API ${response.status}: ${await response.text()}`);
+  const text2 = await response.text();
+  return text2 ? JSON.parse(text2) : [];
+}
+async function listNovelReviews(slug, limit = 30) {
+  const novel = await getNovelBySlug(slug);
+  if (!novel) return [];
+  const db = await getDb();
+  if (db) {
+    try {
+      const rows2 = await db.select({
+        id: reviews.id,
+        body: reviews.body,
+        rating: reviews.rating,
+        status: reviews.status,
+        createdAt: reviews.createdAt,
+        userName: users.name
+      }).from(reviews).leftJoin(users, eq2(reviews.userId, users.id)).where(and2(eq2(reviews.novelId, novel.id), eq2(reviews.status, "published"))).orderBy(desc2(reviews.createdAt)).limit(Math.min(100, Math.max(1, limit)));
+      return rows2.map((row) => ({
+        id: row.id,
+        body: row.body,
+        rating: row.rating,
+        status: row.status,
+        createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt),
+        userName: row.userName
+      }));
+    } catch (error) {
+      console.warn("[reviews] drizzle list failed, REST fallback", error);
+    }
+  }
+  const rows = await rest(
+    "reviews",
+    `select=id,body,rating,status,createdAt,userId&novelId=eq.${novel.id}&status=eq.published&order=createdAt.desc&limit=${Math.min(100, Math.max(1, limit))}`
+  );
+  const userIds = Array.from(new Set(rows.map((r) => r.userId).filter(Boolean)));
+  let nameMap = /* @__PURE__ */ new Map();
+  if (userIds.length) {
+    try {
+      const userRows = await rest("users", `select=id,name&id=in.(${userIds.join(",")})`);
+      nameMap = new Map(userRows.map((u) => [Number(u.id), u.name ?? null]));
+    } catch {
+    }
+  }
+  return rows.map((row) => ({
+    id: Number(row.id),
+    body: row.body,
+    rating: row.rating == null ? null : Number(row.rating),
+    status: row.status,
+    createdAt: row.createdAt,
+    userName: nameMap.get(Number(row.userId)) ?? null
+  }));
+}
+async function getMyReview(userId, slug) {
+  const novel = await getNovelBySlug(slug);
+  if (!novel) return null;
+  const db = await getDb();
+  if (db) {
+    const rows2 = await db.select({
+      id: reviews.id,
+      body: reviews.body,
+      rating: reviews.rating,
+      status: reviews.status,
+      createdAt: reviews.createdAt
+    }).from(reviews).where(and2(eq2(reviews.userId, userId), eq2(reviews.novelId, novel.id))).limit(1);
+    const row2 = rows2[0];
+    if (!row2) return null;
+    return {
+      id: row2.id,
+      body: row2.body,
+      rating: row2.rating,
+      status: row2.status,
+      createdAt: row2.createdAt instanceof Date ? row2.createdAt.toISOString() : String(row2.createdAt)
+    };
+  }
+  const rows = await rest(
+    "reviews",
+    `select=id,body,rating,status,createdAt&userId=eq.${userId}&novelId=eq.${novel.id}&limit=1`
+  );
+  const row = rows[0];
+  if (!row) return null;
+  return {
+    id: Number(row.id),
+    body: row.body,
+    rating: row.rating == null ? null : Number(row.rating),
+    status: row.status,
+    createdAt: row.createdAt
+  };
+}
+async function upsertReview(userId, slug, input) {
+  const body = input.body.trim();
+  if (body.length < 20) throw new Error("\u0627\u0644\u0631\u0623\u064A \u064A\u062C\u0628 \u0623\u0646 \u064A\u0643\u0648\u0646 20 \u062D\u0631\u0641\u064B\u0627 \u0639\u0644\u0649 \u0627\u0644\u0623\u0642\u0644.");
+  if (body.length > 4e3) throw new Error("\u0627\u0644\u0631\u0623\u064A \u0637\u0648\u064A\u0644 \u062C\u062F\u064B\u0627 (\u0627\u0644\u062D\u062F 4000 \u062D\u0631\u0641).");
+  const rating = input.rating == null ? null : Math.min(5, Math.max(1, Math.round(input.rating)));
+  const novel = await getNovelBySlug(slug);
+  if (!novel) throw new Error("\u0627\u0644\u0631\u0648\u0627\u064A\u0629 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F\u0629");
+  const db = await getDb();
+  if (db) {
+    const existing2 = await db.select({ id: reviews.id }).from(reviews).where(and2(eq2(reviews.userId, userId), eq2(reviews.novelId, novel.id))).limit(1);
+    let row2;
+    if (existing2[0]) {
+      [row2] = await db.update(reviews).set({ body, rating, status: "published", updatedAt: /* @__PURE__ */ new Date() }).where(eq2(reviews.id, existing2[0].id)).returning();
+    } else {
+      [row2] = await db.insert(reviews).values({ userId, novelId: novel.id, body, rating, status: "published" }).returning();
+    }
+    if (rating != null) {
+      await db.insert(ratings).values({ userId, novelId: novel.id, rating }).onConflictDoUpdate({
+        target: [ratings.userId, ratings.novelId],
+        set: { rating, updatedAt: /* @__PURE__ */ new Date() }
+      });
+      const aggregate = await db.select({
+        average: sql3`COALESCE(AVG(${ratings.rating}), 0)`,
+        count: sql3`COUNT(${ratings.id})`
+      }).from(ratings).where(eq2(ratings.novelId, novel.id));
+      await db.update(novels).set({
+        rating: Math.round(Number(aggregate[0]?.average ?? 0) * 100),
+        ratingCount: Number(aggregate[0]?.count ?? 0),
+        updatedAt: /* @__PURE__ */ new Date()
+      }).where(eq2(novels.id, novel.id));
+    }
+    return row2;
+  }
+  const existing = await rest(
+    "reviews",
+    `select=id&userId=eq.${userId}&novelId=eq.${novel.id}&limit=1`
+  );
+  const payload = {
+    userId,
+    novelId: novel.id,
+    body,
+    rating,
+    status: "published",
+    updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+  };
+  let row;
+  if (existing[0]) {
+    const updated = await rest(`reviews`, `id=eq.${existing[0].id}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload)
+    });
+    row = updated[0];
+  } else {
+    const created = await rest("reviews", "", {
+      method: "POST",
+      body: JSON.stringify({ ...payload, createdAt: (/* @__PURE__ */ new Date()).toISOString() })
+    });
+    row = created[0];
+  }
+  if (rating != null) {
+    try {
+      await rest("ratings", "on_conflict=userId,novelId", {
+        method: "POST",
+        headers: { Prefer: "resolution=merge-duplicates,return=representation" },
+        body: JSON.stringify({
+          userId,
+          novelId: novel.id,
+          rating,
+          updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+        })
+      });
+    } catch {
+    }
+  }
+  return row;
+}
+async function listPendingReviews(limit = 50) {
+  const db = await getDb();
+  if (db) {
+    return db.select({
+      id: reviews.id,
+      body: reviews.body,
+      rating: reviews.rating,
+      status: reviews.status,
+      createdAt: reviews.createdAt,
+      novelId: reviews.novelId,
+      userId: reviews.userId,
+      userName: users.name,
+      novelTitle: novels.title,
+      novelSlug: novels.slug
+    }).from(reviews).leftJoin(users, eq2(reviews.userId, users.id)).leftJoin(novels, eq2(reviews.novelId, novels.id)).where(eq2(reviews.status, "pending")).orderBy(desc2(reviews.createdAt)).limit(limit);
+  }
+  return rest(
+    "reviews",
+    `select=*&status=eq.pending&order=createdAt.desc&limit=${limit}`
+  );
+}
+async function moderateReview(id, status) {
+  const db = await getDb();
+  if (db) {
+    const [row] = await db.update(reviews).set({ status, updatedAt: /* @__PURE__ */ new Date() }).where(eq2(reviews.id, id)).returning();
+    return row ?? null;
+  }
+  const rows = await rest(`reviews`, `id=eq.${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ status, updatedAt: (/* @__PURE__ */ new Date()).toISOString() })
+  });
+  return rows[0] ?? null;
+}
+
 // server/routers.ts
 var novelSlugInput = z3.object({ slug: z3.string().min(1).max(160) });
 var ratingInput = z3.object({ slug: z3.string().min(1).max(160), rating: z3.number().int().min(1).max(5) });
 var authorFields = z3.object({ slug: z3.string().min(1).max(160), name: z3.string().min(1).max(255), bio: z3.string().max(5e3).optional(), avatarUrl: z3.string().url().max(500).optional(), bookCount: z3.number().int().min(0).optional() });
 var genreFields = z3.object({ slug: z3.string().min(1).max(120), name: z3.string().min(1).max(120), description: z3.string().max(2e3).optional(), icon: z3.string().max(20).optional() });
-var novelFields = z3.object({ slug: z3.string().min(1).max(160), title: z3.string().min(1).max(255), authorId: z3.number().int().positive(), coverUrl: z3.string().url().max(500).optional(), description: z3.string().max(1e4).optional(), parts: z3.number().int().min(1).max(100).optional(), status: z3.enum(["standalone", "completed", "ongoing"]).optional(), publicationYear: z3.number().int().min(0).max(3e3).optional(), language: z3.string().max(32).optional(), genreIds: z3.array(z3.number().int().positive()).max(30).optional() });
+var novelLinkFields = z3.object({ label: z3.string().min(1).max(80), url: z3.string().url().max(2e3), type: z3.enum(["read", "download"]) });
+var novelFields = z3.object({ slug: z3.string().min(1).max(160), title: z3.string().min(1).max(255), authorId: z3.number().int().positive(), coverUrl: z3.string().url().max(500).optional(), description: z3.string().max(1e4).optional(), rightsNote: z3.string().max(2e3).optional(), parts: z3.number().int().min(1).max(100).optional(), status: z3.enum(["standalone", "completed", "ongoing"]).optional(), publicationYear: z3.number().int().min(0).max(3e3).optional(), language: z3.string().max(32).optional(), genreIds: z3.array(z3.number().int().positive()).max(30).optional(), links: z3.array(novelLinkFields).max(20).optional() });
 var coverUploadInput = z3.object({ filename: z3.string().min(1).max(160), dataUrl: z3.string().regex(/^data:image\/(png|jpe?g|webp|gif);base64,/i).max(15e6) });
 var appRouter = router({
   system: systemRouter,
@@ -2258,6 +2930,13 @@ var appRouter = router({
       return setRating(ctx.user.id, novel.id, input.rating);
     })
   }),
+  reviews: router({
+    list: publicProcedure.input(z3.object({ slug: z3.string().min(1).max(160), limit: z3.number().int().min(1).max(100).default(30).optional() })).query(({ input }) => listNovelReviews(input.slug, input.limit ?? 30)),
+    mine: protectedProcedure.input(z3.object({ slug: z3.string().min(1).max(160) })).query(({ ctx, input }) => getMyReview(ctx.user.id, input.slug)),
+    upsert: protectedProcedure.input(z3.object({ slug: z3.string().min(1).max(160), body: z3.string().min(20).max(4e3), rating: z3.number().int().min(1).max(5).optional() })).mutation(({ ctx, input }) => upsertReview(ctx.user.id, input.slug, { body: input.body, rating: input.rating })),
+    pending: adminProcedure.query(() => listPendingReviews()),
+    moderate: adminProcedure.input(z3.object({ id: z3.number().int().positive(), status: z3.enum(["published", "pending", "hidden"]) })).mutation(({ input }) => moderateReview(input.id, input.status))
+  }),
   notifications: router({
     list: protectedProcedure.query(({ ctx }) => listNotifications(ctx.user.openId, ctx.user.role)),
     markRead: protectedProcedure.input(z3.object({ id: z3.number().int().positive() })).mutation(({ ctx, input }) => markNotificationRead(input.id, ctx.user.openId))
@@ -2270,14 +2949,15 @@ var appRouter = router({
     event: publicProcedure.input(z3.object({ id: z3.number().int().positive(), event: z3.enum(["impression", "click"]) })).mutation(({ input }) => recordAdEvent(input.id, input.event))
   }),
   admin: router({
-    summary: adminProcedure.query(() => getAdminSummary()),
+    summary: adminProcedure.query(() => getEnhancedAdminSummary()),
     reports: adminProcedure.query(() => getAdminReports()),
     novels: router({
       list: adminProcedure.query(() => listAdminNovels()),
       create: adminProcedure.input(novelFields).mutation(({ input }) => createNovel(input)),
       update: adminProcedure.input(z3.object({ id: z3.number().int().positive(), data: novelFields.partial() })).mutation(({ input }) => updateNovel(input.id, input.data)),
       delete: adminProcedure.input(z3.object({ id: z3.number().int().positive() })).mutation(({ input }) => deleteNovel(input.id)),
-      uploadCover: adminProcedure.input(coverUploadInput).mutation(({ input }) => uploadNovelCover(input.dataUrl, input.filename))
+      uploadCover: adminProcedure.input(coverUploadInput).mutation(({ input }) => uploadNovelCover(input.dataUrl, input.filename)),
+      resolveCover: adminProcedure.input(z3.object({ url: z3.string().url() })).mutation(({ input }) => resolveCoverUrl(input.url))
     }),
     authors: router({
       list: adminProcedure.query(() => listAdminAuthors()),
@@ -2331,15 +3011,45 @@ var appRouter = router({
     })
   }),
   quotes: router({
-    list: publicProcedure.query(() => listQuotes(true)),
-    byId: publicProcedure.input(z3.object({ id: z3.number().int().positive() })).query(({ input }) => getQuote(input.id))
+    list: publicProcedure.input(z3.object({ limit: z3.number().int().min(1).max(500).default(10), offset: z3.number().int().min(0).default(0) }).optional()).query(({ input }) => listQuotes(true, input?.limit ?? 10, input?.offset ?? 0)),
+    byId: publicProcedure.input(z3.object({ id: z3.number().int().positive() })).query(({ input }) => getQuote(input.id)),
+    neighbors: publicProcedure.input(z3.object({ id: z3.number().int().positive() })).query(({ input }) => getQuoteNeighbors(input.id)),
+    byAuthor: publicProcedure.input(z3.object({ slug: z3.string().min(1).max(160) })).query(({ input }) => listQuotesByAuthor(input.slug)),
+    byBook: publicProcedure.input(z3.object({ slug: z3.string().min(1).max(160) })).query(({ input }) => listQuotesByBook(input.slug)),
+    byCategory: publicProcedure.input(z3.object({ category: z3.string().min(1).max(80) })).query(({ input }) => listQuotesByCategory(input.category)),
+    categories: publicProcedure.query(() => listQuoteCategories())
   }),
   adminQuotes: router({
     list: adminProcedure.query(() => listQuotes(false)),
-    create: adminProcedure.input(z3.object({ quote_text: z3.string().min(3).max(2e3), speaker: z3.string().max(255).nullable().optional(), book_title: z3.string().max(255).nullable().optional(), novel_id: z3.number().int().positive().nullable().optional(), category: z3.string().max(80).nullable().optional(), status: z3.enum(["draft", "published"]) })).mutation(({ input }) => createQuote({ ...input, speaker: input.speaker ?? null, book_title: input.book_title ?? null, novel_id: input.novel_id ?? null, category: input.category ?? null })),
-    update: adminProcedure.input(z3.object({ id: z3.number().int().positive(), data: z3.object({ quote_text: z3.string().min(3).max(2e3).optional(), speaker: z3.string().max(255).nullable().optional(), book_title: z3.string().max(255).nullable().optional(), novel_id: z3.number().int().positive().nullable().optional(), category: z3.string().max(80).nullable().optional(), status: z3.enum(["draft", "published"]).optional() }) })).mutation(({ input }) => updateQuote(input.id, input.data)),
+    create: adminProcedure.input(z3.object({ quote_text: z3.string().min(3).max(2e3), speaker: z3.string().max(255).nullable().optional(), book_title: z3.string().max(255).nullable().optional(), novel_id: z3.number().int().positive().nullable().optional(), category: z3.string().max(80).nullable().optional() })).mutation(({ input }) => createQuote({ ...input, speaker: input.speaker ?? null, book_title: input.book_title ?? null, novel_id: input.novel_id ?? null, category: input.category ?? null, status: "published" })),
+    update: adminProcedure.input(z3.object({ id: z3.number().int().positive(), data: z3.object({ quote_text: z3.string().min(3).max(2e3).optional(), speaker: z3.string().max(255).nullable().optional(), book_title: z3.string().max(255).nullable().optional(), novel_id: z3.number().int().positive().nullable().optional(), category: z3.string().max(80).nullable().optional() }) })).mutation(({ input }) => updateQuote(input.id, { ...input.data, status: "published" })),
     delete: adminProcedure.input(z3.object({ id: z3.number().int().positive() })).mutation(({ input }) => deleteQuote(input.id)),
-    improve: adminProcedure.input(z3.object({ quote: z3.string().min(3).max(2e3), speaker: z3.string().max(255).optional(), book: z3.string().max(255).optional() })).mutation(({ input }) => improveQuote(input))
+    improve: adminProcedure.input(z3.object({ quote: z3.string().min(3).max(2e3), speaker: z3.string().max(255).optional(), book: z3.string().max(255).optional() })).mutation(({ input }) => improveQuote(input)),
+    scanTelegram: adminProcedure.input(z3.object({ url: z3.string().url().max(2e3), maxPages: z3.number().int().min(1).max(10).default(1) })).mutation(({ input }) => scanTelegramChannel(input)),
+    duplicatePreview: adminProcedure.input(z3.object({ threshold: z3.number().min(0.9).max(1).default(0.95) })).query(({ input }) => findDuplicateQuotes(input.threshold)),
+    deleteDuplicates: adminProcedure.input(z3.object({ ids: z3.array(z3.number().int().positive()).min(1).max(500) })).mutation(({ input }) => deleteDuplicateQuotes(input.ids)),
+    previewImport: adminProcedure.input(z3.object({ url: z3.string().url().max(2e3), author: z3.string().max(255).optional(), book: z3.string().max(255).optional(), instructions: z3.string().max(2e3).optional(), useAi: z3.boolean().default(true), language: z3.enum(["ar", "en", "both"]).default("both") })).mutation(async ({ input }) => {
+      const [result, authors2, books] = await Promise.all([previewQuotesFromUrl(input), listQuoteAuthors(), listQuoteBooks()]);
+      const authorMatch = matchEntity(result.author, authors2);
+      const bookMatch = matchEntity(result.book, books);
+      return { ...result, authorMatch: authorMatch ? { name: authorMatch.name, slug: authorMatch.slug } : null, bookMatch: bookMatch ? { title: bookMatch.title, slug: bookMatch.slug } : null };
+    }),
+    imports: adminProcedure.query(() => listQuoteImports()),
+    bulkCreate: adminProcedure.input(z3.object({ sourceUrl: z3.string().url().max(2e3), author: z3.string().max(255).optional(), book: z3.string().max(255).optional(), instructions: z3.string().max(2e3).optional(), quotes: z3.array(z3.object({ quote_text: z3.string().min(3).max(2e3), speaker: z3.string().max(255).nullable().optional(), book_title: z3.string().max(255).nullable().optional(), category: z3.string().max(80).nullable().optional(), source_url: z3.string().url().max(2e3).optional() })).min(1).max(500) })).mutation(async ({ input }) => {
+      const [authors2, books] = await Promise.all([listQuoteAuthors(), listQuoteBooks()]);
+      const filtered = await removeExistingSimilarQuotes(input.quotes);
+      const fresh = filtered.quotes;
+      const matchedAuthor = matchEntity(input.author, authors2);
+      const matchedBook = matchEntity(input.book, books);
+      const importRow = await createQuoteImport({ source_url: input.sourceUrl, author: input.author, book: input.book, instructions: input.instructions, quote_count: fresh.length });
+      for (let index = 0; index < fresh.length; index += 1) {
+        const quote = fresh[index];
+        const author = matchEntity(quote.speaker || input.author, authors2) ?? matchedAuthor;
+        const book = matchEntity(quote.book_title || input.book, books) ?? matchedBook;
+        await createQuote({ ...quote, speaker: quote.speaker ?? null, book_title: quote.book_title ?? null, author_id: author?.id ?? null, novel_id: book?.id ?? null, category: quote.category ?? null, status: "published", source_url: quote.source_url ?? input.sourceUrl, import_id: importRow.id, position: index + 1 });
+      }
+      return { count: fresh.length, skippedDuplicates: input.quotes.length - fresh.length + filtered.duplicateCount, importId: importRow.id, authorMatched: Boolean(matchedAuthor), bookMatched: Boolean(matchedBook), authorSlug: matchedAuthor?.slug ?? null, bookSlug: matchedBook?.slug ?? null };
+    })
   })
 });
 
@@ -2458,42 +3168,24 @@ function writeToLogFile(source, entries) {
 }
 function vitePluginManusDebugCollector() {
   return {
-    name: "manus-debug-collector",
-    transformIndexHtml(html) {
-      if (process.env.NODE_ENV === "production") {
-        return html;
-      }
-      return {
-        html,
-        tags: [
-          {
-            tag: "script",
-            attrs: {
-              src: "/__manus__/debug-collector.js",
-              defer: true
-            },
-            injectTo: "head"
-          }
-        ]
-      };
-    },
+    name: "vite-plugin-manus-debug-collector",
     configureServer(server) {
-      server.middlewares.use("/__manus__/logs", (req, res, next) => {
-        if (req.method !== "POST") {
+      server.middlewares.use((req, res, next) => {
+        if (req.url !== "/__manus__/logs" || req.method !== "POST") {
           return next();
         }
         const handlePayload = (payload) => {
-          if (payload.consoleLogs?.length > 0) {
-            writeToLogFile("browserConsole", payload.consoleLogs);
+          try {
+            const body2 = payload;
+            if (body2.source && Array.isArray(body2.entries)) {
+              writeToLogFile(body2.source, body2.entries);
+            }
+            res.writeHead(200, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ success: true }));
+          } catch (e) {
+            res.writeHead(400, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ success: false, error: String(e) }));
           }
-          if (payload.networkRequests?.length > 0) {
-            writeToLogFile("networkRequests", payload.networkRequests);
-          }
-          if (payload.sessionEvents?.length > 0) {
-            writeToLogFile("sessionReplay", payload.sessionEvents);
-          }
-          res.writeHead(200, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ success: true }));
         };
         const reqBody = req.body;
         if (reqBody && typeof reqBody === "object") {
@@ -2522,7 +3214,13 @@ function vitePluginManusDebugCollector() {
     }
   };
 }
-var plugins = [react(), tailwindcss(), jsxLocPlugin(), vitePluginManusRuntime(), vitePluginManusDebugCollector()];
+var plugins = [
+  react(),
+  tailwindcss(),
+  ...process.env.NODE_ENV === "production" ? [] : [jsxLocPlugin()],
+  vitePluginManusRuntime(),
+  vitePluginManusDebugCollector()
+];
 var vite_config_default = defineConfig({
   plugins,
   resolve: {
@@ -2610,6 +3308,33 @@ function serveStatic(app) {
   });
 }
 
+// server/_core/performance.ts
+var samplesByRoute = /* @__PURE__ */ new Map();
+var MAX_SAMPLES_PER_ROUTE = 200;
+function recordRequest(route, durationMs) {
+  const samples = samplesByRoute.get(route) ?? [];
+  samples.push({ durationMs, recordedAt: Date.now() });
+  if (samples.length > MAX_SAMPLES_PER_ROUTE) samples.splice(0, samples.length - MAX_SAMPLES_PER_ROUTE);
+  samplesByRoute.set(route, samples);
+  if (samples.length % 20 === 0) {
+    console.info("[Performance]", JSON.stringify({ route, count: samples.length, p50Ms: percentile(samples, 0.5), p95Ms: percentile(samples, 0.95), lastMs: Math.round(durationMs * 100) / 100 }));
+  }
+}
+function percentile(samples, percentileValue) {
+  if (!samples.length) return 0;
+  const sorted = samples.map((sample) => sample.durationMs).sort((a, b) => a - b);
+  const index = Math.min(sorted.length - 1, Math.ceil(percentileValue * sorted.length) - 1);
+  return Math.round(sorted[index] * 100) / 100;
+}
+function getPerformanceSnapshot() {
+  return Object.fromEntries(Array.from(samplesByRoute.entries()).map(([route, samples]) => [route, {
+    count: samples.length,
+    p50Ms: percentile(samples, 0.5),
+    p95Ms: percentile(samples, 0.95),
+    lastMs: samples.at(-1)?.durationMs ?? 0
+  }]));
+}
+
 // server/_core/index.ts
 function isPortAvailable(port) {
   return new Promise((resolve) => {
@@ -2630,10 +3355,25 @@ async function findAvailablePort(startPort = 3e3) {
 }
 function createApp() {
   const app = express2();
+  app.use((req, res, next) => {
+    const startedAt = process.hrtime.bigint();
+    res.once("finish", () => {
+      const durationMs = Number(process.hrtime.bigint() - startedAt) / 1e6;
+      const route = `${req.method} ${req.path}`;
+      recordRequest(route, durationMs);
+      const samples = getPerformanceSnapshot();
+      const routeSnapshot = samples[route];
+      if (routeSnapshot && routeSnapshot.count % 20 === 0) {
+        console.info("[Performance]", JSON.stringify({ route, ...routeSnapshot, lastMs: Math.round(durationMs * 100) / 100 }));
+      }
+    });
+    next();
+  });
   app.use(express2.json({ limit: "50mb" }));
   app.use(express2.urlencoded({ limit: "50mb", extended: true }));
   registerStorageProxy(app);
   registerOAuthRoutes(app);
+  app.get("/api/performance", (_req, res) => res.json({ generatedAt: (/* @__PURE__ */ new Date()).toISOString(), routes: getPerformanceSnapshot() }));
   app.use(
     "/api/trpc",
     createExpressMiddleware({

@@ -31,7 +31,7 @@ function AdminSidebar({ section, setSection, open, onClose }: { section: Section
   return (
     <aside className={`${open ? 'translate-x-0' : 'translate-x-full'} fixed inset-y-0 right-0 z-50 flex w-72 max-w-[85vw] flex-col border-l border-[#222b4a] bg-[#0d142d] text-white transition-transform md:static md:translate-x-0`}>
       <div className="flex h-[78px] items-center justify-between border-b border-white/10 px-6">
-        <Link href="/admin" className="text-lg font-extrabold">رِواية <span className="text-[#8d84f9]">/ admin</span></Link>
+        <Link href="/admin" className="text-lg font-extrabold">𝐄𝟳𝐤𝐞𝐭𝐡𝐚 <span className="text-[#8d84f9]">/ admin</span></Link>
         <button onClick={onClose} className="md:hidden" aria-label="إغلاق القائمة"><X size={18} /></button>
       </div>
       <nav className="flex-1 overflow-y-auto p-4" aria-label="قائمة الإدارة">
@@ -218,7 +218,7 @@ export default function AdminPage() {
         <div className="min-w-0 flex-1">
           <header className="sticky top-0 z-30 flex h-[78px] items-center justify-between border-b border-[#e2e6f0] bg-white/85 px-4 backdrop-blur-xl dark:border-[#202a48] dark:bg-[#0d142d]/90 sm:px-5 md:px-8">
             <button onClick={() => setOpen(true)} className="grid size-10 place-items-center rounded-xl border md:hidden" aria-label="فتح قائمة الإدارة"><Menu size={18} /></button>
-            <div className="text-sm font-extrabold">إدارة محتوى رِواية</div>
+            <div className="text-sm font-extrabold">إدارة محتوى 𝐄𝟳𝐤𝐞𝐭𝐡𝐚</div>
             <Link href="/" className="text-xs font-bold text-[#675de8]">عرض الموقع</Link>
           </header>
           <main className="p-4 sm:p-5 md:p-8">

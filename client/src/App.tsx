@@ -18,6 +18,7 @@ const AuthPage = lazy(() => import('@/pages/AccountPages').then((module) => ({ d
 const PasswordResetPage = lazy(() => import('@/pages/AccountPages').then((module) => ({ default: module.PasswordResetPage })));
 const ProfilePage = lazy(() => import('@/pages/AccountPages').then((module) => ({ default: module.ProfilePage })));
 const ReadingListPage = lazy(() => import('@/pages/AccountPages').then((module) => ({ default: module.ReadingListPage })));
+const SavedQuotesPage = lazy(() => import('@/pages/AccountPages').then((module) => ({ default: module.SavedQuotesPage })));
 const AdminPage = lazy(() => import('@/pages/AdminPage'));
 const NotFound = lazy(() => import('@/pages/NotFound'));
 const QuotesPage = lazy(() => import('@/pages/QuotesPage'));
@@ -37,19 +38,30 @@ const TermsPage = lazy(() => import('@/pages/InfoPages').then((module) => ({ def
 function LoadingPage() { return <div className="grid min-h-[45vh] place-items-center"><BookLoader label="نجهز الصفحة" /></div>; }
 
 const SITE_URL = 'https://e7ketha.vercel.app';
-const DEFAULT_DESCRIPTION = 'رِواية — منصة اكتشاف الروايات العربية. ابحث عن روايتك القادمة واستكشف المؤلفين والتصنيفات والاقتباسات.';
+const SITE_NAME = '𝐄𝟳𝐤𝐞𝐭𝐡𝐚';
+const HOME_TITLE = '𝐄𝟳𝐤𝐞𝐭𝐡𝐚 📖 | كُـل رِوَايـة لَهـا حِڪَايـة ✍︎';
+const DEFAULT_DESCRIPTION = 'هنا تبدأ حكايتك مع عالم الروايات… 📚✨ اكتشف روايات تستحق القراءة، أشهر الكُتّاب وأعمالهم، واستكشف عوالم الغموض والرعب والرومانسية والدراما والخيال… بدون حرق 🔥 | ترشيحات · كتّاب · نبذات · اقتباسات';
 
 function SeoManager({ location }: { location: string }) {
   useEffect(() => {
     const pathname = location.split('?')[0] || '/';
-    const isPrivate = /^\/(admin|login|register|auth|reset-password|my-list|profile)(\/|$)/.test(pathname);
+    const isPrivate = /^\/(admin|login|register|auth|reset-password|my-list|saved-quotes|profile)(\/|$)/.test(pathname);
+    const isSearch = pathname === '/search';
     const titles: Record<string, string> = {
-      '/': 'رِواية — اكتشف روايتك القادمة', '/explore': 'استكشف الروايات العربية | رِواية', '/quotes': 'اقتباسات ملهمة من الروايات | رِواية',
-      '/discover': 'اكتشف قراءتك القادمة | رِواية', '/about': 'عن رِواية | منصة اكتشاف الروايات العربية', '/how-it-works': 'كيف تعمل رِواية؟',
-      '/faq': 'الأسئلة الشائعة | رِواية', '/contact': 'تواصل معنا | رِواية', '/privacy': 'سياسة الخصوصية | رِواية', '/terms': 'شروط الاستخدام | رِواية',
+      '/': HOME_TITLE,
+      '/explore': `استكشف الروايات العربية | ${SITE_NAME}`,
+      '/quotes': `اقتباسات عربية ملهمة من الروايات | ${SITE_NAME}`,
+      '/quotes/categories': `تصنيفات الاقتباسات العربية | ${SITE_NAME}`,
+      '/discover': `اكتشف قراءتك القادمة | ${SITE_NAME}`,
+      '/about': `عن ${SITE_NAME} | منصة اكتشاف الروايات العربية`,
+      '/how-it-works': `كيف تعمل ${SITE_NAME}؟`,
+      '/faq': `الأسئلة الشائعة | ${SITE_NAME}`,
+      '/contact': `تواصل معنا | ${SITE_NAME}`,
+      '/privacy': `سياسة الخصوصية | ${SITE_NAME}`,
+      '/terms': `شروط الاستخدام | ${SITE_NAME}`,
     };
-    const title = titles[pathname] ?? (pathname.startsWith('/books/') || pathname.startsWith('/novel/') || pathname.startsWith('/novels/') ? 'تفاصيل الرواية | رِواية' : pathname.startsWith('/authors/') ? 'المؤلفون العرب | رِواية' : pathname.startsWith('/genres/') ? 'تصنيفات الروايات | رِواية' : pathname.startsWith('/series/') ? 'سلاسل روائية | رِواية' : 'رِواية — اكتشف روايتك القادمة');
-    const description = isPrivate ? 'هذه الصفحة مخصصة للمستخدمين المسجلين في رِواية.' : DEFAULT_DESCRIPTION;
+    const title = titles[pathname] ?? (pathname.startsWith('/books/') || pathname.startsWith('/novel/') || pathname.startsWith('/novels/') ? `تفاصيل الرواية | ${SITE_NAME}` : pathname.startsWith('/authors/') ? `المؤلفون العرب | ${SITE_NAME}` : pathname.startsWith('/genres/') ? `تصنيفات الروايات | ${SITE_NAME}` : pathname.startsWith('/series/') ? `سلاسل روائية | ${SITE_NAME}` : HOME_TITLE);
+    const description = isPrivate ? `هذه الصفحة مخصصة للمستخدمين المسجلين في ${SITE_NAME}.` : pathname === '/quotes' ? 'اقرأ واقتبس وشارك أجمل الاقتباسات العربية عن الحب والحياة والفلسفة والقراءة من الروايات والكتّاب.' : DEFAULT_DESCRIPTION;
     const canonical = `${SITE_URL}${pathname === '/' ? '/' : pathname.replace(/\/$/, '')}`;
     document.title = title;
     const setMeta = (selector: string, attributes: Record<string, string>, content: string) => {
@@ -57,14 +69,17 @@ function SeoManager({ location }: { location: string }) {
       if (!element) { element = document.createElement('meta'); document.head.appendChild(element); }
       Object.entries(attributes).forEach(([key, value]) => element!.setAttribute(key, value)); element.setAttribute('content', content);
     };
-    setMeta('meta[name="description"]', { name: 'description' }, description); setMeta('meta[property="og:title"]', { property: 'og:title' }, title);
-    setMeta('meta[property="og:description"]', { property: 'og:description' }, description); setMeta('meta[property="og:url"]', { property: 'og:url' }, canonical);
-    setMeta('meta[name="robots"]', { name: 'robots' }, isPrivate ? 'noindex,nofollow' : 'index,follow');
+    setMeta('meta[name="description"]', { name: 'description' }, description);
+    setMeta('meta[property="og:title"]', { property: 'og:title' }, title);
+    setMeta('meta[property="og:description"]', { property: 'og:description' }, description);
+    setMeta('meta[property="og:url"]', { property: 'og:url' }, canonical);
+    setMeta('meta[property="og:site_name"]', { property: 'og:site_name' }, SITE_NAME);
+    setMeta('meta[name="robots"]', { name: 'robots' }, isPrivate || isSearch ? 'noindex,nofollow' : 'index,follow');
     let link = document.head.querySelector('link[rel="canonical"]') as HTMLLinkElement | null;
     if (!link) { link = document.createElement('link'); link.rel = 'canonical'; document.head.appendChild(link); } link.href = canonical;
     let jsonLd = document.head.querySelector('#site-structured-data') as HTMLScriptElement | null;
     if (!jsonLd) { jsonLd = document.createElement('script'); jsonLd.id = 'site-structured-data'; jsonLd.type = 'application/ld+json'; document.head.appendChild(jsonLd); }
-    jsonLd.textContent = JSON.stringify({ '@context': 'https://schema.org', '@type': 'WebSite', name: 'رِواية', url: SITE_URL, description: DEFAULT_DESCRIPTION, inLanguage: 'ar' });
+    jsonLd.textContent = JSON.stringify({ '@context': 'https://schema.org', '@type': 'WebSite', name: SITE_NAME, url: SITE_URL, description: DEFAULT_DESCRIPTION, inLanguage: 'ar' });
   }, [location]);
   return null;
 }
@@ -74,7 +89,7 @@ function PublicRoutes({ theme, onThemeToggle }: { theme: 'light' | 'dark'; onThe
     <Route path="/" component={Home} /><Route path="/explore" component={ExplorePage} /><Route path="/search" component={SearchPage} />
     <Route path="/quotes" component={QuotesPage} /><Route path="/quotes/categories" component={QuoteCategoriesPage} /><Route path="/quotes/category/:slug" component={QuoteCategoryPage} /><Route path="/quotes/:id" component={QuotePage} /><Route path="/books/:slug/quotes" component={BookQuotesPage} /><Route path="/books/:slug" component={NovelPage} /><Route path="/novel/:slug" component={NovelPage} /><Route path="/novels/:slug" component={NovelPage} />
     <Route path="/authors/:slug/quotes" component={AuthorQuotesPage} /><Route path="/authors/:slug" component={AuthorPage} /><Route path="/genres/:slug" component={GenrePage} /><Route path="/series/:slug" component={SeriesPage} />
-    <Route path="/discover" component={DiscoverPage} /><Route path="/my-list" component={ReadingListPage} /><Route path="/profile" component={ProfilePage} />
+    <Route path="/discover" component={DiscoverPage} /><Route path="/my-list" component={ReadingListPage} /><Route path="/saved-quotes" component={SavedQuotesPage} /><Route path="/profile" component={ProfilePage} />
     <Route path="/login">{() => <AuthPage />}</Route><Route path="/register">{() => <AuthPage register />}</Route><Route path="/auth/callback" component={AuthCallbackPage} /><Route path="/reset-password" component={PasswordResetPage} />
     <Route path="/about" component={AboutPage} /><Route path="/how-it-works" component={HowItWorksPage} /><Route path="/privacy" component={PrivacyPage} /><Route path="/terms" component={TermsPage} />
     <Route path="/contact" component={ContactPage} /><Route path="/report" component={ReportPage} /><Route path="/faq" component={FaqPage} />

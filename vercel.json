@@ -1,5 +1,5 @@
 {
-  "installCommand": "corepack enable && pnpm install --frozen-lockfile",
+  "installCommand": "corepack enable && pnpm install --no-frozen-lockfile",
   "buildCommand": "pnpm build",
   "outputDirectory": "dist/public",
   "framework": "vite",
@@ -16,6 +16,8 @@
     { "src": "^/authors/([^/]+)$", "dest": "/api?resource=seo&path=/authors/$1" },
     { "src": "^/genres/([^/]+)$", "dest": "/api?resource=seo&path=/genres/$1" },
     { "src": "^/series/([^/]+)$", "dest": "/api?resource=seo&path=/series/$1" },
+    { "src": "^/quotes/categories/?$", "dest": "/api?resource=seo&path=/quotes/categories" },
+    { "src": "^/quotes/?$", "dest": "/api?resource=seo&path=%2Fquotes" },
     { "src": "^/quotes/([0-9]+)$", "dest": "/api?resource=seo&path=/quotes/$1" },
     { "src": "^/quotes/category/(.*)", "dest": "/api?resource=seo&path=/quotes/category/$1" },
     { "handle": "filesystem" },

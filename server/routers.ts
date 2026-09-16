@@ -9,7 +9,7 @@ import { commerceRouter } from './routers/commerce';
 import { confirmSupabaseUserEmail, listSupabaseUsers, toManagedUser, updateSupabaseUserRole } from './_core/supabaseAdmin';
 import { uploadNovelCover } from './cloudinary';
 import { audit, createAd, createNotification, deleteAd, getAdminReports, listActiveAds, listAds, listAuditLogs, listMessagesForUser, listNotifications, listTrash, markNotificationRead, purgeTrash, recordAdEvent, restoreTrash, sendAdminMessage, updateAd } from './management';
-import { createQuote, createQuoteImport, deleteDuplicateQuotes, deleteQuote, existingQuoteTexts, findDuplicateQuotes, getQuote, getQuoteNeighbors, improveQuote, listQuoteAuthors, listQuoteBooks, listQuoteCategories, listQuoteImports, listQuotes, listQuotesByAuthor, listQuotesByBook, listQuotesByCategory, matchEntity, previewQuotesFromUrl, removeExistingSimilarQuotes, scanTelegramChannel, updateQuote } from './quotes';
+import { createQuote, createQuoteImport, deleteDuplicateQuotes, deleteQuote, existingQuoteTexts, findDuplicateQuotes, getQuote, getQuoteNeighbors, improveQuote, isQuoteSaved, listSavedQuotes, listQuoteAuthors, listQuoteBooks, listQuoteCategories, listQuoteImports, listQuotes, listQuotesByAuthor, listQuotesByBook, listQuotesByCategory, matchEntity, previewQuotesFromUrl, removeExistingSimilarQuotes, saveQuote, scanTelegramChannel, unsaveQuote, updateQuote } from './quotes';
 import { getMyReview, listNovelReviews, listPendingReviews, moderateReview, upsertReview } from './reviews';
 
 const novelSlugInput = z.object({ slug: z.string().min(1).max(160) });
@@ -167,6 +167,10 @@ export const appRouter = router({
     byBook: publicProcedure.input(z.object({ slug: z.string().min(1).max(160) })).query(({ input }) => listQuotesByBook(input.slug)),
     byCategory: publicProcedure.input(z.object({ category: z.string().min(1).max(80) })).query(({ input }) => listQuotesByCategory(input.category)),
     categories: publicProcedure.query(() => listQuoteCategories()),
+    saved: protectedProcedure.query(({ ctx }) => listSavedQuotes(ctx.user.id)),
+    savedState: protectedProcedure.input(z.object({ id: z.number().int().positive() })).query(({ ctx, input }) => isQuoteSaved(ctx.user.id, input.id)),
+    save: protectedProcedure.input(z.object({ id: z.number().int().positive() })).mutation(async ({ ctx, input }) => { if (!await getQuote(input.id)) throw new Error('Quote not found'); return saveQuote(ctx.user.id, input.id); }),
+    unsave: protectedProcedure.input(z.object({ id: z.number().int().positive() })).mutation(({ ctx, input }) => unsaveQuote(ctx.user.id, input.id)),
   }),
   adminQuotes: router({
     list: adminProcedure.query(() => listQuotes(false)),
