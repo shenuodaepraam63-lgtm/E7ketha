@@ -185,7 +185,7 @@ export function createApp() {
       return next(error);
     }
   };
-  app.get(['/books/:slug', '/novel/:slug', '/novels/:slug', '/authors/:slug', '/genres/:slug', '/series/:slug', '/quotes/:id', '/quotes/category/:slug'], directSeoHandler);
+  app.get(['/books/:slug', '/novel/:slug', '/novels/:slug', '/authors/:slug', '/genres/:slug', '/series/:slug', '/quotes', '/quotes/categories', '/quotes/:id', '/quotes/category/:slug'], directSeoHandler);
   app.get("/api", async (req, res, next) => {
     if (req.query.resource !== 'seo' || typeof req.query.path !== 'string') return next();
     try {
