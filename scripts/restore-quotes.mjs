@@ -1,0 +1,10 @@
+import { readFileSync, writeFileSync, readdirSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+const root = join(dirname(fileURLToPath(import.meta.url)), '..');
+const dir = join(root, 'scripts', 'quotes-restore-parts');
+const parts = readdirSync(dir).filter((f) => f.endsWith('.b64')).sort((a, b) => Number(a.split('.')[0]) - Number(b.split('.')[0]));
+const b64 = parts.map((f) => readFileSync(join(dir, f), 'utf8')).join('');
+const source = Buffer.from(b64, 'base64').toString('utf8');
+writeFileSync(join(root, 'server', 'quotes.ts'), source);
+console.log('[restore-quotes] restored server/quotes.ts (' + source.length + ' chars)');
