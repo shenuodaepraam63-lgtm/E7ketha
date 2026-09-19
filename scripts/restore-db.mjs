@@ -1,8 +1,9 @@
 #!/usr/bin/env node
-/** Restores server/db.ts from base64 parts (checked in to avoid huge single-file MCP push limits). */
+/** Restores server/db.ts from gzipped base64 parts in scripts/db-parts/ */
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { gunzipSync } from 'zlib';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, '..');
@@ -16,16 +17,17 @@ if (!existsSync(partsDir)) {
 
 const files = [];
 for (let i = 0; ; i++) {
-  const f = join(partsDir, `p${i}.b64`);
+  const f = join(partsDir, `gz_p${i}.b64`);
   if (!existsSync(f)) break;
   files.push(f);
 }
 if (!files.length) {
-  console.warn('[restore-db] no parts, skip');
+  console.warn('[restore-db] no gz parts, skip');
   process.exit(0);
 }
 
 const b64 = files.map((f) => readFileSync(f, 'utf8').trim()).join('');
-const content = Buffer.from(b64, 'base64').toString('utf8');
+const gz = Buffer.from(b64, 'base64');
+const content = gunzipSync(gz).toString('utf8');
 writeFileSync(out, content);
-console.log('[restore-db] wrote server/db.ts', content.length, 'bytes from', files.length, 'parts');
+console.log('[restore-db] wrote server/db.ts', content.length, 'bytes from', files.length, 'gz parts');
