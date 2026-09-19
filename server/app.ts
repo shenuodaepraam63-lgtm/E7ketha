@@ -227,6 +227,7 @@ export function createApp() {
     }
   };
   app.get(['/topics', '/topics/:slug', '/books/:slug', '/novel/:slug', '/novels/:slug', '/authors/:slug', '/genres/:slug', '/series/:slug', '/quotes/:id', '/quotes/category/:slug'], directSeoHandler);
+  app.get(['/quotes', '/quotes/', '/quotes/categories'], directSeoHandler);
   app.get("/api", async (req, res, next) => {
     if (req.query.resource !== 'seo' || typeof req.query.path !== 'string') return next();
     try {
