@@ -148,6 +148,17 @@ async function renderPublicSeo(pathname: string) {
     return renderSeoDocument(readClientTemplate(), { title: `${selected.title} — 𝐄𝟳𝐤𝐞𝐭𝐡𝐚`, description, canonical, type: 'collection', image: selected.coverUrl ?? undefined, jsonLd: { '@context': 'https://schema.org', '@graph': [{ '@type': 'BookSeries', '@id': `${canonical}#series`, name: selected.title, description, image: selected.coverUrl || undefined, url: canonical, numberOfItems: seriesBooks.length, hasPart: { '@type': 'ItemList', itemListElement: seriesBooks } }, breadcrumbSchema(origin, [{ name: 'الرئيسية', url: `${origin}/` }, { name: 'السلاسل', url: `${origin}/explore` }, { name: selected.title, url: canonical }]) ] }, content: `<main lang="ar" dir="rtl"><nav><a href="${origin}/">الرئيسية</a> / <a href="${origin}/explore">استكشف</a></nav><article><h1>${htmlEscape(selected.title)}</h1><p><strong>سلسلة روائية</strong> — ${htmlEscape(selected.description || '')}</p><h2>ترتيب القراءة والأعمال المرتبطة</h2><ol>${books}</ol></article></main>` });
   }
 
+  if (normalized === '/quotes' || normalized === '/quotes/categories') {
+    const isCategories = normalized.endsWith('/categories');
+    const quotes = await listQuotes(true);
+    const categories = Array.from(new Set(quotes.map((quote) => quote.category).filter((category): category is string => Boolean(category?.trim()))));
+    const canonical = `${origin}${normalized}`;
+    const title = isCategories ? 'تصنيفات الاقتباسات | 𝐄𝟳𝐤𝐞𝐭𝐡𝐚' : 'اقتباسات الروايات والكتب | 𝐄𝟳𝐤𝐞𝐭𝐡𝐚';
+    const description = isCategories ? 'تصفح اقتباسات الروايات حسب الموضوع والتصنيف.' : 'اقرأ اقتباسات مختارة من الروايات والكتب العربية، واكتشف المؤلفين والأعمال المرتبطة.';
+    const links = (isCategories ? categories.map((category) => [`/quotes/category/${quoteCategorySlug(category)}`, `اقتباسات ${category}`] as const) : quotes.slice(0, 50).map((quote) => [`/quotes/${quote.id}`, stripHtml(quote.quote_text, 120)] as const)).map(([href, label]) => `<li><a href="${origin}${href}">${htmlEscape(label)}</a></li>`).join('');
+    return renderSeoDocument(readClientTemplate(), { title, description, canonical, type: 'collection', jsonLd: { '@context': 'https://schema.org', '@type': 'CollectionPage', name: isCategories ? 'تصنيفات الاقتباسات' : 'اقتباسات الروايات والكتب', description, url: canonical, inLanguage: 'ar' }, content: `<main lang="ar" dir="rtl"><nav><a href="${origin}/">الرئيسية</a></nav><article><h1>${htmlEscape(isCategories ? 'تصنيفات الاقتباسات' : 'اقتباسات الروايات والكتب')}</h1><p>${htmlEscape(description)}</p><h2>${htmlEscape(isCategories ? 'تصفح حسب الموضوع' : 'اقتباسات مختارة')}</h2><ul>${links}</ul><p><a href="${origin}/${isCategories ? 'quotes' : 'quotes/categories'}">${isCategories ? 'كل الاقتباسات' : 'كل التصنيفات'}</a></p></article></main>` });
+  }
+
   if (/^\/quotes\/\d+$/.test(normalized)) {
     const quote = await getQuote(Number(normalized.split('/').pop()));
     if (!quote) return { html: '<!doctype html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="robots" content="noindex"><title>الاقتباس غير موجود | 𝐄𝟳𝐤𝐞𝐭𝐡𝐚</title></head><body><h1>الاقتباس غير موجود</h1></body></html>', status: 404 };
@@ -193,7 +204,7 @@ export function createApp() {
       const staticPaths = ["/", "/explore", "/quotes", "/quotes/categories", "/discover", "/about", "/how-it-works", "/faq", "/contact", "/privacy", "/terms", ...topicPaths];
       const urls = [...staticPaths, ...novels.map((item) => `/books/${item.slug}`), ...bookQuotePaths, ...authors.map((item) => `/authors/${item.slug}`), ...authorQuotePaths, ...genres.map((item) => `/genres/${item.slug}`), ...seriesList.map((item) => `/series/${item.slug}`), ...categoryQuotePaths, ...quotes.map((item) => `/quotes/${item.id}`)];
       const resource = String(_req.query.resource ?? "");
-      const sitemap = resource === "index" || resource === "sitemap" ? renderSitemapIndex() : resource === "novels" ? renderUrlset([...novels.map((item) => `/books/${item.slug}`), ...bookQuotePaths]) : resource === "authors" ? renderUrlset([...authors.map((item) => `/authors/${item.slug}`), ...authorQuotePaths]) : resource === "genres" ? renderUrlset(genres.map((item) => `/genres/${item.slug}`)) : resource === "series" ? renderUrlset(seriesList.map((item) => `/series/${item.slug}`)) : resource === "quotes" ? renderUrlset([...categoryQuotePaths, ...quotes.map((item) => `/quotes/${item.id}`)]) : renderUrlset(urls);
+      const sitemap = resource === "index" || resource === "sitemap" ? renderSitemapIndex() : resource === "novels" ? renderUrlset([...novels.map((item) => `/books/${item.slug}`), ...bookQuotePaths]) : resource === "authors" ? renderUrlset([...authors.map((item) => `/authors/${item.slug}`), ...authorQuotePaths]) : resource === "genres" ? renderUrlset(genres.map((item) => `/genres/${item.slug}`)) : resource === "series" ? renderUrlset(seriesList.map((item) => `/series/${item.slug}`)) : resource === "quotes" ? renderUrlset(["/quotes", "/quotes/categories", ...categoryQuotePaths, ...quotes.map((item) => `/quotes/${item.id}`)]) : renderUrlset(urls);
       res.type("application/xml").set("Cache-Control", "public, max-age=0, s-maxage=0, must-revalidate").send(sitemap);
     } catch (error) {
       console.error("[SEO] sitemap generation failed", error);
