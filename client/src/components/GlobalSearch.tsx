@@ -4,6 +4,22 @@ import { useLocation } from 'wouter';
 import { trpc } from '@/lib/trpc';
 import { coverFallback } from '@/lib/data';
 
+function normalizeArabic(value: string) {
+  return value
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u064B-\u065F\u0670]/g, '')
+    .replace(/[إأآٱ]/g, 'ا')
+    .replace(/ى/g, 'ي')
+    .replace(/ة/g, 'ه')
+    .replace(/ؤ/g, 'و')
+    .replace(/ئ/g, 'ي')
+    .replace(/ـ/g, '')
+    .replace(/[^\u0600-\u06FFa-z0-9\s]/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 export function GlobalSearch({ hero = false }: { hero?: boolean }) {
   const [, navigate] = useLocation();
   const [value, setValue] = useState('');
@@ -29,14 +45,24 @@ export function GlobalSearch({ hero = false }: { hero?: boolean }) {
     if (!q) return (authorsQuery.data ?? []).slice(0, 4);
     const needle = q.toLowerCase();
     return (authorsQuery.data ?? [])
-      .filter((a) => a.name.toLowerCase().includes(needle) || a.slug.includes(needle))
+      .filter((a) => {
+      const n = normalizeArabic(a.name);
+      const s = normalizeArabic(a.slug);
+      const qq = normalizeArabic(needle);
+      return n.includes(qq) || s.includes(qq);
+    })
       .slice(0, 4);
   }, [authorsQuery.data, q]);
   const genres = useMemo(() => {
     if (!q) return (genresQuery.data ?? []).slice(0, 4);
     const needle = q.toLowerCase();
     return (genresQuery.data ?? [])
-      .filter((g) => g.name.toLowerCase().includes(needle) || g.slug.includes(needle))
+      .filter((g) => {
+      const n = normalizeArabic(g.name);
+      const s = normalizeArabic(g.slug);
+      const qq = normalizeArabic(needle);
+      return n.includes(qq) || s.includes(qq);
+    })
       .slice(0, 4);
   }, [genresQuery.data, q]);
 
