@@ -216,7 +216,7 @@ export function createApp() {
   app.get("/api/sitemap.xml", sitemapHandler);
   const directSeoHandler = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
     const pathname = req.path;
-    if (pathname.startsWith('/quotes/') && !/^\/quotes\/(?:\d+|category\/[^/]+)$/.test(pathname)) return next();
+    if (pathname.startsWith('/quotes/') && !/^\/quotes\/(?:categories|\d+|category\/[^/]+)$/.test(pathname)) return next();
     try {
       const result = await renderPublicSeo(pathname);
       if (!result) return next();
