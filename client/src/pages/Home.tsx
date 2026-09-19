@@ -33,13 +33,13 @@ export default function Home() {
         <div className="container relative z-30 grid min-h-[570px] items-center py-20 md:min-h-[620px] md:grid-cols-[1fr_1.15fr] md:py-24">
           <div className="order-1 max-w-[590px] md:order-2">
             <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/[.07] px-3 py-1.5 text-[11px] font-semibold text-[#d8d5ff]">
-              <Sparkles size={13} className="text-[#9f96ff]" /> مساحة أهدأ لاكتشاف ما يستحق القراءة
+              <Sparkles size={13} className="text-[#9f96ff]" /> محرك بحث للروايات العربية
             </div>
             <h1 className="max-w-[650px] text-[43px] font-extrabold leading-[1.18] sm:text-[58px]">
               اكتشف روايتك<br />
               <span className="bg-gradient-to-l from-[#c3bdff] via-[#8f86ff] to-[#ffcf9b] bg-clip-text text-transparent">القادمة.</span>
             </h1>
-            <p className="mt-6 max-w-[490px] text-base leading-8 text-white/65">ابحث واستكشف مكتبة رواية الحية من أول فكرة لحد آخر صفحة.</p>
+            <p className="mt-6 max-w-[490px] text-base leading-8 text-white/65">محرك بحث للروايات العربية — ابحث بالعنوان أو المؤلف أو التصنيف واكتشف ما يستحق القراءة.</p>
             <div className="relative z-[60] mt-9 max-w-[610px]">
               <GlobalSearch hero />
             </div>
