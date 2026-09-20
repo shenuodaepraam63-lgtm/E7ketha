@@ -26,6 +26,7 @@ queryClient.getMutationCache().subscribe(event => {
 const trpcClient = trpc.createClient({
   links: [
     httpBatchLink({
+      // Same Vercel project serves all hosts — relative URL avoids CORS issues
       url: "/api/trpc",
       transformer: superjson,
       async headers() {
