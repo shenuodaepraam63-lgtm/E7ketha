@@ -107,7 +107,7 @@
     }
   },
   "scripts": {
-    "build": "node scripts/restore-db.mjs && tsx scripts/generate-sitemap.ts && vite build && esbuild server/_core/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist && esbuild scripts/vercel-api-entry.ts --platform=node --packages=external --bundle --format=esm --outfile=api/index.js",
+    "build": "node scripts/restore-db.mjs && node scripts/restore-app.mjs && tsx scripts/generate-sitemap.ts && vite build && esbuild server/_core/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist && esbuild scripts/vercel-api-entry.ts --platform=node --packages=external --bundle --format=esm --outfile=api/index.js",
     "check": "tsc --noEmit",
     "db:push": "drizzle-kit generate && drizzle-kit migrate",
     "db:seed": "tsx server/seed.ts",
