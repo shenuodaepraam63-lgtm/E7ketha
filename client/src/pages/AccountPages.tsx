@@ -33,7 +33,9 @@ export function AuthPage({ register = false }: { register?: boolean }) {
     setLoading(false);
     if (result.error) { toast.error(result.error.message); return; }
     if (register && !result.data.session) { toast.success('تم إنشاء الحساب. راجع بريدك لتأكيد الحساب.'); return; }
-    window.location.href = '/profile';
+    const next = new URLSearchParams(window.location.search).get('next');
+    const isAdminHost = window.location.hostname.toLowerCase().startsWith('admin.');
+    window.location.href = next || (isAdminHost ? '/' : '/profile');
   };
 
   const requestReset = async (event: FormEvent) => {
@@ -63,7 +65,7 @@ export function AuthCallbackPage() {
   useEffect(() => {
     if (!supabase) { setMessage('لم يتم إعداد المصادقة بعد.'); return; }
     let redirected = false;
-    const go = () => { if (!redirected) { redirected = true; window.location.replace('/profile'); } };
+    const go = () => { if (!redirected) { redirected = true; window.location.replace(window.location.hostname.toLowerCase().startsWith('admin.') ? '/' : '/profile'); } };
     void supabase.auth.getSession().then(({ data }) => { if (data.session) go(); else setMessage('تم تأكيد البريد. يمكنك تسجيل الدخول الآن.'); });
     const { data } = supabase.auth.onAuthStateChange((event, session) => { if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session) go(); });
     return () => data.subscription.unsubscribe();
