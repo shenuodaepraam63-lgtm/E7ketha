@@ -1,5 +1,5 @@
 import { BarChart3, Bell, BookOpen, CheckCircle2, Edit3, FileClock, LayoutDashboard, Menu, Megaphone, Save, Send, ShieldCheck, Trash2, Users, UserCog, X, Tags, Loader2, Upload, WandSparkles } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'wouter';
 import { toast } from 'sonner';
 import { useAuth } from '@/_core/hooks/useAuth';
@@ -186,30 +186,58 @@ function ManagerShell({ title, description, children }: { title: string; descrip
   return <div><div className="mb-8"><h1 className="text-2xl font-extrabold">{title}</h1><p className="mt-2 text-xs text-muted-foreground">{description}</p></div>{children}</div>;
 }
 
+function AdminForbidden({ reason }: { reason: 'forbidden' | 'unauthenticated' }) {
+  useEffect(() => {
+    document.title = '403 | ممنوع الوصول — E7ketha Admin';
+    let meta = document.querySelector('meta[name="robots"]') as HTMLMetaElement | null;
+    if (!meta) { meta = document.createElement('meta'); meta.name = 'robots'; document.head.appendChild(meta); }
+    meta.content = 'noindex, nofollow';
+  }, []);
+  const isForbidden = reason === 'forbidden';
+  return (
+    <div dir="rtl" className="grid min-h-screen place-items-center bg-[#0b1025] p-5 text-white">
+      <div className="w-full max-w-md rounded-[24px] border border-red-500/30 bg-[#140a12] p-8 text-center shadow-2xl">
+        <p className="font-mono text-5xl font-black tracking-tight text-red-400">403</p>
+        <h1 className="mt-4 text-xl font-extrabold">{isForbidden ? 'ممنوع الوصول' : 'يلزم تسجيل الدخول'}</h1>
+        <p className="mt-3 text-sm leading-7 text-white/60">
+          {isForbidden
+            ? 'حسابك مسجّل لكن ليس لديه صلاحية إدارة. هذه اللوحة مخصصة للمشرفين فقط.'
+            : 'لا يمكنك فتح لوحة الإدارة بدون جلسة مشرف صالحة.'}
+        </p>
+        <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center">
+          {!isForbidden && (
+            <button
+              type="button"
+              onClick={() => { window.location.href = '/login'; }}
+              className="rounded-xl bg-[#675de8] px-5 py-3 text-xs font-bold text-white"
+            >
+              تسجيل الدخول كمشرف
+            </button>
+          )}
+          <a href="https://e7ketha.com/" className="rounded-xl border border-white/15 px-5 py-3 text-xs font-bold text-white/80">
+            العودة للموقع
+          </a>
+        </div>
+        <p className="mt-6 font-mono text-[10px] text-white/35">HTTP 403 Forbidden · admin.e7ketha.com</p>
+      </div>
+    </div>
+  );
+}
+
 export default function AdminPage() {
   const { user, loading } = useAuth();
   const [location, navigate] = useLocation();
   const [open, setOpen] = useState(false);
   const [section, setSection] = useState<Section>(location.startsWith('/novels') ? 'novels' : 'overview');
-  if (loading) return <div className="grid min-h-screen place-items-center">جارٍ التحقق من الصلاحيات...</div>;
-  if (!user) return (
-    <div className="grid min-h-screen place-items-center p-5">
-      <div className="max-w-md rounded-[24px] border border-border bg-card p-8 text-center">
-        <h1 className="text-2xl font-extrabold">لوحة الإدارة</h1>
-        <p className="mt-3 text-sm text-muted-foreground">سجّل الدخول بحساب المشرف للوصول إلى إدارة المحتوى.</p>
-        <button onClick={() => { window.location.href = '/login'; }} className="mt-6 rounded-xl bg-[#171e42] px-5 py-3 text-xs font-bold text-white">تسجيل الدخول</button>
-      </div>
-    </div>
-  );
-  if (user.role !== 'admin') return (
-    <div className="grid min-h-screen place-items-center p-5">
-      <div className="max-w-md rounded-[24px] border border-red-200 bg-red-50 p-8 text-center text-red-800">
-        <h1 className="text-2xl font-extrabold">لا تملك صلاحية الوصول</h1>
-        <p className="mt-3 text-sm">هذه الصفحة مخصصة للمشرفين فقط.</p>
-        <a href="https://e7ketha.com/" className="mt-6 inline-flex rounded-xl bg-[#171e42] px-5 py-3 text-xs font-bold text-white">العودة للموقع</a>
-      </div>
-    </div>
-  );
+  if (loading) return <div className="grid min-h-screen place-items-center text-sm text-muted-foreground">جارٍ التحقق من الصلاحيات...</div>;
+
+  if (user && user.role !== 'admin') {
+    return <AdminForbidden reason="forbidden" />;
+  }
+
+  if (!user) {
+    return <AdminForbidden reason="unauthenticated" />;
+  }
   return (
     <div dir="rtl" className="min-h-screen overflow-x-hidden bg-[#f4f6fb] text-[#121a38] dark:bg-[#080d1d] dark:text-white">
       <div className="flex min-h-screen">
