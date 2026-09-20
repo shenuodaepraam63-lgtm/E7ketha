@@ -197,7 +197,7 @@ export default function AdminPage() {
       <div className="max-w-md rounded-[24px] border border-border bg-card p-8 text-center">
         <h1 className="text-2xl font-extrabold">لوحة الإدارة</h1>
         <p className="mt-3 text-sm text-muted-foreground">سجّل الدخول بحساب المشرف للوصول إلى إدارة المحتوى.</p>
-        <button onClick={() => { window.location.href = window.location.hostname.startsWith('admin.') ? 'https://e7ketha.com/login' : '/login'; }} className="mt-6 rounded-xl bg-[#171e42] px-5 py-3 text-xs font-bold text-white">تسجيل الدخول</button>
+        <button onClick={() => { window.location.href = '/login'; }} className="mt-6 rounded-xl bg-[#171e42] px-5 py-3 text-xs font-bold text-white">تسجيل الدخول</button>
       </div>
     </div>
   );
