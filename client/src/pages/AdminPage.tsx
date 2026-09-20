@@ -31,7 +31,7 @@ function AdminSidebar({ section, setSection, open, onClose }: { section: Section
   return (
     <aside className={`${open ? 'translate-x-0' : 'translate-x-full'} fixed inset-y-0 right-0 z-50 flex w-72 max-w-[85vw] flex-col border-l border-[#222b4a] bg-[#0d142d] text-white transition-transform md:static md:translate-x-0`}>
       <div className="flex h-[78px] items-center justify-between border-b border-white/10 px-6">
-        <Link href="/admin" className="text-lg font-extrabold">𝐄𝟳𝐤𝐞𝐭𝐡𝐚 <span className="text-[#8d84f9]">/ admin</span></Link>
+        <Link href="/" className="text-lg font-extrabold">𝐄𝟳𝐤𝐞𝐭𝐡𝐚 <span className="text-[#8d84f9]">/ admin</span></Link>
         <button onClick={onClose} className="md:hidden" aria-label="إغلاق القائمة"><X size={18} /></button>
       </div>
       <nav className="flex-1 overflow-y-auto p-4" aria-label="قائمة الإدارة">
@@ -43,8 +43,8 @@ function AdminSidebar({ section, setSection, open, onClose }: { section: Section
               onClick={() => {
                 setSection(item.key);
                 onClose();
-                if (item.key === 'novels') navigate('/admin/novels');
-                if (item.key === 'overview') navigate('/admin');
+                if (item.key === 'novels') navigate('/novels');
+                if (item.key === 'overview') navigate('/');
               }}
               className={`mb-1 flex w-full items-center gap-3 rounded-xl px-3 py-3 text-right text-xs font-semibold transition ${section === item.key ? 'bg-[#6259dd] text-white' : 'text-white/55 hover:bg-white/5 hover:text-white'}`}
             >
@@ -190,7 +190,7 @@ export default function AdminPage() {
   const { user, loading } = useAuth();
   const [location, navigate] = useLocation();
   const [open, setOpen] = useState(false);
-  const [section, setSection] = useState<Section>(location.startsWith('/admin/novels') ? 'novels' : 'overview');
+  const [section, setSection] = useState<Section>(location.startsWith('/novels') ? 'novels' : 'overview');
   if (loading) return <div className="grid min-h-screen place-items-center">جارٍ التحقق من الصلاحيات...</div>;
   if (!user) return (
     <div className="grid min-h-screen place-items-center p-5">
@@ -222,7 +222,7 @@ export default function AdminPage() {
             <a href="https://e7ketha.com/" className="text-xs font-bold text-[#675de8]">عرض الموقع</a>
           </header>
           <main className="p-4 sm:p-5 md:p-8">
-            {section === 'overview' && <AdminOverview onSelect={(value) => { setSection(value); if (value === 'novels') navigate('/admin/novels'); }} />}
+            {section === 'overview' && <AdminOverview onSelect={(value) => { setSection(value); if (value === 'novels') navigate('/novels'); }} />}
             {section === 'novels' && <NovelsManager />}
             {section === 'quotes' && <AdminQuotesManager />}
             {section === 'authors' && <AuthorsManager />}
