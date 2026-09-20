@@ -23,11 +23,19 @@ queryClient.getMutationCache().subscribe(event => {
   }
 });
 
+/** Route all browser tRPC traffic through api.e7ketha.com (same-origin on api host / localhost). */
+function resolveTrpcUrl() {
+  if (typeof window === "undefined") return "/api/trpc";
+  const host = window.location.hostname.toLowerCase();
+  if (host === "localhost" || host === "127.0.0.1") return "/api/trpc";
+  if (host === "api.e7ketha.com" || host.startsWith("api.")) return "/api/trpc";
+  return "https://api.e7ketha.com/api/trpc";
+}
+
 const trpcClient = trpc.createClient({
   links: [
     httpBatchLink({
-      // Same Vercel project serves all hosts — relative URL avoids CORS issues
-      url: "/api/trpc",
+      url: resolveTrpcUrl(),
       transformer: superjson,
       async headers() {
         const { data } = await supabase?.auth.getSession() ?? { data: { session: null } };
