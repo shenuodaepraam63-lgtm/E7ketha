@@ -40,7 +40,7 @@ const TermsPage = lazy(() => import('@/pages/InfoPages').then((module) => ({ def
 
 function LoadingPage() { return <div className="grid min-h-[45vh] place-items-center"><BookLoader label="نجهز الصفحة" /></div>; }
 
-const SITE_URL = 'https://e7ketha.vercel.app';
+const SITE_URL = 'https://e7ketha.com';
 const SITE_NAME = '𝐄𝟳𝐤𝐞𝐭𝐡𝐚';
 const HOME_TITLE = '𝐄𝟳𝐤𝐞𝐭𝐡𝐚 📖 | كُـل رِوَايـة لَهـا حِڪَايـة ✍︎';
 const DEFAULT_DESCRIPTION = 'هنا تبدأ حكايتك مع عالم الروايات… 📚✨ اكتشف روايات تستحق القراءة، أشهر الكُتّاب وأعمالهم، واستكشف عوالم الغموض والرعب والرومانسية والدراما والخيال… بدون حرق 🔥 | ترشيحات · كتّاب · نبذات · اقتباسات';
