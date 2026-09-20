@@ -128,8 +128,18 @@ export default function App() {
     );
   }
 
-  if (hostRole === 'admin' || location.startsWith('/admin')) {
-    return <><SeoManager location={location.startsWith('/admin') ? location : '/admin'} /><Suspense fallback={<LoadingPage />}><AdminPage /></Suspense><Toaster position="bottom-left" /></>;
+  // Admin lives only on admin.e7ketha.com (no /admin path on the public site)
+  if (hostRole === 'admin') {
+    return <><SeoManager location="/admin" /><Suspense fallback={<LoadingPage />}><AdminPage /></Suspense><Toaster position="bottom-left" /></>;
+  }
+
+  // Legacy /admin on public domain → send users to the admin host
+  if (location.startsWith('/admin')) {
+    if (typeof window !== 'undefined') {
+      const path = location.replace(/^\/admin/, '') || '/';
+      window.location.replace(`https://admin.e7ketha.com${path}`);
+    }
+    return <div className="grid min-h-[40vh] place-items-center text-sm text-muted-foreground">جارٍ التحويل للوحة الإدارة…</div>;
   }
 
   return <><SeoManager location={location} /><PublicRoutes theme={theme} onThemeToggle={toggleTheme} /><Toaster position="bottom-left" /></>;
