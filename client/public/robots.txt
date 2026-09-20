@@ -9,4 +9,4 @@ Disallow: /register
 Disallow: /auth/
 Disallow: /reset-password
 Disallow: /search
-Sitemap: https://e7ketha.vercel.app/sitemap.xml
+Sitemap: https://e7ketha.com/sitemap.xml
