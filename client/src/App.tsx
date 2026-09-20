@@ -100,11 +100,37 @@ function PublicRoutes({ theme, onThemeToggle }: { theme: 'light' | 'dark'; onThe
   </Switch></Suspense></SiteShell>;
 }
 
+function getHostRole() {
+  if (typeof window === 'undefined') return 'public' as const;
+  const host = window.location.hostname.toLowerCase();
+  if (host === 'admin.e7ketha.com' || host.startsWith('admin.')) return 'admin' as const;
+  if (host === 'api.e7ketha.com' || host.startsWith('api.')) return 'api' as const;
+  return 'public' as const;
+}
+
 export default function App() {
   const [location] = useLocation();
+  const hostRole = getHostRole();
   const [theme, setTheme] = useState<'light' | 'dark'>(() => (localStorage.getItem('riwaya-theme') as 'light' | 'dark') || 'light');
   useEffect(() => { document.documentElement.classList.toggle('dark', theme === 'dark'); localStorage.setItem('riwaya-theme', theme); }, [theme]);
   const toggleTheme = () => setTheme((current) => current === 'dark' ? 'light' : 'dark');
-  if (location.startsWith('/admin')) return <><SeoManager location={location} /><Suspense fallback={<LoadingPage />}><AdminPage /></Suspense><Toaster position="bottom-left" /></>;
+
+  // api.e7ketha.com is for API only — no public SPA shell needed
+  if (hostRole === 'api') {
+    return (
+      <div className="grid min-h-screen place-items-center bg-[#0b1025] p-6 text-center text-white" dir="rtl">
+        <div className="max-w-md rounded-2xl border border-white/10 bg-white/5 p-8">
+          <h1 className="text-xl font-extrabold">E7ketha API</h1>
+          <p className="mt-3 text-sm text-white/70">نقطة النهاية: <code className="text-[#a5b4fc]">/api/trpc</code></p>
+          <a href="https://e7ketha.com" className="mt-6 inline-block text-sm font-bold text-[#8d84f9]">العودة للموقع</a>
+        </div>
+      </div>
+    );
+  }
+
+  if (hostRole === 'admin' || location.startsWith('/admin')) {
+    return <><SeoManager location={location.startsWith('/admin') ? location : '/admin'} /><Suspense fallback={<LoadingPage />}><AdminPage /></Suspense><Toaster position="bottom-left" /></>;
+  }
+
   return <><SeoManager location={location} /><PublicRoutes theme={theme} onThemeToggle={toggleTheme} /><Toaster position="bottom-left" /></>;
 }
