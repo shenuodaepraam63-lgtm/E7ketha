@@ -115,7 +115,6 @@ export default function App() {
   useEffect(() => { document.documentElement.classList.toggle('dark', theme === 'dark'); localStorage.setItem('riwaya-theme', theme); }, [theme]);
   const toggleTheme = () => setTheme((current) => current === 'dark' ? 'light' : 'dark');
 
-  // api.e7ketha.com is for API only — no public SPA shell needed
   if (hostRole === 'api') {
     return (
       <div className="grid min-h-screen place-items-center bg-[#0b1025] p-6 text-center text-white" dir="rtl">
@@ -128,12 +127,23 @@ export default function App() {
     );
   }
 
-  // Admin lives only on admin.e7ketha.com (no /admin path on the public site)
   if (hostRole === 'admin') {
+    // Keep auth routes on the same host so Supabase session stays local (no cross-subdomain loop)
+    if (location.startsWith('/login') || location.startsWith('/register') || location.startsWith('/auth') || location.startsWith('/reset-password')) {
+      const isRegister = location.startsWith('/register');
+      return (
+        <>
+          <SeoManager location={location} />
+          <Suspense fallback={<LoadingPage />}>
+            {location.startsWith('/auth') ? <AuthCallbackPage /> : location.startsWith('/reset-password') ? <PasswordResetPage /> : <AuthPage register={isRegister} />}
+          </Suspense>
+          <Toaster position="bottom-left" />
+        </>
+      );
+    }
     return <><SeoManager location="/admin" /><Suspense fallback={<LoadingPage />}><AdminPage /></Suspense><Toaster position="bottom-left" /></>;
   }
 
-  // Legacy /admin on public domain → send users to the admin host
   if (location.startsWith('/admin')) {
     if (typeof window !== 'undefined') {
       const path = location.replace(/^\/admin/, '') || '/';
