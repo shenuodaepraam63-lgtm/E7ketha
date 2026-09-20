@@ -117,18 +117,26 @@ export default function App() {
 
   if (hostRole === 'api') {
     return (
-      <div className="grid min-h-screen place-items-center bg-[#0b1025] p-6 text-center text-white" dir="rtl">
-        <div className="max-w-md rounded-2xl border border-white/10 bg-white/5 p-8">
-          <h1 className="text-xl font-extrabold">E7ketha API</h1>
-          <p className="mt-3 text-sm text-white/70">نقطة النهاية: <code className="text-[#a5b4fc]">/api/trpc</code></p>
-          <a href="https://e7ketha.com" className="mt-6 inline-block text-sm font-bold text-[#8d84f9]">العودة للموقع</a>
+      <div className="grid min-h-screen place-items-center bg-[#0b1025] p-6 text-white" dir="rtl">
+        <div className="w-full max-w-lg rounded-2xl border border-white/10 bg-white/5 p-8 text-right">
+          <p className="text-[10px] font-bold tracking-widest text-[#a5b4fc]">API · e7ketha.com</p>
+          <h1 className="mt-2 text-2xl font-extrabold">E7ketha API</h1>
+          <p className="mt-3 text-sm leading-7 text-white/65">واجهة البيانات الرسمية للمنصة. الطلبات تتم عبر tRPC مع JSON.</p>
+          <ul className="mt-6 space-y-2 text-sm text-white/80">
+            <li className="rounded-xl border border-white/10 bg-black/20 px-4 py-3 font-mono text-xs text-[#c7d2fe]">POST /api/trpc</li>
+            <li className="rounded-xl border border-white/10 bg-black/20 px-4 py-3 font-mono text-xs text-[#c7d2fe]">GET  /api/trpc</li>
+            <li className="rounded-xl border border-white/10 bg-black/20 px-4 py-3 font-mono text-xs text-[#c7d2fe]">/sitemap.xml → على النطاق الرئيسي</li>
+          </ul>
+          <div className="mt-8 flex flex-wrap gap-3">
+            <a href="https://e7ketha.com" className="rounded-xl bg-[#675de8] px-4 py-2.5 text-xs font-bold">الموقع</a>
+            <a href="https://admin.e7ketha.com" className="rounded-xl border border-white/15 px-4 py-2.5 text-xs font-bold text-white/80">لوحة التحكم</a>
+          </div>
         </div>
       </div>
     );
   }
 
   if (hostRole === 'admin') {
-    // Keep auth routes on the same host so Supabase session stays local (no cross-subdomain loop)
     if (location.startsWith('/login') || location.startsWith('/register') || location.startsWith('/auth') || location.startsWith('/reset-password')) {
       const isRegister = location.startsWith('/register');
       return (
