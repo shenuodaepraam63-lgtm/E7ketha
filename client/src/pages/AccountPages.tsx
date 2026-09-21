@@ -9,7 +9,15 @@ import { trpc } from '@/lib/trpc';
 import { requireSupabase, supabase, supabaseConfigured } from '@/lib/supabase';
 import { toNovel } from '@/lib/data';
 
-const redirectUrl = (path: string) => `${window.location.origin}${path}`;
+/** Always point recovery links to the public site (not admin subdomain) */
+const publicOrigin = () => {
+  if (typeof window === 'undefined') return 'https://e7ketha.com';
+  const host = window.location.hostname.toLowerCase();
+  if (host === 'localhost' || host === '127.0.0.1') return window.location.origin;
+  return 'https://e7ketha.com';
+};
+
+const redirectUrl = (path: string) => `${publicOrigin()}${path}`;
 
 export function AuthPage({ register = false }: { register?: boolean }) {
   const [, navigate] = useLocation();
@@ -85,9 +93,17 @@ export function AuthPage({ register = false }: { register?: boolean }) {
 
   const requestReset = async (event: FormEvent) => {
     event.preventDefault();
-    if (!supabase) return;
+    if (!supabaseConfigured || !supabase) {
+      toast.error('لم يتم إعداد المصادقة بعد');
+      return;
+    }
+    const email = resetEmail.trim();
+    if (!email || !email.includes('@')) {
+      toast.error('أدخل بريدًا إلكترونيًا صالحًا');
+      return;
+    }
     setLoading(true);
-    const { error } = await supabase.auth.resetPasswordForEmail(resetEmail.trim(), {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: redirectUrl('/reset-password'),
     });
     setLoading(false);
@@ -95,8 +111,9 @@ export function AuthPage({ register = false }: { register?: boolean }) {
       toast.error(error.message);
       return;
     }
-    toast.success('أرسلنا رابط استعادة كلمة المرور إلى بريدك.');
+    toast.success('إذا كان البريد مسجلاً، ستصلك رسالة برابط استعادة كلمة المرور خلال دقائق.');
     setForgotOpen(false);
+    setResetEmail('');
   };
 
   const inputClass = (key: string) =>
@@ -111,7 +128,6 @@ export function AuthPage({ register = false }: { register?: boolean }) {
     const active = isRegister === reg;
     return (
       <div className="auth-card-shell flex h-full flex-col rounded-[26px] p-6 sm:p-8">
-        <div className="auth-card-noise pointer-events-none absolute inset-0 rounded-[26px]" />
         <div className="pointer-events-none absolute inset-x-0 top-0 h-px rounded-t-[26px] bg-gradient-to-r from-transparent via-[#675de8]/80 to-transparent" />
         <div className="auth-stagger mb-5 shrink-0 sm:mb-6">
           <div className="mb-5 flex justify-center">
@@ -257,30 +273,45 @@ export function AuthPage({ register = false }: { register?: boolean }) {
             onClick={() => setForgotOpen((v) => !v)}
             className="mt-4 flex w-full shrink-0 items-center justify-center gap-2 text-xs font-bold text-[#aaa4ff] transition hover:text-white"
           >
-            <RefreshCw size={13} />
-            نسيت كلمة المرور؟
+            <RefreshCw size={13} className={forgotOpen ? 'rotate-180 transition' : 'transition'} />
+            {forgotOpen ? 'إخفاء استعادة كلمة المرور' : 'نسيت كلمة المرور؟'}
           </button>
         )}
 
         {!reg && forgotOpen && (
-          <form onSubmit={requestReset} className="mt-3 shrink-0 rounded-2xl border border-white/10 bg-white/5 p-4">
+          <form onSubmit={requestReset} className="mt-3 shrink-0 space-y-3 rounded-2xl border border-[#675de8]/30 bg-[#675de8]/10 p-4">
+            <p className="text-center text-[11px] leading-5 text-white/55">
+              أدخل بريدك وسنرسل رابطًا لإعادة تعيين كلمة المرور.
+            </p>
             <label className="grid gap-2 text-[11px] font-bold text-white/70">
-              <span>أرسل رابط الاستعادة</span>
-              <input
-                value={resetEmail}
-                onChange={(e) => setResetEmail(e.target.value)}
-                required
-                type="email"
-                placeholder="you@example.com"
-                dir="ltr"
-                className="mt-1 rounded-xl border border-white/10 bg-white/5 px-3 py-3 text-sm text-white outline-none transition focus:border-[#675de8] placeholder:text-white/30"
-              />
+              <span>البريد الإلكتروني</span>
+              <div className="relative">
+                <Mail size={16} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/35" />
+                <input
+                  value={resetEmail}
+                  onChange={(e) => setResetEmail(e.target.value)}
+                  required
+                  type="email"
+                  autoComplete="email"
+                  placeholder="you@example.com"
+                  dir="ltr"
+                  className="w-full rounded-xl border border-white/10 bg-white/5 py-3 pr-11 pl-3 text-sm text-white outline-none transition focus:border-[#675de8] placeholder:text-white/30"
+                />
+              </div>
             </label>
             <button
               disabled={loading}
-              className="mt-3 w-full rounded-xl bg-[#675de8] py-3 text-xs font-bold text-white transition hover:brightness-110 disabled:opacity-60"
+              type="submit"
+              className="auth-btn-shine w-full rounded-xl py-3 text-xs font-extrabold text-white shadow-lg shadow-[#675de8]/25 transition hover:brightness-110 disabled:opacity-60"
             >
-              إرسال الرابط
+              {loading ? (
+                <span className="inline-flex items-center gap-2">
+                  <RefreshCw size={14} className="animate-spin" />
+                  جارٍ الإرسال...
+                </span>
+              ) : (
+                'إرسال رابط الاستعادة'
+              )}
             </button>
           </form>
         )}
@@ -320,10 +351,6 @@ export function AuthPage({ register = false }: { register?: boolean }) {
         @keyframes auth-shine {
           0% { background-position: 200% center; }
           100% { background-position: -200% center; }
-        }
-        @keyframes auth-glow-pulse {
-          0%, 100% { opacity: 0.55; transform: scale(1); }
-          50% { opacity: 0.9; transform: scale(1.06); }
         }
         .auth-orb-1 { animation: auth-float-1 12s ease-in-out infinite; }
         .auth-orb-2 { animation: auth-float-2 14s ease-in-out infinite; }
@@ -494,22 +521,52 @@ export function PasswordResetPage() {
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [ready, setReady] = useState(false);
+  const [checking, setChecking] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [focused, setFocused] = useState<string | null>(null);
+
   useEffect(() => {
-    if (!supabase) return;
-    void supabase.auth.getSession().then(({ data }) => setReady(Boolean(data.session)));
-    const { data } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'PASSWORD_RECOVERY' || session) setReady(true);
-    });
-    return () => data.subscription.unsubscribe();
-  }, []);
-  const submit = async (event: FormEvent) => {
-    event.preventDefault();
-    if (password.length < 6 || password !== confirm) {
-      toast.error('تأكد من تطابق كلمتي المرور وأن لا تقل عن 6 أحرف.');
+    if (!supabase) {
+      setChecking(false);
       return;
     }
-    if (!supabase) return;
+    let cancelled = false;
+    const markReady = () => {
+      if (!cancelled) {
+        setReady(true);
+        setChecking(false);
+      }
+    };
+    void supabase.auth.getSession().then(({ data }) => {
+      if (cancelled) return;
+      if (data.session) markReady();
+      else setChecking(false);
+    });
+    const { data } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN' || (event === 'INITIAL_SESSION' && session)) {
+        markReady();
+      }
+    });
+    return () => {
+      cancelled = true;
+      data.subscription.unsubscribe();
+    };
+  }, []);
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (password.length < 6) {
+      toast.error('كلمة المرور يجب ألا تقل عن 6 أحرف.');
+      return;
+    }
+    if (password !== confirm) {
+      toast.error('كلمتا المرور غير متطابقتين.');
+      return;
+    }
+    if (!supabase) {
+      toast.error('لم يتم إعداد المصادقة بعد');
+      return;
+    }
     setSaving(true);
     const { error } = await supabase.auth.updateUser({ password });
     setSaving(false);
@@ -517,31 +574,82 @@ export function PasswordResetPage() {
       toast.error(error.message);
       return;
     }
-    toast.success('تم تحديث كلمة المرور بنجاح.');
+    toast.success('تم تحديث كلمة المرور بنجاح. سجّل الدخول الآن.');
     await supabase.auth.signOut();
     window.location.href = '/login';
   };
+
+  const inputCls = (key: string) =>
+    `w-full rounded-2xl border bg-white/5 py-3.5 px-4 text-sm text-white outline-none transition-all duration-300 placeholder:text-white/30 ${
+      focused === key
+        ? 'border-[#675de8] bg-white/10 shadow-[0_0_0_3px_rgba(103,93,232,0.25)]'
+        : 'border-white/10 hover:border-white/20'
+    }`;
+
   return (
-    <div className="container grid min-h-[calc(100vh-72px)] place-items-center py-16">
-      <div className="w-full max-w-md rounded-[28px] border border-border bg-card p-8">
-        <LockKeyhole className="text-[#675de8]" size={28} />
-        <h1 className="mt-5 text-2xl font-extrabold">إنشاء كلمة مرور جديدة</h1>
-        {ready ? (
-          <form onSubmit={submit} className="mt-7 grid gap-4">
-            <label className="grid gap-2 text-xs font-bold">
-              كلمة المرور الجديدة
-              <input required minLength={6} type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="rounded-xl border border-border bg-background px-3 py-3 text-sm" />
+    <div className="relative flex min-h-[calc(100vh-72px)] items-center justify-center px-4 py-10">
+      <div className="pointer-events-none absolute inset-0 bg-[#0b1025]" />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_30%_20%,rgba(103,93,232,0.3),transparent_50%)]" />
+      <div className="relative z-10 w-full max-w-md rounded-[26px] border border-white/10 bg-[#11183a] p-6 shadow-2xl sm:p-8">
+        <div className="mb-6 text-center">
+          <div className="mx-auto mb-4 grid size-14 place-items-center rounded-2xl bg-gradient-to-br from-[#675de8] to-[#4a42b8] shadow-lg shadow-[#675de8]/40">
+            <LockKeyhole size={22} className="text-white" strokeWidth={1.7} />
+          </div>
+          <h1 className="text-2xl font-extrabold text-white">كلمة مرور جديدة</h1>
+          <p className="mt-2 text-sm leading-7 text-white/50">اختر كلمة مرور قوية لحسابك في رِواية.</p>
+        </div>
+
+        {checking ? (
+          <p className="text-center text-sm text-white/50">جارٍ التحقق من رابط الاستعادة...</p>
+        ) : ready ? (
+          <form onSubmit={submit} className="grid gap-3.5">
+            <label className="grid gap-2 text-[11px] font-bold text-white/70">
+              <span>كلمة المرور الجديدة</span>
+              <input
+                required
+                minLength={6}
+                type="password"
+                value={password}
+                dir="ltr"
+                placeholder="••••••••"
+                onChange={(e) => setPassword(e.target.value)}
+                onFocus={() => setFocused('pw')}
+                onBlur={() => setFocused(null)}
+                className={inputCls('pw')}
+              />
             </label>
-            <label className="grid gap-2 text-xs font-bold">
-              تأكيد كلمة المرور
-              <input required minLength={6} type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} className="rounded-xl border border-border bg-background px-3 py-3 text-sm" />
+            <label className="grid gap-2 text-[11px] font-bold text-white/70">
+              <span>تأكيد كلمة المرور</span>
+              <input
+                required
+                minLength={6}
+                type="password"
+                value={confirm}
+                dir="ltr"
+                placeholder="••••••••"
+                onChange={(e) => setConfirm(e.target.value)}
+                onFocus={() => setFocused('cf')}
+                onBlur={() => setFocused(null)}
+                className={inputCls('cf')}
+              />
             </label>
-            <button disabled={saving} className="rounded-xl bg-[#171e42] py-3.5 text-xs font-bold text-white">
+            <button
+              disabled={saving}
+              type="submit"
+              className="mt-1 rounded-2xl bg-gradient-to-l from-[#675de8] to-[#7067ef] py-3.5 text-xs font-extrabold text-white shadow-lg shadow-[#675de8]/30 transition hover:brightness-110 disabled:opacity-60"
+            >
               {saving ? 'جارٍ الحفظ...' : 'حفظ كلمة المرور'}
             </button>
           </form>
         ) : (
-          <p className="mt-4 text-sm leading-7 text-muted-foreground">افتح رابط استعادة كلمة المرور من بريدك الإلكتروني للوصول إلى هذه الصفحة.</p>
+          <div className="space-y-4 text-center">
+            <p className="text-sm leading-7 text-white/55">
+              افتح رابط استعادة كلمة المرور من بريدك الإلكتروني للوصول إلى هذه الصفحة. الرابط صالح لفترة محدودة.
+            </p>
+            <Link href="/login" className="inline-flex rounded-xl bg-[#675de8] px-5 py-3 text-xs font-bold text-white transition hover:brightness-110">
+              العودة لتسجيل الدخول
+            </Link>
+          </div>
         )}
       </div>
     </div>
@@ -578,7 +686,6 @@ export function ReadingListPage() {
     <div className="container py-10 md:py-16">
       <Breadcrumbs items={['المحفوظات']} />
       <h1 className="text-4xl font-extrabold">المحفوظات</h1>
-      <p className="mt-3 text-sm text-muted-foreground">كل الروايات التي اخترت الاحتفاظ بها في حسابك، مع بقاء زر القلب متاحًا دائمًا.</p>
       <div className="my-8 flex gap-2 border-b border-border pb-3">
         {(
           [
@@ -665,7 +772,7 @@ export function SavedQuotesPage() {
   if (!user)
     return (
       <div className="container py-16">
-        <EmptyState title="سجّل الدخول لمحفوظاتك" description="احفظ الاقتباسات التي تلمس قلبك وارجع إليها من أي جهاز." action="تسجيل الدخول" href="/login" />
+        <EmptyState title="سجّل الدخول لمحفوظاتك" description="احفظ الاقتباسات التي تلمس قلبك." action="تسجيل الدخول" href="/login" />
       </div>
     );
   return (
