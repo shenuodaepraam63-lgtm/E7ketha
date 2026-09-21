@@ -114,19 +114,49 @@ export function AuthPage({ register = false }: { register?: boolean }) {
       <div className="auth-card-shell flex h-full flex-col rounded-[26px] p-6 sm:p-8">
         <div className="auth-card-noise pointer-events-none absolute inset-0 rounded-[26px]" />
         <div className="pointer-events-none absolute inset-x-0 top-0 h-px rounded-t-[26px] bg-gradient-to-r from-transparent via-[#675de8]/80 to-transparent" />
-        <div className="auth-stagger mb-6 shrink-0 text-center sm:mb-7">
-          <div className="auth-logo-pulse mx-auto mb-4 grid size-14 place-items-center rounded-2xl bg-gradient-to-br from-[#675de8] to-[#4a42b8] shadow-lg shadow-[#675de8]/40">
-            <Sparkles size={22} className="text-white" strokeWidth={1.7} />
+        <div className="auth-stagger mb-5 shrink-0 sm:mb-6">
+          <div className="mb-5 flex justify-center">
+            <div className="auth-logo-pulse grid size-12 place-items-center rounded-2xl bg-gradient-to-br from-[#675de8] to-[#4a42b8] shadow-lg shadow-[#675de8]/40 sm:size-14">
+              <Sparkles size={20} className="text-white" strokeWidth={1.7} />
+            </div>
           </div>
-          <h1 className="text-2xl font-extrabold leading-tight tracking-tight text-white sm:text-3xl">
-            {reg ? 'ابدأ رحلتك مع رِواية' : 'مرحبًا بعودتك'}
-          </h1>
-          <p className="mt-2 text-sm leading-7 text-white/50">
-            {reg ? 'أنشئ حسابًا واحفظ الروايات التي تهمك.' : 'ادخل إلى مساحتك وأكمل من حيث توقفت.'}
-          </p>
+          <div className="auth-tabs mb-5 grid grid-cols-2 gap-1 rounded-2xl border border-white/10 bg-white/5 p-1">
+            <button
+              type="button"
+              tabIndex={active ? 0 : -1}
+              onClick={() => flipTo(false)}
+              className={`rounded-xl py-2.5 text-xs font-extrabold transition-all duration-300 ${
+                !reg
+                  ? 'bg-gradient-to-l from-[#675de8] to-[#7067ef] text-white shadow-lg shadow-[#675de8]/30'
+                  : 'text-white/50 hover:bg-white/5 hover:text-white/80'
+              }`}
+            >
+              تسجيل الدخول
+            </button>
+            <button
+              type="button"
+              tabIndex={active ? 0 : -1}
+              onClick={() => flipTo(true)}
+              className={`rounded-xl py-2.5 text-xs font-extrabold transition-all duration-300 ${
+                reg
+                  ? 'bg-gradient-to-l from-[#675de8] to-[#7067ef] text-white shadow-lg shadow-[#675de8]/30'
+                  : 'text-white/50 hover:bg-white/5 hover:text-white/80'
+              }`}
+            >
+              إنشاء حساب
+            </button>
+          </div>
+          <div className="text-center">
+            <h1 className="text-xl font-extrabold leading-tight tracking-tight text-white sm:text-2xl">
+              {reg ? 'ابدأ رحلتك مع رِواية' : 'مرحبًا بعودتك'}
+            </h1>
+            <p className="mt-1.5 text-sm leading-6 text-white/50">
+              {reg ? 'أنشئ حسابًا واحفظ الروايات التي تهمك.' : 'ادخل إلى مساحتك وأكمل من حيث توقفت.'}
+            </p>
+          </div>
         </div>
 
-        <form onSubmit={submit} className="auth-form-stagger grid gap-3.5">
+        <form onSubmit={submit} className="auth-form-stagger grid grid-cols-1 gap-3.5">
           {reg && (
             <label className="grid gap-2 text-[11px] font-bold text-white/70">
               <span>الاسم</span>
@@ -257,20 +287,9 @@ export function AuthPage({ register = false }: { register?: boolean }) {
         )}
 
         <div className="mt-auto pt-5">
-          <p className="text-center text-[10px] leading-5 text-white/35">
+          <p className="pb-1 text-center text-[10px] leading-5 text-white/35">
             تتم حماية حسابك بواسطة Supabase Auth مع تأكيد البريد الإلكتروني.
           </p>
-          <div className="mt-3 pb-1 text-center text-xs leading-6 text-white/45">
-            {reg ? 'لديك حساب بالفعل؟ ' : 'ليس لديك حساب؟ '}
-            <button
-              type="button"
-              tabIndex={active ? 0 : -1}
-              onClick={() => flipTo(!reg)}
-              className="font-bold text-[#aaa4ff] transition hover:text-white"
-            >
-              {reg ? 'تسجيل الدخول' : 'إنشاء حساب'}
-            </button>
-          </div>
         </div>
       </div>
     );
@@ -556,6 +575,11 @@ export function AuthPage({ register = false }: { register?: boolean }) {
         }
         .auth-stagger {
           animation: auth-rise 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+        }
+
+        .auth-tabs button {
+          position: relative;
+          z-index: 1;
         }
       `}</style>
 
