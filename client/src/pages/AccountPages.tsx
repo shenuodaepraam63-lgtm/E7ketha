@@ -101,20 +101,21 @@ export function AuthPage({ register = false }: { register?: boolean }) {
   };
 
   const inputClass = (key: string) =>
-    `w-full rounded-2xl border bg-white/5 py-3.5 pr-11 pl-4 text-sm text-white outline-none transition-all duration-300 placeholder:text-white/30 ${
+    `auth-input w-full rounded-2xl border bg-white/5 py-3.5 pr-11 pl-4 text-sm text-white outline-none transition-all duration-300 placeholder:text-white/30 ${
       focused === key
-        ? 'border-[#675de8] bg-white/10 shadow-[0_0_0_3px_rgba(103,93,232,0.25)]'
-        : 'border-white/10 hover:border-white/20'
+        ? 'auth-input-focus border-[#675de8] bg-white/10'
+        : 'border-white/10 hover:border-white/25 hover:bg-white/[0.07]'
     }`;
 
   const faceCard = (mode: 'login' | 'register') => {
     const reg = mode === 'register';
     const active = isRegister === reg;
     return (
-      <div className="flex h-full flex-col rounded-[26px] border border-white/10 bg-[#11183a] p-6 shadow-2xl sm:p-8">
+      <div className="auth-card-shell flex h-full flex-col rounded-[26px] p-6 sm:p-8">
+        <div className="auth-card-noise pointer-events-none absolute inset-0 rounded-[26px]" />
         <div className="pointer-events-none absolute inset-x-0 top-0 h-px rounded-t-[26px] bg-gradient-to-r from-transparent via-[#675de8]/80 to-transparent" />
-        <div className="mb-6 shrink-0 text-center sm:mb-7">
-          <div className="mx-auto mb-4 grid size-14 place-items-center rounded-2xl bg-gradient-to-br from-[#675de8] to-[#4a42b8] shadow-lg shadow-[#675de8]/40">
+        <div className="auth-stagger mb-6 shrink-0 text-center sm:mb-7">
+          <div className="auth-logo-pulse mx-auto mb-4 grid size-14 place-items-center rounded-2xl bg-gradient-to-br from-[#675de8] to-[#4a42b8] shadow-lg shadow-[#675de8]/40">
             <Sparkles size={22} className="text-white" strokeWidth={1.7} />
           </div>
           <h1 className="text-2xl font-extrabold leading-tight tracking-tight text-white sm:text-3xl">
@@ -125,7 +126,7 @@ export function AuthPage({ register = false }: { register?: boolean }) {
           </p>
         </div>
 
-        <form onSubmit={submit} className="grid gap-3.5">
+        <form onSubmit={submit} className="auth-form-stagger grid gap-3.5">
           {reg && (
             <label className="grid gap-2 text-[11px] font-bold text-white/70">
               <span>الاسم</span>
@@ -278,7 +279,9 @@ export function AuthPage({ register = false }: { register?: boolean }) {
   return (
     <div className="relative flex min-h-[calc(100vh-72px)] items-center justify-center px-4 py-10 sm:py-12">
       <div className="pointer-events-none absolute inset-0 bg-[#0b1025]" />
+      <div className="auth-aurora pointer-events-none absolute inset-0" />
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_20%_20%,rgba(103,93,232,0.35),transparent_50%),radial-gradient(ellipse_at_80%_80%,rgba(170,164,255,0.2),transparent_45%),radial-gradient(ellipse_at_50%_100%,rgba(23,30,66,0.8),transparent_40%)]" />
+      <div className="auth-grid pointer-events-none absolute inset-0 opacity-[0.07]" />
       <div className="auth-orb auth-orb-1 pointer-events-none absolute -left-24 top-1/4 size-72 rounded-full bg-[#675de8]/30 blur-3xl" />
       <div className="auth-orb auth-orb-2 pointer-events-none absolute -right-16 bottom-1/4 size-80 rounded-full bg-[#aaa4ff]/25 blur-3xl" />
       <div className="auth-orb auth-orb-3 pointer-events-none absolute left-1/3 top-0 size-56 rounded-full bg-[#7067ef]/20 blur-3xl" />
@@ -312,12 +315,37 @@ export function AuthPage({ register = false }: { register?: boolean }) {
         .auth-orb-1 { animation: auth-float-1 12s ease-in-out infinite; }
         .auth-orb-2 { animation: auth-float-2 14s ease-in-out infinite; }
         .auth-orb-3 { animation: auth-float-3 10s ease-in-out infinite; }
+        .auth-input-focus {
+          box-shadow:
+            0 0 0 3px rgba(103, 93, 232, 0.28),
+            0 0 24px rgba(103, 93, 232, 0.18);
+        }
         .auth-btn-shine {
           background-size: 200% auto;
           background-image: linear-gradient(105deg, #675de8 0%, #8b83f0 40%, #aaa4ff 50%, #8b83f0 60%, #675de8 100%);
+          position: relative;
+          overflow: hidden;
         }
         .auth-btn-shine:hover:not(:disabled) {
           animation: auth-shine 1.2s linear infinite;
+        }
+        .auth-btn-shine::after {
+          content: '';
+          position: absolute;
+          top: 0;
+          left: -120%;
+          width: 60%;
+          height: 100%;
+          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.28), transparent);
+          transform: skewX(-20deg);
+          transition: none;
+        }
+        .auth-btn-shine:hover:not(:disabled)::after {
+          animation: auth-btn-sweep 0.85s ease;
+        }
+        @keyframes auth-btn-sweep {
+          from { left: -120%; }
+          to { left: 140%; }
         }
         .auth-flip-scene {
           perspective: 1600px;
@@ -422,6 +450,113 @@ export function AuthPage({ register = false }: { register?: boolean }) {
         .auth-spark.run {
           animation: auth-spark 0.85s ease-out forwards;
         }
+
+        .auth-aurora {
+          background:
+            radial-gradient(ellipse 60% 50% at 20% 30%, rgba(103,93,232,0.4), transparent 55%),
+            radial-gradient(ellipse 50% 40% at 80% 70%, rgba(170,164,255,0.28), transparent 50%),
+            radial-gradient(ellipse 40% 35% at 50% 100%, rgba(112,103,239,0.22), transparent 45%);
+          animation: auth-aurora-shift 18s ease-in-out infinite alternate;
+          filter: blur(2px);
+        }
+        @keyframes auth-aurora-shift {
+          0% { transform: translate3d(0,0,0) scale(1); opacity: 0.9; }
+          50% { transform: translate3d(-2%, 1%, 0) scale(1.05); opacity: 1; }
+          100% { transform: translate3d(2%, -1%, 0) scale(1.02); opacity: 0.95; }
+        }
+        .auth-grid {
+          background-image:
+            linear-gradient(rgba(170,164,255,0.35) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(170,164,255,0.35) 1px, transparent 1px);
+          background-size: 48px 48px;
+          mask-image: radial-gradient(ellipse at center, black 20%, transparent 70%);
+          -webkit-mask-image: radial-gradient(ellipse at center, black 20%, transparent 70%);
+        }
+        .auth-card-shell {
+          position: relative;
+          background:
+            linear-gradient(165deg, rgba(24, 30, 62, 0.98) 0%, rgba(14, 18, 42, 0.98) 100%);
+          border: 1px solid transparent;
+          background-clip: padding-box;
+          box-shadow:
+            0 25px 50px -12px rgba(0, 0, 0, 0.55),
+            0 0 0 1px rgba(103, 93, 232, 0.15),
+            inset 0 1px 0 rgba(255, 255, 255, 0.08);
+          isolation: isolate;
+        }
+        .auth-card-shell::before {
+          content: '';
+          position: absolute;
+          inset: -1px;
+          border-radius: 27px;
+          padding: 1px;
+          background: linear-gradient(
+            130deg,
+            rgba(170,164,255,0.7),
+            rgba(103,93,232,0.15) 35%,
+            rgba(103,93,232,0.1) 65%,
+            rgba(170,164,255,0.55)
+          );
+          background-size: 200% 200%;
+          animation: auth-border-flow 6s linear infinite;
+          -webkit-mask:
+            linear-gradient(#fff 0 0) content-box,
+            linear-gradient(#fff 0 0);
+          -webkit-mask-composite: xor;
+          mask:
+            linear-gradient(#fff 0 0) content-box,
+            linear-gradient(#fff 0 0);
+          mask-composite: exclude;
+          pointer-events: none;
+          z-index: 0;
+        }
+        @keyframes auth-border-flow {
+          0% { background-position: 0% 50%; }
+          50% { background-position: 100% 50%; }
+          100% { background-position: 0% 50%; }
+        }
+        .auth-card-noise {
+          opacity: 0.04;
+          background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+          mix-blend-mode: overlay;
+          z-index: 1;
+        }
+        .auth-logo-pulse {
+          animation: auth-logo-breathe 3.5s ease-in-out infinite;
+          position: relative;
+        }
+        .auth-logo-pulse::after {
+          content: '';
+          position: absolute;
+          inset: -6px;
+          border-radius: 18px;
+          border: 1px solid rgba(170,164,255,0.35);
+          animation: auth-ring 3.5s ease-out infinite;
+        }
+        @keyframes auth-logo-breathe {
+          0%, 100% { transform: scale(1); box-shadow: 0 10px 25px rgba(103,93,232,0.35); }
+          50% { transform: scale(1.04); box-shadow: 0 14px 32px rgba(103,93,232,0.5); }
+        }
+        @keyframes auth-ring {
+          0% { transform: scale(0.92); opacity: 0.7; }
+          100% { transform: scale(1.35); opacity: 0; }
+        }
+        .auth-form-stagger > * {
+          animation: auth-rise 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+        }
+        .auth-form-stagger > *:nth-child(1) { animation-delay: 0.05s; }
+        .auth-form-stagger > *:nth-child(2) { animation-delay: 0.1s; }
+        .auth-form-stagger > *:nth-child(3) { animation-delay: 0.15s; }
+        .auth-form-stagger > *:nth-child(4) { animation-delay: 0.2s; }
+        .auth-form-stagger > *:nth-child(5) { animation-delay: 0.25s; }
+        .auth-form-stagger > *:nth-child(6) { animation-delay: 0.3s; }
+        @keyframes auth-rise {
+          from { opacity: 0; transform: translateY(12px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .auth-stagger {
+          animation: auth-rise 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+        }
       `}</style>
 
       <div
@@ -439,7 +574,7 @@ export function AuthPage({ register = false }: { register?: boolean }) {
               : `rotateX(${tilt.x}deg) rotateY(${tilt.y}deg)`,
           }}
         >
-          <div className={`auth-flip-inner ${isRegister ? 'is-flipped' : ''} ${flipping ? 'is-animating' : ''}`}>
+          <div className={`auth-flip-inner ${isRegister ? 'is-flipped' : ''} ${flipping ? 'is-animating' : ''`}>
             <div className="auth-flip-face auth-flip-face-front">
               {faceCard('login')}
               <div className="auth-edge-shine" />
