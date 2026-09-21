@@ -98,13 +98,13 @@ export function AuthPage({ register = false }: { register?: boolean }) {
     const reg = mode === 'register';
     const active = isRegister === reg;
     return (
-      <div className="relative h-full overflow-hidden rounded-[26px] border border-white/10 bg-[#11183a]/90 p-7 shadow-2xl backdrop-blur-2xl sm:p-9">
-        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#675de8]/80 to-transparent" />
-        <div className="mb-8 text-center">
-          <div className="mx-auto mb-5 grid size-14 place-items-center rounded-2xl bg-gradient-to-br from-[#675de8] to-[#4a42b8] shadow-lg shadow-[#675de8]/40">
+      <div className="relative rounded-[26px] border border-white/10 bg-[#11183a]/95 p-6 shadow-2xl backdrop-blur-2xl sm:p-8">
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#675de8]/80 to-transparent" />
+        <div className="mb-6 text-center sm:mb-8">
+          <div className="mx-auto mb-4 grid size-14 place-items-center rounded-2xl bg-gradient-to-br from-[#675de8] to-[#4a42b8] shadow-lg shadow-[#675de8]/40 sm:mb-5">
             <Sparkles size={22} className="text-white" strokeWidth={1.7} />
           </div>
-          <h1 className="text-2xl font-extrabold tracking-tight text-white sm:text-3xl">
+          <h1 className="text-2xl font-extrabold leading-tight tracking-tight text-white sm:text-3xl">
             {reg ? 'ابدأ رحلتك مع رِواية' : 'مرحبًا بعودتك'}
           </h1>
           <p className="mt-2 text-sm leading-7 text-white/50">
@@ -112,10 +112,10 @@ export function AuthPage({ register = false }: { register?: boolean }) {
           </p>
         </div>
 
-        <form onSubmit={submit} className="grid gap-4">
+        <form onSubmit={submit} className="grid gap-3.5 sm:gap-4">
           {reg && (
             <label className="grid gap-2 text-[11px] font-bold text-white/70">
-              الاسم
+              <span>الاسم</span>
               <input
                 name="name"
                 required={active}
@@ -128,7 +128,7 @@ export function AuthPage({ register = false }: { register?: boolean }) {
             </label>
           )}
           <label className="grid gap-2 text-[11px] font-bold text-white/70">
-            البريد الإلكتروني
+            <span>البريد الإلكتروني</span>
             <div className="relative">
               <Mail
                 size={16}
@@ -150,7 +150,7 @@ export function AuthPage({ register = false }: { register?: boolean }) {
             </div>
           </label>
           <label className="grid gap-2 text-[11px] font-bold text-white/70">
-            كلمة المرور
+            <span>كلمة المرور</span>
             <div className="relative">
               <LockKeyhole
                 size={16}
@@ -174,7 +174,7 @@ export function AuthPage({ register = false }: { register?: boolean }) {
           </label>
           {reg && (
             <label className="grid gap-2 text-[11px] font-bold text-white/70">
-              تأكيد كلمة المرور
+              <span>تأكيد كلمة المرور</span>
               <input
                 name="confirmPassword"
                 required={active}
@@ -222,7 +222,7 @@ export function AuthPage({ register = false }: { register?: boolean }) {
         {!reg && forgotOpen && (
           <form onSubmit={requestReset} className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-4">
             <label className="grid gap-2 text-[11px] font-bold text-white/70">
-              أرسل رابط الاستعادة
+              <span>أرسل رابط الاستعادة</span>
               <input
                 value={resetEmail}
                 onChange={(e) => setResetEmail(e.target.value)}
@@ -245,7 +245,7 @@ export function AuthPage({ register = false }: { register?: boolean }) {
         <p className="mt-5 text-center text-[10px] leading-5 text-white/35">
           تتم حماية حسابك بواسطة Supabase Auth مع تأكيد البريد الإلكتروني.
         </p>
-        <div className="mt-6 text-center text-xs text-white/45">
+        <div className="mt-5 pb-1 text-center text-xs leading-6 text-white/45">
           {reg ? 'لديك حساب بالفعل؟ ' : 'ليس لديك حساب؟ '}
           <button
             type="button"
@@ -261,19 +261,12 @@ export function AuthPage({ register = false }: { register?: boolean }) {
   };
 
   return (
-    <div className="relative flex min-h-[calc(100vh-72px)] items-center justify-center overflow-hidden px-4 py-12">
+    <div className="relative flex min-h-[calc(100vh-72px)] items-center justify-center px-4 py-10 sm:py-12">
       <div className="pointer-events-none absolute inset-0 bg-[#0b1025]" />
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_20%_20%,rgba(103,93,232,0.35),transparent_50%),radial-gradient(ellipse_at_80%_80%,rgba(170,164,255,0.2),transparent_45%),radial-gradient(ellipse_at_50%_100%,rgba(23,30,66,0.8),transparent_40%)]" />
       <div className="auth-orb auth-orb-1 pointer-events-none absolute -left-24 top-1/4 size-72 rounded-full bg-[#675de8]/30 blur-3xl" />
       <div className="auth-orb auth-orb-2 pointer-events-none absolute -right-16 bottom-1/4 size-80 rounded-full bg-[#aaa4ff]/25 blur-3xl" />
       <div className="auth-orb auth-orb-3 pointer-events-none absolute left-1/3 top-0 size-56 rounded-full bg-[#7067ef]/20 blur-3xl" />
-      <div
-        className="pointer-events-none absolute inset-0 opacity-[0.04]"
-        style={{
-          backgroundImage:
-            'url("data:image/svg+xml,%3Csvg viewBox=%220 0 200 200%22 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cfilter id=%22n%22%3E%3CfeTurbulence type=%22fractalNoise%22 baseFrequency=%220.9%22 numOctaves=%224%22 stitchTiles=%22stitch%22/%3E%3C/filter%3E%3Crect width=%22100%25%22 height=%22100%25%22 filter=%22url(%23n)%22/%3E%3C/svg%3E")',
-        }}
-      />
 
       <style>{`
         @keyframes auth-float-1 {
@@ -303,10 +296,12 @@ export function AuthPage({ register = false }: { register?: boolean }) {
           animation: auth-shine 1.2s linear infinite;
         }
         .auth-flip-scene {
-          perspective: 1400px;
+          perspective: 1600px;
+          width: 100%;
+          max-width: 420px;
         }
         .auth-flip-inner {
-          position: relative;
+          display: grid;
           width: 100%;
           transform-style: preserve-3d;
           transition: transform 0.7s cubic-bezier(0.4, 0.2, 0.2, 1);
@@ -315,22 +310,19 @@ export function AuthPage({ register = false }: { register?: boolean }) {
           transform: rotateY(180deg);
         }
         .auth-flip-face {
+          grid-area: 1 / 1;
+          width: 100%;
           backface-visibility: hidden;
           -webkit-backface-visibility: hidden;
         }
         .auth-flip-face-back {
-          position: absolute;
-          inset: 0;
           transform: rotateY(180deg);
-        }
-        .auth-flip-face-front {
-          position: relative;
         }
       `}</style>
 
-      <div className="auth-flip-scene relative z-10 w-full max-w-[420px]">
-        <div className="absolute -inset-1 rounded-[28px] bg-gradient-to-br from-[#675de8]/40 via-transparent to-[#aaa4ff]/30 opacity-60 blur-xl" />
-        <div className={`auth-flip-inner min-h-[560px] ${isRegister ? 'is-flipped' : ''}`}>
+      <div className="auth-flip-scene relative z-10">
+        <div className="pointer-events-none absolute -inset-2 -z-10 rounded-[32px] bg-gradient-to-br from-[#675de8]/35 via-transparent to-[#aaa4ff]/25 opacity-70 blur-2xl" />
+        <div className={`auth-flip-inner ${isRegister ? 'is-flipped' : ''}`}>
           <div className="auth-flip-face auth-flip-face-front">{faceCard('login')}</div>
           <div className="auth-flip-face auth-flip-face-back">{faceCard('register')}</div>
         </div>
