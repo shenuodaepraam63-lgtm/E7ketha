@@ -15,6 +15,7 @@ export const seriesStatusEnum = pgEnum('series_status', ['completed', 'ongoing']
 export const novelStatusEnum = pgEnum('novel_status', ['standalone', 'completed', 'ongoing']);
 export const readingStatusEnum = pgEnum('reading_status', ['want_to_read', 'reading', 'finished']);
 export const reviewStatusEnum = pgEnum('review_status', ['published', 'pending', 'hidden']);
+export const articleStatusEnum = pgEnum('article_status', ['draft', 'published', 'archived']);
 
 export const users = pgTable('users', {
   id: serial('id').primaryKey(),
@@ -140,6 +141,24 @@ export const reviews = pgTable('reviews', {
   updatedAt: timestamp('updatedAt', { withTimezone: true }).defaultNow().notNull(),
 });
 
+export const articles = pgTable('articles', {
+  id: serial('id').primaryKey(),
+  slug: varchar('slug', { length: 200 }).notNull().unique(),
+  title: varchar('title', { length: 300 }).notNull(),
+  excerpt: text('excerpt'),
+  content: text('content').notNull(),
+  coverUrl: varchar('coverUrl', { length: 800 }),
+  status: articleStatusEnum('status').default('draft').notNull(),
+  authorName: varchar('authorName', { length: 160 }),
+  authorUserId: integer('authorUserId'),
+  seoTitle: varchar('seoTitle', { length: 300 }),
+  seoDescription: text('seoDescription'),
+  tags: text('tags'),
+  publishedAt: timestamp('publishedAt', { withTimezone: true }),
+  createdAt: timestamp('createdAt', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updatedAt', { withTimezone: true }).defaultNow().notNull(),
+});
+
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 export type Novel = typeof novels.$inferSelect;
@@ -148,3 +167,5 @@ export type Genre = typeof genres.$inferSelect;
 export type ReadingListItem = typeof readingListItems.$inferSelect;
 export type Rating = typeof ratings.$inferSelect;
 export type Review = typeof reviews.$inferSelect;
+export type Article = typeof articles.$inferSelect;
+export type InsertArticle = typeof articles.$inferInsert;
