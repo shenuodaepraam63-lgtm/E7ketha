@@ -114,8 +114,51 @@ function migrateLocalStorageToCookies(storage: SupportedStorage) {
   }
 }
 
-const sharedStorage = typeof window !== 'undefined' ? createSharedCookieStorage() : undefined;
-if (sharedStorage) migrateLocalStorageToCookies(sharedStorage);
+const cookieStorage = typeof window !== 'undefined' ? createSharedCookieStorage() : undefined;
+if (cookieStorage) migrateLocalStorageToCookies(cookieStorage);
+
+/**
+ * Hybrid storage: session cookies shared across *.e7ketha.com,
+ * but PKCE code-verifier always in localStorage (cookies can drop it → recovery fails).
+ */
+function createAuthStorage(): SupportedStorage | undefined {
+  if (typeof window === 'undefined' || !cookieStorage) return undefined;
+  return {
+    getItem(key: string) {
+      if (key.includes('code-verifier')) {
+        try {
+          const fromLs = localStorage.getItem(key);
+          if (fromLs) return fromLs;
+        } catch {
+          /* private mode */
+        }
+      }
+      return cookieStorage.getItem(key);
+    },
+    setItem(key: string, value: string) {
+      if (key.includes('code-verifier')) {
+        try {
+          localStorage.setItem(key, value);
+        } catch {
+          /* ignore */
+        }
+      }
+      cookieStorage.setItem(key, value);
+    },
+    removeItem(key: string) {
+      if (key.includes('code-verifier')) {
+        try {
+          localStorage.removeItem(key);
+        } catch {
+          /* ignore */
+        }
+      }
+      cookieStorage.removeItem(key);
+    },
+  };
+}
+
+const authStorage = createAuthStorage();
 
 export const supabase =
   url && publishableKey
@@ -125,7 +168,7 @@ export const supabase =
           autoRefreshToken: true,
           detectSessionInUrl: true,
           flowType: 'pkce',
-          storage: sharedStorage,
+          storage: authStorage,
         },
       })
     : null;

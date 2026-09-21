@@ -110,7 +110,7 @@ export function AuthPage({ register = false }: { register?: boolean }) {
       toast.error(error.message);
       return;
     }
-    toast.success('إذا كان البريد مسجلاً، ستصلك رسالة برابط استعادة كلمة المرور خلال دقائق.');
+    toast.success('إذا كان البريد مسجلاً، ستصلك رسالة برابط استعادة كلمة المرور خلال دقائق. افتح الرابط من نفس المتصفح.');
     setForgotOpen(false);
     setResetEmail('');
   };
@@ -185,7 +185,7 @@ export function AuthPage({ register = false }: { register?: boolean }) {
 
         {!reg && forgotOpen && (
           <form onSubmit={requestReset} className="mt-3 shrink-0 space-y-3 rounded-2xl border border-[#675de8]/30 bg-[#675de8]/10 p-4">
-            <p className="text-center text-[11px] leading-5 text-white/55">أدخل بريدك وسنرسل رابطًا لإعادة تعيين كلمة المرور.</p>
+            <p className="text-center text-[11px] leading-5 text-white/55">أدخل بريدك وسنرسل رابطًا. افتحه من <strong className="text-white/80">نفس المتصفح</strong> الذي طلبت منه الاستعادة.</p>
             <label className="grid gap-2 text-[11px] font-bold text-white/70">
               <span>البريد الإلكتروني</span>
               <div className="relative">
@@ -254,7 +254,7 @@ export function AuthPage({ register = false }: { register?: boolean }) {
       <div ref={sceneRef} className="auth-flip-scene relative z-10" onMouseMove={onSceneMove} onMouseLeave={onSceneLeave}>
         <div className={`auth-card-glow ${flipping ? 'is-flipping' : ''}`} />
         <div className={`auth-flip-tilt ${flipping ? 'is-flipping' : ''}`} style={{ transform: flipping ? undefined : `rotateX(${tilt.x}deg) rotateY(${tilt.y}deg)` }}>
-          <div className={`auth-flip-inner ${isRegister ? 'is-flipped' : ''} ${flipping ? 'is-animating' : ''}`}>
+          <div className={`auth-flip-inner ${isRegister ? 'is-flipped' : ''} ${flipping ? 'is-animating' : ''`}>
             <div className="auth-flip-face auth-flip-face-front">{faceCard('login')}<div className="auth-edge-shine" /></div>
             <div className="auth-flip-face auth-flip-face-back">{faceCard('register')}<div className="auth-edge-shine" /></div>
           </div>
@@ -296,74 +296,160 @@ export function PasswordResetPage() {
   const [focused, setFocused] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!supabase) { setChecking(false); setErrorMsg('لم يتم إعداد المصادقة بعد.'); return; }
+    if (!supabase) {
+      setChecking(false);
+      setErrorMsg('لم يتم إعداد المصادقة بعد.');
+      return;
+    }
+
     let cancelled = false;
-    const markReady = () => { if (cancelled) return; setReady(true); setChecking(false); setErrorMsg(null); };
-    const markFail = (msg: string) => { if (cancelled) return; setReady(false); setChecking(false); setErrorMsg(msg); };
+    let settled = false;
+
+    const markReady = () => {
+      if (cancelled || settled) return;
+      settled = true;
+      setReady(true);
+      setChecking(false);
+      setErrorMsg(null);
+    };
+
+    const markFail = (msg: string) => {
+      if (cancelled || settled) return;
+      settled = true;
+      setReady(false);
+      setChecking(false);
+      setErrorMsg(msg);
+    };
+
     const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'PASSWORD_RECOVERY') markReady();
       if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') && session) markReady();
     });
+
     (async () => {
       try {
         const params = new URLSearchParams(window.location.search);
+        const urlError = params.get('error_description') || params.get('error');
+        if (urlError) {
+          markFail(decodeURIComponent(urlError.replace(/\+/g, ' ')));
+          return;
+        }
+
         const code = params.get('code');
         if (code) {
-          const { error } = await supabase.auth.exchangeCodeForSession(code);
-          if (error) { markFail(error.message || 'رابط الاستعادة غير صالح أو منتهي.'); return; }
-          window.history.replaceState({}, '', '/reset-password');
-          markReady(); return;
+          const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+          if (error) {
+            markFail(
+              error.message.includes('verifier') || error.message.includes('code challenge')
+                ? 'يجب فتح رابط الإيميل من نفس المتصفح والجهاز الذي طلبت منه «نسيت كلمة المرور». اطلب رابطًا جديدًا وافتحه فورًا من نفس المتصفح.'
+                : error.message || 'رابط الاستعادة غير صالح أو منتهي.',
+            );
+            return;
+          }
+          if (data.session) {
+            window.history.replaceState({}, '', '/reset-password');
+            markReady();
+            return;
+          }
         }
+
         const tokenHash = params.get('token_hash') || params.get('token');
         const type = params.get('type');
-        if (tokenHash && (type === 'recovery' || type === 'email')) {
-          const { error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type: type === 'email' ? 'email' : 'recovery' });
-          if (error) { markFail(error.message || 'رابط الاستعادة غير صالح أو منتهي.'); return; }
-          window.history.replaceState({}, '', '/reset-password');
-          markReady(); return;
+        if (tokenHash && (type === 'recovery' || type === 'email' || type === 'magiclink')) {
+          const { data, error } = await supabase.auth.verifyOtp({
+            token_hash: tokenHash,
+            type: (type === 'email' ? 'email' : type === 'magiclink' ? 'magiclink' : 'recovery') as 'recovery' | 'email' | 'magiclink',
+          });
+          if (error) {
+            markFail(error.message || 'رابط الاستعادة غير صالح أو منتهي.');
+            return;
+          }
+          if (data.session) {
+            window.history.replaceState({}, '', '/reset-password');
+            markReady();
+            return;
+          }
         }
+
         const hash = window.location.hash.replace(/^#/, '');
         if (hash) {
           const hp = new URLSearchParams(hash);
           const access_token = hp.get('access_token');
           const refresh_token = hp.get('refresh_token');
           if (access_token && refresh_token) {
-            const { error } = await supabase.auth.setSession({ access_token, refresh_token });
-            if (error) { markFail(error.message || 'تعذر تفعيل جلسة الاستعادة.'); return; }
-            window.history.replaceState({}, '', '/reset-password');
-            markReady(); return;
+            const { data, error } = await supabase.auth.setSession({ access_token, refresh_token });
+            if (error) {
+              markFail(error.message || 'تعذر تفعيل جلسة الاستعادة.');
+              return;
+            }
+            if (data.session) {
+              window.history.replaceState({}, '', '/reset-password');
+              markReady();
+              return;
+            }
           }
         }
-        const { data } = await supabase.auth.getSession();
-        if (data.session) { markReady(); return; }
-        await new Promise((r) => setTimeout(r, 1200));
-        if (cancelled) return;
-        const again = await supabase.auth.getSession();
-        if (again.data.session) { markReady(); return; }
-        markFail('لم نتمكن من تفعيل رابط الاستعادة. من صفحة تسجيل الدخول اضغط «نسيت كلمة المرور؟» واطلب رابطًا جديدًا، ثم افتحه من نفس المتصفح خلال دقائق.');
+
+        for (let i = 0; i < 8 && !cancelled && !settled; i++) {
+          const { data } = await supabase.auth.getSession();
+          if (data.session) {
+            markReady();
+            return;
+          }
+          await new Promise((r) => setTimeout(r, 400));
+        }
+
+        if (!settled) {
+          const hasLinkParams = Boolean(code || tokenHash || hash);
+          markFail(
+            hasLinkParams
+              ? 'تعذر تفعيل الرابط. اطلب رابطًا جديدًا من تسجيل الدخول وافتحه من نفس المتصفح خلال دقائق (لا تنسخ الرابط لمتصفح آخر).'
+              : 'هذه الصفحة تعمل فقط من رابط الإيميل. من تسجيل الدخول اضغط «نسيت كلمة المرور؟» واطلب رابطًا جديدًا.',
+          );
+        }
       } catch (e) {
         markFail(e instanceof Error ? e.message : 'حدث خطأ أثناء التحقق من الرابط.');
       }
     })();
-    return () => { cancelled = true; listener.subscription.unsubscribe(); };
+
+    return () => {
+      cancelled = true;
+      listener.subscription.unsubscribe();
+    };
   }, []);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    if (password.length < 6) { toast.error('كلمة المرور يجب ألا تقل عن 6 أحرف.'); return; }
-    if (password !== confirm) { toast.error('كلمتا المرور غير متطابقتين.'); return; }
-    if (!supabase) { toast.error('لم يتم إعداد المصادقة بعد'); return; }
+    if (password.length < 6) {
+      toast.error('كلمة المرور يجب ألا تقل عن 6 أحرف.');
+      return;
+    }
+    if (password !== confirm) {
+      toast.error('كلمتا المرور غير متطابقتين.');
+      return;
+    }
+    if (!supabase) {
+      toast.error('لم يتم إعداد المصادقة بعد');
+      return;
+    }
     setSaving(true);
     const { error } = await supabase.auth.updateUser({ password });
     setSaving(false);
-    if (error) { toast.error(error.message); return; }
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
     toast.success('تم تحديث كلمة المرور بنجاح.');
     await supabase.auth.signOut();
     window.location.replace('/login');
   };
 
   const inputCls = (key: string) =>
-    `w-full rounded-2xl border bg-white/5 py-3.5 px-4 text-sm text-white outline-none transition-all duration-300 placeholder:text-white/30 ${focused === key ? 'border-[#675de8] bg-white/10 shadow-[0_0_0_3px_rgba(103,93,232,0.25)]' : 'border-white/10 hover:border-white/20'}`;
+    `w-full rounded-2xl border bg-white/5 py-3.5 px-4 text-sm text-white outline-none transition-all duration-300 placeholder:text-white/30 ${
+      focused === key
+        ? 'border-[#675de8] bg-white/10 shadow-[0_0_0_3px_rgba(103,93,232,0.25)]'
+        : 'border-white/10 hover:border-white/20'
+    }`;
 
   return (
     <div className="relative flex min-h-[calc(100vh-72px)] items-center justify-center px-4 py-10">
@@ -377,6 +463,7 @@ export function PasswordResetPage() {
           <h1 className="text-2xl font-extrabold text-white">كلمة مرور جديدة</h1>
           <p className="mt-2 text-sm leading-7 text-white/50">أدخل كلمة المرور الجديدة ثم أكّدها واضغط تحديث.</p>
         </div>
+
         {checking ? (
           <div className="flex flex-col items-center gap-3 py-6">
             <RefreshCw size={22} className="animate-spin text-[#aaa4ff]" />
@@ -384,10 +471,12 @@ export function PasswordResetPage() {
           </div>
         ) : ready ? (
           <form onSubmit={submit} className="grid gap-3.5">
-            <label className="grid gap-2 text-[11px] font-bold text-white/70"><span>كلمة السر الجديدة</span>
+            <label className="grid gap-2 text-[11px] font-bold text-white/70">
+              <span>كلمة السر الجديدة</span>
               <input required minLength={6} type="password" value={password} dir="ltr" autoComplete="new-password" placeholder="••••••••" onChange={(e) => setPassword(e.target.value)} onFocus={() => setFocused('pw')} onBlur={() => setFocused(null)} className={inputCls('pw')} />
             </label>
-            <label className="grid gap-2 text-[11px] font-bold text-white/70"><span>تأكيد كلمة السر</span>
+            <label className="grid gap-2 text-[11px] font-bold text-white/70">
+              <span>تأكيد كلمة السر</span>
               <input required minLength={6} type="password" value={confirm} dir="ltr" autoComplete="new-password" placeholder="••••••••" onChange={(e) => setConfirm(e.target.value)} onFocus={() => setFocused('cf')} onBlur={() => setFocused(null)} className={inputCls('cf')} />
             </label>
             <button disabled={saving} type="submit" className="mt-1 rounded-2xl bg-gradient-to-l from-[#675de8] to-[#7067ef] py-3.5 text-xs font-extrabold text-white shadow-lg shadow-[#675de8]/30 transition hover:brightness-110 disabled:opacity-60">
