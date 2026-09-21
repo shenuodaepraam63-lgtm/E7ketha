@@ -1,5 +1,5 @@
-import { Check, Heart, LockKeyhole, Mail, RefreshCw, Sparkles } from 'lucide-react';
-import { useEffect, useRef, useState, type FormEvent, type MouseEvent } from 'react';
+import { Check, Eye, EyeOff, Heart, LockKeyhole, Mail, RefreshCw, Sparkles } from 'lucide-react';
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent, type MouseEvent } from 'react';
 import { Link, useLocation } from 'wouter';
 import { NovelCard } from '@/components/NovelCard';
 import { Breadcrumbs, EmptyState } from '@/components/SiteShell';
@@ -17,6 +17,77 @@ const publicOrigin = () => {
 };
 
 const redirectUrl = (path: string) => `${publicOrigin()}${path}`;
+
+/** Password field with show/hide eye toggle */
+function PasswordInput({
+  name,
+  value,
+  onChange,
+  required,
+  minLength,
+  tabIndex,
+  className,
+  placeholder = '••••••••',
+  autoComplete = 'current-password',
+  onFocus,
+  onBlur,
+  withLockIcon = false,
+  lockActive = false,
+  eyeClassName = 'text-white/40 hover:text-white/80',
+}: {
+  name?: string;
+  value?: string;
+  onChange?: (e: ChangeEvent<HTMLInputElement>) => void;
+  required?: boolean;
+  minLength?: number;
+  tabIndex?: number;
+  className?: string;
+  placeholder?: string;
+  autoComplete?: string;
+  onFocus?: () => void;
+  onBlur?: () => void;
+  withLockIcon?: boolean;
+  lockActive?: boolean;
+  eyeClassName?: string;
+}) {
+  const [show, setShow] = useState(false);
+  return (
+    <div className="relative">
+      {withLockIcon && (
+        <LockKeyhole
+          size={16}
+          className={`pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 transition-colors duration-300 ${
+            lockActive ? 'text-[#aaa4ff]' : 'text-white/35'
+          }`}
+        />
+      )}
+      <input
+        name={name}
+        value={value}
+        onChange={onChange}
+        required={required}
+        minLength={minLength}
+        type={show ? 'text' : 'password'}
+        placeholder={placeholder}
+        dir="ltr"
+        autoComplete={autoComplete}
+        tabIndex={tabIndex}
+        onFocus={onFocus}
+        onBlur={onBlur}
+        className={`${className ?? ''} ${withLockIcon ? 'pr-11' : ''} pl-11`}
+      />
+      <button
+        type="button"
+        tabIndex={tabIndex !== undefined && tabIndex < 0 ? -1 : 0}
+        onClick={() => setShow((v) => !v)}
+        className={`absolute left-3 top-1/2 z-10 -translate-y-1/2 rounded-md p-1 transition ${eyeClassName}`}
+        aria-label={show ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}
+      >
+        {show ? <EyeOff size={16} strokeWidth={1.8} /> : <Eye size={16} strokeWidth={1.8} />}
+      </button>
+    </div>
+  );
+}
 
 export function AuthPage({ register = false }: { register?: boolean }) {
   const [, navigate] = useLocation();
@@ -160,15 +231,32 @@ export function AuthPage({ register = false }: { register?: boolean }) {
           </label>
           <label className="grid gap-2 text-[11px] font-bold text-white/70">
             <span>كلمة المرور</span>
-            <div className="relative">
-              <LockKeyhole size={16} className={`absolute right-3.5 top-1/2 -translate-y-1/2 transition-colors duration-300 ${focused === `${mode}-password` ? 'text-[#aaa4ff]' : 'text-white/35'}`} />
-              <input name="password" required={active} minLength={6} type="password" placeholder="••••••••" dir="ltr" className={inputClass(`${mode}-password`)} onFocus={() => setFocused(`${mode}-password`)} onBlur={() => setFocused(null)} tabIndex={active ? 0 : -1} />
-            </div>
+            <PasswordInput
+              name="password"
+              required={active}
+              minLength={6}
+              withLockIcon
+              lockActive={focused === `${mode}-password`}
+              className={inputClass(`${mode}-password`)}
+              onFocus={() => setFocused(`${mode}-password`)}
+              onBlur={() => setFocused(null)}
+              tabIndex={active ? 0 : -1}
+              autoComplete={reg ? 'new-password' : 'current-password'}
+            />
           </label>
           {reg && (
             <label className="grid gap-2 text-[11px] font-bold text-white/70">
               <span>تأكيد كلمة المرور</span>
-              <input name="confirmPassword" required={active} type="password" placeholder="••••••••" dir="ltr" className={inputClass(`${mode}-confirm`)} onFocus={() => setFocused(`${mode}-confirm`)} onBlur={() => setFocused(null)} tabIndex={active ? 0 : -1} />
+              <PasswordInput
+                name="confirmPassword"
+                required={active}
+                minLength={6}
+                className={inputClass(`${mode}-confirm`)}
+                onFocus={() => setFocused(`${mode}-confirm`)}
+                onBlur={() => setFocused(null)}
+                tabIndex={active ? 0 : -1}
+                autoComplete="new-password"
+              />
             </label>
           )}
           <button disabled={loading || !active} type="submit" tabIndex={active ? 0 : -1} className="auth-btn-shine mt-1 rounded-2xl py-3.5 text-xs font-extrabold text-white shadow-lg shadow-[#675de8]/30 transition-all duration-300 hover:shadow-[#675de8]/50 hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60">
@@ -254,7 +342,7 @@ export function AuthPage({ register = false }: { register?: boolean }) {
       <div ref={sceneRef} className="auth-flip-scene relative z-10" onMouseMove={onSceneMove} onMouseLeave={onSceneLeave}>
         <div className={`auth-card-glow ${flipping ? 'is-flipping' : ''}`} />
         <div className={`auth-flip-tilt ${flipping ? 'is-flipping' : ''}`} style={{ transform: flipping ? undefined : `rotateX(${tilt.x}deg) rotateY(${tilt.y}deg)` }}>
-          <div className={`auth-flip-inner ${isRegister ? 'is-flipped' : ''} ${flipping ? 'is-animating' : ''`}>
+          <div className={`auth-flip-inner ${isRegister ? 'is-flipped' : ''} ${flipping ? 'is-animating' : ''}`}>
             <div className="auth-flip-face auth-flip-face-front">{faceCard('login')}<div className="auth-edge-shine" /></div>
             <div className="auth-flip-face auth-flip-face-back">{faceCard('register')}<div className="auth-edge-shine" /></div>
           </div>
@@ -473,11 +561,29 @@ export function PasswordResetPage() {
           <form onSubmit={submit} className="grid gap-3.5">
             <label className="grid gap-2 text-[11px] font-bold text-white/70">
               <span>كلمة السر الجديدة</span>
-              <input required minLength={6} type="password" value={password} dir="ltr" autoComplete="new-password" placeholder="••••••••" onChange={(e) => setPassword(e.target.value)} onFocus={() => setFocused('pw')} onBlur={() => setFocused(null)} className={inputCls('pw')} />
+              <PasswordInput
+                required
+                minLength={6}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="new-password"
+                onFocus={() => setFocused('pw')}
+                onBlur={() => setFocused(null)}
+                className={inputCls('pw')}
+              />
             </label>
             <label className="grid gap-2 text-[11px] font-bold text-white/70">
               <span>تأكيد كلمة السر</span>
-              <input required minLength={6} type="password" value={confirm} dir="ltr" autoComplete="new-password" placeholder="••••••••" onChange={(e) => setConfirm(e.target.value)} onFocus={() => setFocused('cf')} onBlur={() => setFocused(null)} className={inputCls('cf')} />
+              <PasswordInput
+                required
+                minLength={6}
+                value={confirm}
+                onChange={(e) => setConfirm(e.target.value)}
+                autoComplete="new-password"
+                onFocus={() => setFocused('cf')}
+                onBlur={() => setFocused(null)}
+                className={inputCls('cf')}
+              />
             </label>
             <button disabled={saving} type="submit" className="mt-1 rounded-2xl bg-gradient-to-l from-[#675de8] to-[#7067ef] py-3.5 text-xs font-extrabold text-white shadow-lg shadow-[#675de8]/30 transition hover:brightness-110 disabled:opacity-60">
               {saving ? (<span className="inline-flex items-center gap-2"><RefreshCw size={14} className="animate-spin" />جارٍ التحديث...</span>) : 'تحديث كلمة السر'}
@@ -573,10 +679,26 @@ export function ProfilePage() {
         {showPwForm && (
           <form onSubmit={changePassword} className="mt-5 grid max-w-md gap-3">
             <label className="grid gap-2 text-xs font-bold">كلمة المرور الجديدة
-              <input required minLength={6} type="password" dir="ltr" autoComplete="new-password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className="rounded-xl border border-border bg-background px-3 py-3 text-sm" placeholder="••••••••" />
+              <PasswordInput
+                required
+                minLength={6}
+                autoComplete="new-password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                className="w-full rounded-xl border border-border bg-background py-3 pr-3 text-sm text-foreground outline-none"
+                eyeClassName="text-muted-foreground hover:text-foreground"
+              />
             </label>
             <label className="grid gap-2 text-xs font-bold">تأكيد كلمة المرور
-              <input required minLength={6} type="password" dir="ltr" autoComplete="new-password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="rounded-xl border border-border bg-background px-3 py-3 text-sm" placeholder="••••••••" />
+              <PasswordInput
+                required
+                minLength={6}
+                autoComplete="new-password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                className="w-full rounded-xl border border-border bg-background py-3 pr-3 text-sm text-foreground outline-none"
+                eyeClassName="text-muted-foreground hover:text-foreground"
+              />
             </label>
             <button disabled={savingPw} type="submit" className="rounded-xl bg-[#675de8] py-3 text-xs font-extrabold text-white transition hover:brightness-110 disabled:opacity-60">{savingPw ? 'جارٍ الحفظ...' : 'حفظ كلمة المرور الجديدة'}</button>
           </form>
