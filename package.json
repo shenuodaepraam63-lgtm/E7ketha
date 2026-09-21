@@ -34,7 +34,6 @@
     "@trpc/client": "^11.6.0",
     "@trpc/react-query": "^11.6.0",
     "@trpc/server": "^11.6.0",
-    "@upstash/ratelimit": "^2.0.5",
     "@upstash/redis": "^1.34.3",
     "axios": "^1.12.0",
     "class-variance-authority": "^0.7.1",
