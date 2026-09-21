@@ -1,4 +1,4 @@
-import { BarChart3, Bell, BookOpen, CheckCircle2, Edit3, FileClock, LayoutDashboard, Menu, Megaphone, Save, Send, ShieldCheck, Trash2, Users, UserCog, X, Tags, Loader2, Upload, WandSparkles } from 'lucide-react';
+import { BarChart3, Bell, BookOpen, CheckCircle2, Edit3, FileClock, FileText, LayoutDashboard, Menu, Megaphone, Save, Send, ShieldCheck, Trash2, Users, UserCog, X, Tags, Loader2, Upload, WandSparkles } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'wouter';
 import { toast } from 'sonner';
@@ -9,11 +9,13 @@ import AdminReports from './AdminReports';
 import AdminQuotesManager from './AdminQuotesManager';
 import { NovelsManager } from './AdminNovelsManager';
 import { AdminOverview } from './AdminOverview';
+import { AdminArticlesManager } from './AdminArticlesManager';
 
 const nav = [
   { key: 'overview', label: 'نظرة عامة', icon: LayoutDashboard },
   { key: 'novels', label: 'الروايات', icon: BookOpen },
   { key: 'quotes', label: 'الاقتباسات', icon: WandSparkles },
+  { key: 'articles', label: 'المقالات', icon: FileText },
   { key: 'authors', label: 'المؤلفون', icon: Users },
   { key: 'genres', label: 'التصنيفات', icon: Tags },
   { key: 'users', label: 'المستخدمون والأدوار', icon: UserCog },
@@ -253,6 +255,7 @@ export default function AdminPage() {
             {section === 'overview' && <AdminOverview onSelect={(value) => { setSection(value); if (value === 'novels') navigate('/novels'); }} />}
             {section === 'novels' && <NovelsManager />}
             {section === 'quotes' && <AdminQuotesManager />}
+            {section === 'articles' && <AdminArticlesManager />}
             {section === 'authors' && <AuthorsManager />}
             {section === 'genres' && <GenresManager />}
             {section === 'users' && <UsersManager />}
