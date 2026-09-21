@@ -74,6 +74,19 @@ export function AdminArticlesManager() {
     onError: (e) => toast.error(e.message),
   });
 
+  const resolveCover = trpc.admin.novels.resolveCover.useMutation({
+    onSuccess: (result) => {
+      const url = typeof result === 'string' ? result : (result as { coverUrl?: string } | null)?.coverUrl;
+      if (url) {
+        setForm((f) => ({ ...f, coverUrl: url }));
+        toast.success('تم استخراج رابط الصورة');
+      } else {
+        toast.message('لم يُعثر على صورة مباشرة؛ تم الإبقاء على الرابط كما هو');
+      }
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
   const reset = () => {
     setEditingId(null);
     setForm(emptyForm);
@@ -175,10 +188,50 @@ export function AdminArticlesManager() {
             <span>اسم الكاتب الظاهر</span>
             <input value={form.authorName} onChange={(e) => setForm({ ...form, authorName: e.target.value })} className="h-11 rounded-xl border border-border bg-background px-3 text-sm outline-none focus:border-[#8279ee]" />
           </label>
-          <label className="grid gap-2 text-xs font-bold">
+          <div className="grid gap-2 text-xs font-bold md:col-span-2">
             <span>صورة الغلاف (URL)</span>
-            <input value={form.coverUrl} onChange={(e) => setForm({ ...form, coverUrl: e.target.value })} className="h-11 rounded-xl border border-border bg-background px-3 text-sm outline-none focus:border-[#8279ee]" dir="ltr" placeholder="https://..." />
-          </label>
+            <div className="flex flex-wrap items-end gap-2">
+              <input
+                value={form.coverUrl}
+                onChange={(e) => setForm({ ...form, coverUrl: e.target.value })}
+                className="h-11 min-w-0 flex-1 rounded-xl border border-border bg-background px-3 text-sm outline-none focus:border-[#8279ee]"
+                dir="ltr"
+                placeholder="https://... أو رابط مشاركة"
+              />
+              <button
+                type="button"
+                disabled={!form.coverUrl.trim() || resolveCover.isPending}
+                onClick={() => {
+                  const url = form.coverUrl.trim();
+                  if (!url) return;
+                  try {
+                    // eslint-disable-next-line no-new
+                    new URL(url);
+                  } catch {
+                    toast.error('الرابط غير صالح');
+                    return;
+                  }
+                  resolveCover.mutate({ url });
+                }}
+                className="h-11 shrink-0 rounded-xl border border-[#675de8]/30 px-3 text-[10px] font-bold text-[#675de8] disabled:opacity-50"
+              >
+                {resolveCover.isPending ? 'جارٍ التحويل...' : 'استخراج الرابط'}
+              </button>
+            </div>
+            <div className="mt-1 flex items-center gap-3">
+              {form.coverUrl ? (
+                <img
+                  src={form.coverUrl}
+                  onError={() => toast.error('الرابط لا يعيد صورة مباشرة؛ استخدم استخراج الرابط أو رابط صورة مباشر')}
+                  className="size-16 rounded-xl border border-border object-cover"
+                  alt="معاينة الغلاف"
+                />
+              ) : null}
+              <span className="text-[10px] font-normal text-muted-foreground">
+                يقبل رابط صورة مباشر أو رابط مشاركة (مثل share.google) — بدون اشتراط امتداد jpg/png. الزر يستخرج الصورة الفعلية من الصفحة.
+              </span>
+            </div>
+          </div>
           <label className="grid gap-2 text-xs font-bold md:col-span-2">
             <span>مقتطف قصير</span>
             <textarea value={form.excerpt} onChange={(e) => setForm({ ...form, excerpt: e.target.value })} className="min-h-20 rounded-xl border border-border bg-background p-3 text-sm outline-none focus:border-[#8279ee]" />
@@ -216,7 +269,11 @@ export function AdminArticlesManager() {
         ) : (
           (list.data ?? []).map((article) => (
             <div key={article.id} className="flex flex-wrap items-center gap-3 rounded-[18px] border border-border bg-card p-4">
-              <div className="grid size-12 place-items-center rounded-xl bg-[#efeeff] text-[#675de8]"><FileText size={18} /></div>
+              {article.coverUrl ? (
+                <img src={article.coverUrl} alt="" className="size-12 rounded-xl object-cover" />
+              ) : (
+                <div className="grid size-12 place-items-center rounded-xl bg-[#efeeff] text-[#675de8]"><FileText size={18} /></div>
+              )}
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <strong className="truncate text-sm">{article.title}</strong>
