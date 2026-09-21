@@ -20,9 +20,10 @@ export function AuthPage({ register = false }: { register?: boolean }) {
   const [focused, setFocused] = useState<string | null>(null);
   const [flipping, setFlipping] = useState(false);
 
+  // Sync only when landing from outside (not during our own flip)
   useEffect(() => {
-    setIsRegister(register);
-  }, [register]);
+    if (!flipping) setIsRegister(register);
+  }, [register, flipping]);
 
   const flipTo = (nextRegister: boolean) => {
     if (nextRegister === isRegister || flipping) return;
@@ -31,7 +32,7 @@ export function AuthPage({ register = false }: { register?: boolean }) {
     setFocused(null);
     setIsRegister(nextRegister);
     navigate(nextRegister ? '/register' : '/login', { replace: true });
-    window.setTimeout(() => setFlipping(false), 700);
+    window.setTimeout(() => setFlipping(false), 800);
   };
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
@@ -98,10 +99,10 @@ export function AuthPage({ register = false }: { register?: boolean }) {
     const reg = mode === 'register';
     const active = isRegister === reg;
     return (
-      <div className="relative rounded-[26px] border border-white/10 bg-[#11183a]/95 p-6 shadow-2xl backdrop-blur-2xl sm:p-8">
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#675de8]/80 to-transparent" />
-        <div className="mb-6 text-center sm:mb-8">
-          <div className="mx-auto mb-4 grid size-14 place-items-center rounded-2xl bg-gradient-to-br from-[#675de8] to-[#4a42b8] shadow-lg shadow-[#675de8]/40 sm:mb-5">
+      <div className="flex h-full flex-col rounded-[26px] border border-white/10 bg-[#11183a] p-6 shadow-2xl sm:p-8">
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-px rounded-t-[26px] bg-gradient-to-r from-transparent via-[#675de8]/80 to-transparent" />
+        <div className="mb-6 shrink-0 text-center sm:mb-7">
+          <div className="mx-auto mb-4 grid size-14 place-items-center rounded-2xl bg-gradient-to-br from-[#675de8] to-[#4a42b8] shadow-lg shadow-[#675de8]/40">
             <Sparkles size={22} className="text-white" strokeWidth={1.7} />
           </div>
           <h1 className="text-2xl font-extrabold leading-tight tracking-tight text-white sm:text-3xl">
@@ -112,7 +113,7 @@ export function AuthPage({ register = false }: { register?: boolean }) {
           </p>
         </div>
 
-        <form onSubmit={submit} className="grid gap-3.5 sm:gap-4">
+        <form onSubmit={submit} className="grid gap-3.5">
           {reg && (
             <label className="grid gap-2 text-[11px] font-bold text-white/70">
               <span>الاسم</span>
@@ -212,7 +213,7 @@ export function AuthPage({ register = false }: { register?: boolean }) {
             type="button"
             tabIndex={active ? 0 : -1}
             onClick={() => setForgotOpen((v) => !v)}
-            className="mt-5 flex w-full items-center justify-center gap-2 text-xs font-bold text-[#aaa4ff] transition hover:text-white"
+            className="mt-4 flex w-full shrink-0 items-center justify-center gap-2 text-xs font-bold text-[#aaa4ff] transition hover:text-white"
           >
             <RefreshCw size={13} />
             نسيت كلمة المرور؟
@@ -220,7 +221,7 @@ export function AuthPage({ register = false }: { register?: boolean }) {
         )}
 
         {!reg && forgotOpen && (
-          <form onSubmit={requestReset} className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-4">
+          <form onSubmit={requestReset} className="mt-3 shrink-0 rounded-2xl border border-white/10 bg-white/5 p-4">
             <label className="grid gap-2 text-[11px] font-bold text-white/70">
               <span>أرسل رابط الاستعادة</span>
               <input
@@ -242,19 +243,21 @@ export function AuthPage({ register = false }: { register?: boolean }) {
           </form>
         )}
 
-        <p className="mt-5 text-center text-[10px] leading-5 text-white/35">
-          تتم حماية حسابك بواسطة Supabase Auth مع تأكيد البريد الإلكتروني.
-        </p>
-        <div className="mt-5 pb-1 text-center text-xs leading-6 text-white/45">
-          {reg ? 'لديك حساب بالفعل؟ ' : 'ليس لديك حساب؟ '}
-          <button
-            type="button"
-            tabIndex={active ? 0 : -1}
-            onClick={() => flipTo(!reg)}
-            className="font-bold text-[#aaa4ff] transition hover:text-white"
-          >
-            {reg ? 'تسجيل الدخول' : 'إنشاء حساب'}
-          </button>
+        <div className="mt-auto pt-5">
+          <p className="text-center text-[10px] leading-5 text-white/35">
+            تتم حماية حسابك بواسطة Supabase Auth مع تأكيد البريد الإلكتروني.
+          </p>
+          <div className="mt-3 pb-1 text-center text-xs leading-6 text-white/45">
+            {reg ? 'لديك حساب بالفعل؟ ' : 'ليس لديك حساب؟ '}
+            <button
+              type="button"
+              tabIndex={active ? 0 : -1}
+              onClick={() => flipTo(!reg)}
+              className="font-bold text-[#aaa4ff] transition hover:text-white"
+            >
+              {reg ? 'تسجيل الدخول' : 'إنشاء حساب'}
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -296,32 +299,46 @@ export function AuthPage({ register = false }: { register?: boolean }) {
           animation: auth-shine 1.2s linear infinite;
         }
         .auth-flip-scene {
-          perspective: 1600px;
+          perspective: 1400px;
+          -webkit-perspective: 1400px;
           width: 100%;
           max-width: 420px;
         }
         .auth-flip-inner {
-          display: grid;
+          position: relative;
           width: 100%;
+          min-height: 640px;
           transform-style: preserve-3d;
-          transition: transform 0.7s cubic-bezier(0.4, 0.2, 0.2, 1);
+          -webkit-transform-style: preserve-3d;
+          transition: transform 0.75s cubic-bezier(0.4, 0.2, 0.2, 1);
         }
         .auth-flip-inner.is-flipped {
           transform: rotateY(180deg);
         }
         .auth-flip-face {
-          grid-area: 1 / 1;
+          position: absolute;
+          inset: 0;
           width: 100%;
-          backface-visibility: hidden;
+          height: 100%;
           -webkit-backface-visibility: hidden;
+          backface-visibility: hidden;
+        }
+        .auth-flip-face-front {
+          transform: rotateY(0deg);
+          -webkit-transform: rotateY(0deg);
         }
         .auth-flip-face-back {
           transform: rotateY(180deg);
+          -webkit-transform: rotateY(180deg);
+        }
+        .auth-flip-face > div {
+          position: relative;
+          height: 100%;
         }
       `}</style>
 
       <div className="auth-flip-scene relative z-10">
-        <div className="pointer-events-none absolute -inset-2 -z-10 rounded-[32px] bg-gradient-to-br from-[#675de8]/35 via-transparent to-[#aaa4ff]/25 opacity-70 blur-2xl" />
+        <div className="pointer-events-none absolute -inset-3 -z-10 rounded-[32px] bg-gradient-to-br from-[#675de8]/40 via-transparent to-[#aaa4ff]/30 opacity-70 blur-2xl" />
         <div className={`auth-flip-inner ${isRegister ? 'is-flipped' : ''}`}>
           <div className="auth-flip-face auth-flip-face-front">{faceCard('login')}</div>
           <div className="auth-flip-face auth-flip-face-back">{faceCard('register')}</div>
