@@ -86,17 +86,54 @@ function SeoManager({ location }: { location: string }) {
 }
 
 function PublicRoutes({ theme, onThemeToggle }: { theme: 'light' | 'dark'; onThemeToggle: () => void }) {
-  return <SiteShell theme={theme} onThemeToggle={onThemeToggle}><Suspense fallback={<LoadingPage />}><Switch>
-    <Route path="/" component={Home} /><Route path="/explore" component={ExplorePage} /><Route path="/search" component={SearchPage} />
-    <Route path="/articles" component={ArticlesPage} /><Route path="/articles/:slug" component={ArticlePage} />
-    <Route path="/quotes" component={QuotesPage} /><Route path="/quotes/categories" component={QuoteCategoriesPage} /><Route path="/quotes/category/:slug" component={QuoteCategoryPage} /><Route path="/quotes/:id" component={QuotePage} /><Route path="/topics" component={TopicsPage} /><Route path="/topics/:slug" component={TopicPage} /><Route path="/books/:slug/quotes" component={BookQuotesPage} /><Route path="/books/:slug" component={NovelPage} /><Route path="/novel/:slug" component={NovelPage} /><Route path="/novels/:slug" component={NovelPage} />
-    <Route path="/authors/:slug/quotes" component={AuthorQuotesPage} /><Route path="/authors/:slug" component={AuthorPage} /><Route path="/genres/:slug" component={GenrePage} /><Route path="/series/:slug" component={SeriesPage} />
-    <Route path="/discover" component={DiscoverPage} /><Route path="/my-list" component={ReadingListPage} /><Route path="/saved-quotes" component={SavedQuotesPage} /><Route path="/profile" component={ProfilePage} />
-    <Route path="/login">{() => <AuthPage />}</Route><Route path="/register">{() => <AuthPage register />}</Route><Route path="/auth/callback" component={AuthCallbackPage} /><Route path="/reset-password" component={PasswordResetPage} />
-    <Route path="/about" component={AboutPage} /><Route path="/how-it-works" component={HowItWorksPage} /><Route path="/privacy" component={PrivacyPage} /><Route path="/terms" component={TermsPage} />
-    <Route path="/contact" component={ContactPage} /><Route path="/report" component={ReportPage} /><Route path="/faq" component={FaqPage} />
-    <Route component={NotFound} />
-  </Switch></Suspense></SiteShell>;
+  const [location] = useLocation();
+  const isAuthPage = location === '/login' || location === '/register';
+
+  return (
+    <SiteShell theme={theme} onThemeToggle={onThemeToggle}>
+      <Suspense fallback={<LoadingPage />}>
+        {isAuthPage ? (
+          <AuthPage register={location.startsWith('/register')} />
+        ) : (
+          <Switch>
+            <Route path="/" component={Home} />
+            <Route path="/explore" component={ExplorePage} />
+            <Route path="/search" component={SearchPage} />
+            <Route path="/articles" component={ArticlesPage} />
+            <Route path="/articles/:slug" component={ArticlePage} />
+            <Route path="/quotes" component={QuotesPage} />
+            <Route path="/quotes/categories" component={QuoteCategoriesPage} />
+            <Route path="/quotes/category/:slug" component={QuoteCategoryPage} />
+            <Route path="/quotes/:id" component={QuotePage} />
+            <Route path="/topics" component={TopicsPage} />
+            <Route path="/topics/:slug" component={TopicPage} />
+            <Route path="/books/:slug/quotes" component={BookQuotesPage} />
+            <Route path="/books/:slug" component={NovelPage} />
+            <Route path="/novel/:slug" component={NovelPage} />
+            <Route path="/novels/:slug" component={NovelPage} />
+            <Route path="/authors/:slug/quotes" component={AuthorQuotesPage} />
+            <Route path="/authors/:slug" component={AuthorPage} />
+            <Route path="/genres/:slug" component={GenrePage} />
+            <Route path="/series/:slug" component={SeriesPage} />
+            <Route path="/discover" component={DiscoverPage} />
+            <Route path="/my-list" component={ReadingListPage} />
+            <Route path="/saved-quotes" component={SavedQuotesPage} />
+            <Route path="/profile" component={ProfilePage} />
+            <Route path="/auth/callback" component={AuthCallbackPage} />
+            <Route path="/reset-password" component={PasswordResetPage} />
+            <Route path="/about" component={AboutPage} />
+            <Route path="/how-it-works" component={HowItWorksPage} />
+            <Route path="/privacy" component={PrivacyPage} />
+            <Route path="/terms" component={TermsPage} />
+            <Route path="/contact" component={ContactPage} />
+            <Route path="/report" component={ReportPage} />
+            <Route path="/faq" component={FaqPage} />
+            <Route component={NotFound} />
+          </Switch>
+        )}
+      </Suspense>
+    </SiteShell>
+  );
 }
 
 function getHostRole() {
