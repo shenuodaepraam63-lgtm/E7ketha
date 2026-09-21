@@ -3,7 +3,6 @@ import { Route, Switch, useLocation } from 'wouter';
 import { Toaster } from 'sonner';
 import { SiteShell } from '@/components/SiteShell';
 import { BookLoader } from '@/components/BookLoader';
-// Homepage must not be lazy: SSR shell must align with the initial React tree.
 import Home from '@/pages/Home';
 
 const ExplorePage = lazy(() => import('@/pages/ExplorePages').then((module) => ({ default: module.ExplorePage })));
@@ -22,8 +21,9 @@ const SavedQuotesPage = lazy(() => import('@/pages/AccountPages').then((module) 
 const AdminPage = lazy(() => import('@/pages/AdminPage'));
 const NotFound = lazy(() => import('@/pages/NotFound'));
 const QuotesPage = lazy(() => import('@/pages/QuotesPage'));
+const ArticlesPage = lazy(() => import('@/pages/ArticlesPages'));
+const ArticlePage = lazy(() => import('@/pages/ArticlesPages').then((m) => ({ default: m.ArticlePage })));
 const QuotePage = lazy(() => import('@/pages/QuotesPage').then((module) => ({ default: module.QuotePage })));
-const QuoteLandingPages = lazy(() => import('@/pages/QuoteLandingPages'));
 const QuoteCategoriesPage = lazy(() => import('@/pages/QuoteLandingPages'));
 const TopicsPage = lazy(() => import('@/pages/TopicPages').then((module) => ({ default: module.TopicsPage })));
 const TopicPage = lazy(() => import('@/pages/TopicPages').then((module) => ({ default: module.TopicPage })));
@@ -56,6 +56,7 @@ function SeoManager({ location }: { location: string }) {
       '/quotes': `اقتباسات عربية ملهمة من الروايات | ${SITE_NAME}`,
       '/quotes/categories': `تصنيفات الاقتباسات العربية | ${SITE_NAME}`,
       '/discover': `اكتشف قراءتك القادمة | ${SITE_NAME}`,
+      '/articles': `مقالات أدبية وترشيحات قراءة | ${SITE_NAME}`,
       '/about': `عن ${SITE_NAME} | منصة اكتشاف الروايات العربية`,
       '/how-it-works': `كيف تعمل ${SITE_NAME}؟`,
       '/faq': `الأسئلة الشائعة | ${SITE_NAME}`,
@@ -63,8 +64,8 @@ function SeoManager({ location }: { location: string }) {
       '/privacy': `سياسة الخصوصية | ${SITE_NAME}`,
       '/terms': `شروط الاستخدام | ${SITE_NAME}`,
     };
-    const title = titles[pathname] ?? (pathname.startsWith('/books/') || pathname.startsWith('/novel/') || pathname.startsWith('/novels/') ? `تفاصيل الرواية | ${SITE_NAME}` : pathname.startsWith('/authors/') ? `المؤلفون العرب | ${SITE_NAME}` : pathname.startsWith('/genres/') ? `تصنيفات الروايات | ${SITE_NAME}` : pathname.startsWith('/series/') ? `سلاسل روائية | ${SITE_NAME}` : HOME_TITLE);
-    const description = isPrivate ? `هذه الصفحة مخصصة للمستخدمين المسجلين في ${SITE_NAME}.` : pathname === '/quotes' ? 'اقرأ واقتبس وشارك أجمل الاقتباسات العربية عن الحب والحياة والفلسفة والقراءة من الروايات والكتّاب.' : DEFAULT_DESCRIPTION;
+    const title = titles[pathname] ?? (pathname.startsWith('/articles/') ? `مقال | ${SITE_NAME}` : pathname.startsWith('/books/') || pathname.startsWith('/novel/') || pathname.startsWith('/novels/') ? `تفاصيل الرواية | ${SITE_NAME}` : pathname.startsWith('/authors/') ? `المؤلفون العرب | ${SITE_NAME}` : pathname.startsWith('/genres/') ? `تصنيفات الروايات | ${SITE_NAME}` : pathname.startsWith('/series/') ? `سلاسل روائية | ${SITE_NAME}` : HOME_TITLE);
+    const description = isPrivate ? `هذه الصفحة مخصصة للمستخدمين المسجلين في ${SITE_NAME}.` : pathname === '/quotes' ? 'اقرأ واقتبس وشارك أجمل الاقتباسات العربية عن الحب والحياة والفلسفة والقراءة من الروايات والكتّاب.' : pathname === '/articles' || pathname.startsWith('/articles/') ? 'مقالات أدبية وترشيحات قراءة من منصة اكتشاف الروايات العربية.' : DEFAULT_DESCRIPTION;
     const canonical = `${SITE_URL}${pathname === '/' ? '/' : pathname.replace(/\/$/, '')}`;
     document.title = title;
     const setMeta = (selector: string, attributes: Record<string, string>, content: string) => {
@@ -80,9 +81,6 @@ function SeoManager({ location }: { location: string }) {
     setMeta('meta[name="robots"]', { name: 'robots' }, isPrivate || isSearch ? 'noindex,nofollow' : 'index,follow');
     let link = document.head.querySelector('link[rel="canonical"]') as HTMLLinkElement | null;
     if (!link) { link = document.createElement('link'); link.rel = 'canonical'; document.head.appendChild(link); } link.href = canonical;
-    let jsonLd = document.head.querySelector('#site-structured-data') as HTMLScriptElement | null;
-    if (!jsonLd) { jsonLd = document.createElement('script'); jsonLd.id = 'site-structured-data'; jsonLd.type = 'application/ld+json'; document.head.appendChild(jsonLd); }
-    jsonLd.textContent = JSON.stringify({ '@context': 'https://schema.org', '@type': 'WebSite', name: SITE_NAME, url: SITE_URL, description: DEFAULT_DESCRIPTION, inLanguage: 'ar' });
   }, [location]);
   return null;
 }
@@ -90,6 +88,7 @@ function SeoManager({ location }: { location: string }) {
 function PublicRoutes({ theme, onThemeToggle }: { theme: 'light' | 'dark'; onThemeToggle: () => void }) {
   return <SiteShell theme={theme} onThemeToggle={onThemeToggle}><Suspense fallback={<LoadingPage />}><Switch>
     <Route path="/" component={Home} /><Route path="/explore" component={ExplorePage} /><Route path="/search" component={SearchPage} />
+    <Route path="/articles" component={ArticlesPage} /><Route path="/articles/:slug" component={ArticlePage} />
     <Route path="/quotes" component={QuotesPage} /><Route path="/quotes/categories" component={QuoteCategoriesPage} /><Route path="/quotes/category/:slug" component={QuoteCategoryPage} /><Route path="/quotes/:id" component={QuotePage} /><Route path="/topics" component={TopicsPage} /><Route path="/topics/:slug" component={TopicPage} /><Route path="/books/:slug/quotes" component={BookQuotesPage} /><Route path="/books/:slug" component={NovelPage} /><Route path="/novel/:slug" component={NovelPage} /><Route path="/novels/:slug" component={NovelPage} />
     <Route path="/authors/:slug/quotes" component={AuthorQuotesPage} /><Route path="/authors/:slug" component={AuthorPage} /><Route path="/genres/:slug" component={GenrePage} /><Route path="/series/:slug" component={SeriesPage} />
     <Route path="/discover" component={DiscoverPage} /><Route path="/my-list" component={ReadingListPage} /><Route path="/saved-quotes" component={SavedQuotesPage} /><Route path="/profile" component={ProfilePage} />
@@ -121,16 +120,8 @@ export default function App() {
         <div className="w-full max-w-lg rounded-2xl border border-white/10 bg-white/5 p-8 text-right">
           <p className="text-[10px] font-bold tracking-widest text-[#a5b4fc]">API · e7ketha.com</p>
           <h1 className="mt-2 text-2xl font-extrabold">E7ketha API</h1>
-          <p className="mt-3 text-sm leading-7 text-white/65">واجهة البيانات الرسمية للمنصة. الطلبات تتم عبر tRPC مع JSON.</p>
-          <ul className="mt-6 space-y-2 text-sm text-white/80">
-            <li className="rounded-xl border border-white/10 bg-black/20 px-4 py-3 font-mono text-xs text-[#c7d2fe]">POST /api/trpc</li>
-            <li className="rounded-xl border border-white/10 bg-black/20 px-4 py-3 font-mono text-xs text-[#c7d2fe]">GET  /api/trpc</li>
-            <li className="rounded-xl border border-white/10 bg-black/20 px-4 py-3 font-mono text-xs text-[#c7d2fe]">/sitemap.xml → على النطاق الرئيسي</li>
-          </ul>
-          <div className="mt-8 flex flex-wrap gap-3">
-            <a href="https://e7ketha.com" className="rounded-xl bg-[#675de8] px-4 py-2.5 text-xs font-bold">الموقع</a>
-            <a href="https://admin.e7ketha.com" className="rounded-xl border border-white/15 px-4 py-2.5 text-xs font-bold text-white/80">لوحة التحكم</a>
-          </div>
+          <p className="mt-3 text-sm leading-7 text-white/65">واجهة البيانات الرسمية للمنصة.</p>
+          <a href="https://e7ketha.com" className="mt-6 inline-block rounded-xl bg-[#675de8] px-4 py-2.5 text-xs font-bold">الموقع</a>
         </div>
       </div>
     );
