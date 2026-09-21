@@ -464,7 +464,7 @@ export function AuthPage({ register = false }: { register?: boolean }) {
             transform: flipping ? undefined : `rotateX(${tilt.x}deg) rotateY(${tilt.y}deg)`,
           }}
         >
-          <div className={`auth-flip-inner ${isRegister ? 'is-flipped' : ''} ${flipping ? 'is-animating' : ''}`}>
+          <div className={`auth-flip-inner ${isRegister ? 'is-flipped' : ''} ${flipping ? 'is-animating' : ''`}>
             <div className="auth-flip-face auth-flip-face-front">
               {faceCard('login')}
               <div className="auth-edge-shine" />
@@ -522,34 +522,94 @@ export function PasswordResetPage() {
   const [confirm, setConfirm] = useState('');
   const [ready, setReady] = useState(false);
   const [checking, setChecking] = useState(true);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [focused, setFocused] = useState<string | null>(null);
 
   useEffect(() => {
     if (!supabase) {
       setChecking(false);
+      setErrorMsg('لم يتم إعداد المصادقة بعد.');
       return;
     }
+
     let cancelled = false;
+
     const markReady = () => {
-      if (!cancelled) {
-        setReady(true);
-        setChecking(false);
-      }
-    };
-    void supabase.auth.getSession().then(({ data }) => {
       if (cancelled) return;
-      if (data.session) markReady();
-      else setChecking(false);
+      setReady(true);
+      setChecking(false);
+      setErrorMsg(null);
+    };
+
+    const markFail = (msg: string) => {
+      if (cancelled) return;
+      setReady(false);
+      setChecking(false);
+      setErrorMsg(msg);
+    };
+
+    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY') markReady();
+      if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session) markReady();
     });
-    const { data } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN' || (event === 'INITIAL_SESSION' && session)) {
-        markReady();
+
+    (async () => {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const code = params.get('code');
+        if (code) {
+          const { error } = await supabase.auth.exchangeCodeForSession(code);
+          if (error) {
+            markFail(error.message || 'رابط الاستعادة غير صالح أو منتهي.');
+            return;
+          }
+          window.history.replaceState({}, '', '/reset-password');
+          markReady();
+          return;
+        }
+
+        const hash = window.location.hash.replace(/^#/, '');
+        if (hash) {
+          const hp = new URLSearchParams(hash);
+          const access_token = hp.get('access_token');
+          const refresh_token = hp.get('refresh_token');
+          const type = hp.get('type');
+          if (access_token && refresh_token && (type === 'recovery' || type === 'magiclink' || !type)) {
+            const { error } = await supabase.auth.setSession({ access_token, refresh_token });
+            if (error) {
+              markFail(error.message || 'تعذر تفعيل جلسة الاستعادة.');
+              return;
+            }
+            window.history.replaceState({}, '', '/reset-password');
+            markReady();
+            return;
+          }
+        }
+
+        const { data } = await supabase.auth.getSession();
+        if (data.session) {
+          markReady();
+          return;
+        }
+
+        await new Promise((r) => setTimeout(r, 800));
+        if (cancelled) return;
+        const again = await supabase.auth.getSession();
+        if (again.data.session) {
+          markReady();
+          return;
+        }
+
+        markFail('افتح رابط الاستعادة من بريدك الإلكتروني. الرابط صالح لفترة محدودة.');
+      } catch (e) {
+        markFail(e instanceof Error ? e.message : 'حدث خطأ أثناء التحقق من الرابط.');
       }
-    });
+    })();
+
     return () => {
       cancelled = true;
-      data.subscription.unsubscribe();
+      listener.subscription.unsubscribe();
     };
   }, []);
 
@@ -574,9 +634,9 @@ export function PasswordResetPage() {
       toast.error(error.message);
       return;
     }
-    toast.success('تم تحديث كلمة المرور بنجاح. سجّل الدخول الآن.');
+    toast.success('تم تحديث كلمة المرور بنجاح.');
     await supabase.auth.signOut();
-    window.location.href = '/login';
+    window.location.replace('/login');
   };
 
   const inputCls = (key: string) =>
@@ -596,21 +656,25 @@ export function PasswordResetPage() {
             <LockKeyhole size={22} className="text-white" strokeWidth={1.7} />
           </div>
           <h1 className="text-2xl font-extrabold text-white">كلمة مرور جديدة</h1>
-          <p className="mt-2 text-sm leading-7 text-white/50">اختر كلمة مرور قوية لحسابك في رِواية.</p>
+          <p className="mt-2 text-sm leading-7 text-white/50">أدخل كلمة المرور الجديدة ثم أكّدها للتحديث.</p>
         </div>
 
         {checking ? (
-          <p className="text-center text-sm text-white/50">جارٍ التحقق من رابط الاستعادة...</p>
+          <div className="flex flex-col items-center gap-3 py-6">
+            <RefreshCw size={22} className="animate-spin text-[#aaa4ff]" />
+            <p className="text-sm text-white/50">جارٍ تجهيز صفحة الاستعادة...</p>
+          </div>
         ) : ready ? (
           <form onSubmit={submit} className="grid gap-3.5">
             <label className="grid gap-2 text-[11px] font-bold text-white/70">
-              <span>كلمة المرور الجديدة</span>
+              <span>كلمة السر الجديدة</span>
               <input
                 required
                 minLength={6}
                 type="password"
                 value={password}
                 dir="ltr"
+                autoComplete="new-password"
                 placeholder="••••••••"
                 onChange={(e) => setPassword(e.target.value)}
                 onFocus={() => setFocused('pw')}
@@ -619,13 +683,14 @@ export function PasswordResetPage() {
               />
             </label>
             <label className="grid gap-2 text-[11px] font-bold text-white/70">
-              <span>تأكيد كلمة المرور</span>
+              <span>تأكيد كلمة السر</span>
               <input
                 required
                 minLength={6}
                 type="password"
                 value={confirm}
                 dir="ltr"
+                autoComplete="new-password"
                 placeholder="••••••••"
                 onChange={(e) => setConfirm(e.target.value)}
                 onFocus={() => setFocused('cf')}
@@ -638,15 +703,25 @@ export function PasswordResetPage() {
               type="submit"
               className="mt-1 rounded-2xl bg-gradient-to-l from-[#675de8] to-[#7067ef] py-3.5 text-xs font-extrabold text-white shadow-lg shadow-[#675de8]/30 transition hover:brightness-110 disabled:opacity-60"
             >
-              {saving ? 'جارٍ الحفظ...' : 'حفظ كلمة المرور'}
+              {saving ? (
+                <span className="inline-flex items-center gap-2">
+                  <RefreshCw size={14} className="animate-spin" />
+                  جارٍ التحديث...
+                </span>
+              ) : (
+                'تحديث كلمة السر'
+              )}
             </button>
           </form>
         ) : (
           <div className="space-y-4 text-center">
             <p className="text-sm leading-7 text-white/55">
-              افتح رابط استعادة كلمة المرور من بريدك الإلكتروني للوصول إلى هذه الصفحة. الرابط صالح لفترة محدودة.
+              {errorMsg || 'افتح رابط الاستعادة من بريدك الإلكتروني.'}
             </p>
-            <Link href="/login" className="inline-flex rounded-xl bg-[#675de8] px-5 py-3 text-xs font-bold text-white transition hover:brightness-110">
+            <Link
+              href="/login"
+              className="inline-flex rounded-xl bg-[#675de8] px-5 py-3 text-xs font-bold text-white transition hover:brightness-110"
+            >
               العودة لتسجيل الدخول
             </Link>
           </div>
