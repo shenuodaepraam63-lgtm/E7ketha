@@ -4,6 +4,7 @@ import { httpBatchLink } from "@trpc/client";
 import { createRoot } from "react-dom/client";
 import superjson from "superjson";
 import App from "./App";
+import { AnalyticsRouteTracker } from "@/components/AnalyticsRouteTracker";
 import "./index.css";
 import { supabase } from "@/lib/supabase";
 
@@ -23,10 +24,19 @@ queryClient.getMutationCache().subscribe(event => {
   }
 });
 
+/** Route all browser tRPC traffic through api.e7ketha.com (same-origin on api host / localhost). */
+function resolveTrpcUrl() {
+  if (typeof window === "undefined") return "/api/trpc";
+  const host = window.location.hostname.toLowerCase();
+  if (host === "localhost" || host === "127.0.0.1") return "/api/trpc";
+  if (host === "api.e7ketha.com" || host.startsWith("api.")) return "/api/trpc";
+  return "https://api.e7ketha.com/api/trpc";
+}
+
 const trpcClient = trpc.createClient({
   links: [
     httpBatchLink({
-      url: "/api/trpc",
+      url: resolveTrpcUrl(),
       transformer: superjson,
       async headers() {
         const { data } = await supabase?.auth.getSession() ?? { data: { session: null } };
@@ -45,6 +55,7 @@ const trpcClient = trpc.createClient({
 const rootElement = document.getElementById("root")!;
 const app = <trpc.Provider client={trpcClient} queryClient={queryClient}>
   <QueryClientProvider client={queryClient}>
+    <AnalyticsRouteTracker />
     <App />
   </QueryClientProvider>
 </trpc.Provider>;

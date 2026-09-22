@@ -24,11 +24,8 @@ function clientIp(req: Request): string {
 }
 
 type LimitConfig = {
-  /** Max requests in the window */
   max: number;
-  /** Window length in milliseconds */
   windowMs: number;
-  /** Prefix for Redis / memory keys */
   prefix: string;
 };
 
@@ -59,73 +56,57 @@ function memoryLimit(config: LimitConfig): RequestHandler {
   };
 }
 
-type UpstashLimiter = {
-  limit: (id: string) => Promise<{
-    success: boolean;
-    limit: number;
-    remaining: number;
-    reset: number;
-  }>;
+type RedisClient = {
+  incr: (key: string) => Promise<number>;
+  expire: (key: string, seconds: number) => Promise<unknown>;
+  ttl: (key: string) => Promise<number>;
 };
 
-let upstashReady: Promise<{
-  api: UpstashLimiter | null;
-  auth: UpstashLimiter | null;
-}> | null = null;
+let redisReady: Promise<RedisClient | null> | null = null;
 
-async function getUpstashLimiters() {
-  if (upstashReady) return upstashReady;
-  upstashReady = (async () => {
+async function getRedis(): Promise<RedisClient | null> {
+  if (redisReady) return redisReady;
+  redisReady = (async () => {
     const url = process.env.UPSTASH_REDIS_REST_URL;
     const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-    if (!url || !token) return { api: null, auth: null };
+    if (!url || !token) return null;
     try {
       const { Redis } = await import("@upstash/redis");
-      const { Ratelimit } = await import("@upstash/ratelimit");
-      const redis = new Redis({ url, token });
-      const api = new Ratelimit({
-        redis,
-        limiter: Ratelimit.slidingWindow(120, "1 m"),
-        prefix: "e7ketha:rl:api",
-        analytics: true,
-      });
-      const auth = new Ratelimit({
-        redis,
-        limiter: Ratelimit.slidingWindow(15, "1 m"),
-        prefix: "e7ketha:rl:auth",
-        analytics: true,
-      });
-      return { api, auth };
+      return new Redis({ url, token }) as unknown as RedisClient;
     } catch (err) {
-      console.warn("[rateLimit] Upstash unavailable, using in-memory fallback", err);
-      return { api: null, auth: null };
+      console.warn("[rateLimit] Upstash Redis unavailable, using in-memory fallback", err);
+      return null;
     }
   })();
-  return upstashReady;
+  return redisReady;
 }
 
-function upstashOrMemory(
-  kind: "api" | "auth",
-  memory: RequestHandler,
-): RequestHandler {
+function redisOrMemory(config: LimitConfig, memory: RequestHandler): RequestHandler {
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const limiters = await getUpstashLimiters();
-      const limiter = kind === "auth" ? limiters.auth : limiters.api;
-      if (!limiter) return memory(req, res, next);
+      const redis = await getRedis();
+      if (!redis) return memory(req, res, next);
 
-      const result = await limiter.limit(clientIp(req));
-      res.setHeader("X-RateLimit-Limit", String(result.limit));
-      res.setHeader("X-RateLimit-Remaining", String(result.remaining));
-      res.setHeader("X-RateLimit-Reset", String(Math.ceil(result.reset / 1000)));
+      const key = `e7ketha:rl:${config.prefix}:${clientIp(req)}`;
+      const count = await redis.incr(key);
+      if (count === 1) {
+        await redis.expire(key, Math.ceil(config.windowMs / 1000));
+      }
+      let ttl = await redis.ttl(key);
+      if (ttl < 0) ttl = Math.ceil(config.windowMs / 1000);
 
-      if (!result.success) {
-        const retryAfter = Math.max(1, Math.ceil((result.reset - Date.now()) / 1000));
-        res.setHeader("Retry-After", String(retryAfter));
+      const remaining = Math.max(0, config.max - count);
+      const reset = Math.ceil(Date.now() / 1000) + ttl;
+      res.setHeader("X-RateLimit-Limit", String(config.max));
+      res.setHeader("X-RateLimit-Remaining", String(remaining));
+      res.setHeader("X-RateLimit-Reset", String(reset));
+
+      if (count > config.max) {
+        res.setHeader("Retry-After", String(Math.max(1, ttl)));
         return res.status(429).json({
           error: "too_many_requests",
           message: "طلبات كثيرة جداً. حاول بعد قليل.",
-          retryAfter,
+          retryAfter: Math.max(1, ttl),
         });
       }
       next();
@@ -140,7 +121,13 @@ const apiMemory = memoryLimit({ max: 120, windowMs: 60_000, prefix: "api" });
 const authMemory = memoryLimit({ max: 15, windowMs: 60_000, prefix: "auth" });
 
 /** General API / tRPC: 120 req / min per IP (Redis when configured). */
-export const apiRateLimit: RequestHandler = upstashOrMemory("api", apiMemory);
+export const apiRateLimit: RequestHandler = redisOrMemory(
+  { max: 120, windowMs: 60_000, prefix: "api" },
+  apiMemory,
+);
 
 /** Auth-sensitive routes: 15 req / min per IP. */
-export const authRateLimit: RequestHandler = upstashOrMemory("auth", authMemory);
+export const authRateLimit: RequestHandler = redisOrMemory(
+  { max: 15, windowMs: 60_000, prefix: "auth" },
+  authMemory,
+);

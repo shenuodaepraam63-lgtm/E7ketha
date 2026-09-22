@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowUpLeft, ChevronLeft, Sparkles, WandSparkles } from 'lucide-react';
+import { ArrowUpLeft, ChevronLeft, Sparkles } from 'lucide-react';
 import { Link } from 'wouter';
 import { GlobalSearch } from '@/components/GlobalSearch';
 import { NovelCard } from '@/components/NovelCard';
@@ -33,13 +33,13 @@ export default function Home() {
         <div className="container relative z-30 grid min-h-[570px] items-center py-20 md:min-h-[620px] md:grid-cols-[1fr_1.15fr] md:py-24">
           <div className="order-1 max-w-[590px] md:order-2">
             <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/[.07] px-3 py-1.5 text-[11px] font-semibold text-[#d8d5ff]">
-              <Sparkles size={13} className="text-[#9f96ff]" /> مساحة أهدأ لاكتشاف ما يستحق القراءة
+              <Sparkles size={13} className="text-[#9f96ff]" /> محرك بحث للروايات العربية
             </div>
             <h1 className="max-w-[650px] text-[43px] font-extrabold leading-[1.18] sm:text-[58px]">
               اكتشف روايتك<br />
               <span className="bg-gradient-to-l from-[#c3bdff] via-[#8f86ff] to-[#ffcf9b] bg-clip-text text-transparent">القادمة.</span>
             </h1>
-            <p className="mt-6 max-w-[490px] text-base leading-8 text-white/65">ابحث واستكشف مكتبة رواية الحية من أول فكرة لحد آخر صفحة.</p>
+            <p className="mt-6 max-w-[490px] text-base leading-8 text-white/65">محرك بحث للروايات العربية — ابحث بالعنوان أو المؤلف أو التصنيف واكتشف ما يستحق القراءة.</p>
             <div className="relative z-[60] mt-9 max-w-[610px]">
               <GlobalSearch hero />
             </div>
@@ -49,7 +49,7 @@ export default function Home() {
       <main className="relative z-0 container py-16 md:py-20">
         <section>
           <SectionHeading eyebrow="الأكثر بحثًا" title="الروايات التي يتكلم عنها القرّاء" subtitle="نتائج حية من مكتبة رِواية." href="/explore" />
-          <div className="-mx-1 flex gap-5 overflow-x-auto px-1 pb-5">
+          <div className="scroll-rail -mx-1 px-1">
             {novels.map((novel) => (
               <NovelCard key={novel.id} novel={novel} />
             ))}
@@ -57,7 +57,7 @@ export default function Home() {
         </section>
         <section className="mt-20">
           <SectionHeading eyebrow="حسب المزاج" title="استكشف حسب مزاجك" subtitle="اختار الباب اللي يشدك." />
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
             {genres.map((genre) => (
               <GenreCard key={genre.slug} genre={genre} />
             ))}
@@ -65,20 +65,21 @@ export default function Home() {
         </section>
         <section className="mt-20">
           <SectionHeading eyebrow="أصوات تستحق المتابعة" title="مؤلفون يستحقون الاكتشاف" subtitle="تعرف على أصحاب العوالم التي لا تُنسى." />
-          <div className="-mx-1 flex gap-4 overflow-x-auto px-1 pb-4">
+          <div className="scroll-rail -mx-1 px-1">
             {authors.map((author) => (
               <AuthorCard key={author.slug} author={author} />
             ))}
           </div>
         </section>
         <section className="relative mt-24 overflow-hidden rounded-[28px] bg-[#121a3b] px-6 py-12 text-white md:px-14 md:py-16">
+          <div className="pointer-events-none absolute -left-20 top-0 size-72 rounded-full bg-[#5b4de8]/20 blur-3xl" />
           <div className="relative grid items-center gap-10 md:grid-cols-[1fr_auto]">
             <div>
               <div className="section-label mb-3 text-[#9d95ff]">مقترحات على مقاسك</div>
               <h2 className="max-w-xl text-3xl font-extrabold md:text-4xl">ربما تعجبك هذه الروايات</h2>
               <p className="mt-3 text-sm leading-7 text-white/55">اختيارات مشابهة لما تبحث عنه.</p>
             </div>
-            <Link href="/discover" className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-[#eeeefe] px-5 text-xs font-extrabold text-[#171e42]">
+            <Link href="/discover" className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-[#eeeefe] px-5 text-xs font-extrabold text-[#171e42] transition hover:bg-white">
               ابدأ الاكتشاف <ArrowUpLeft size={16} />
             </Link>
           </div>

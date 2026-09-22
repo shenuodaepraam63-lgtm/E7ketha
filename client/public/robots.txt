@@ -1,6 +1,5 @@
 User-agent: *
 Allow: /
-Disallow: /admin
 Disallow: /api/
 Disallow: /profile
 Disallow: /my-list
@@ -9,4 +8,4 @@ Disallow: /register
 Disallow: /auth/
 Disallow: /reset-password
 Disallow: /search
-Sitemap: https://e7ketha.vercel.app/sitemap.xml
+Sitemap: https://e7ketha.com/sitemap.xml

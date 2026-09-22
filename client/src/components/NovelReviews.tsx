@@ -1,181 +1,181 @@
-import { useMemo, useState } from 'react';
-import { MessageSquare, Star } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Loader2, MessageSquare, Star } from 'lucide-react';
+import { toast } from 'sonner';
+import { useAuth } from '@/_core/hooks/useAuth';
+import { trpc } from '@/lib/trpc';
 
 function Stars({
   value,
   size = 22,
+  interactive = false,
+  onPick,
 }: {
   value: number;
   size?: number;
+  interactive?: boolean;
+  onPick?: (n: number) => void;
 }) {
   return (
     <div className="flex gap-1" role="img" aria-label={`تقييم ${value} من 5`}>
       {[1, 2, 3, 4, 5].map((n) => (
-        <span
+        <button
           key={n}
-          className={n <= value ? 'text-[#c28228]' : 'text-muted-foreground/35'}
-          aria-hidden
+          type="button"
+          disabled={!interactive}
+          onClick={() => onPick?.(n)}
+          className={`${n <= value ? 'text-[#c28228]' : 'text-muted-foreground/35'} ${interactive ? 'cursor-pointer transition hover:scale-110' : 'cursor-default'}`}
+          aria-label={interactive ? `تقييم ${n}` : undefined}
         >
           <Star size={size} fill={n <= value ? 'currentColor' : 'none'} />
-        </span>
+        </button>
       ))}
     </div>
   );
 }
 
-/** آراء نصية ثابتة فقط — غير مرتبطة بقاعدة البيانات */
-const STATIC_REVIEWS: { userName: string; rating: number; body: string; daysAgo: number }[] = [
-  {
-    userName: 'سارة م.',
-    rating: 5,
-    body: 'رواية استثنائية من أول صفحة. الأسلوب سلس والأحداث متماسكة، وأنصح بها بشدة لكل محبي الأدب العربي المعاصر.',
-    daysAgo: 2,
-  },
-  {
-    userName: 'أحمد خليل',
-    rating: 4,
-    body: 'حبكة قوية وشخصيات مقنعة. الجزء الأوسط كان أبطأ قليلاً لكن النهاية عوضت كل شيء.',
-    daysAgo: 5,
-  },
-  {
-    userName: 'نورة العتيبي',
-    rating: 5,
-    body: 'من أجمل ما قرأت هذا العام. اللغة شاعرية دون تكلف، والرسالة الإنسانية واضحة ومؤثرة.',
-    daysAgo: 8,
-  },
-  {
-    userName: 'يوسف ر.',
-    rating: 4,
-    body: 'تجربة قراءة ممتعة. بعض الفصول تحتاج تركيزاً أكثر، لكن القيمة الأدبية عالية جداً.',
-    daysAgo: 12,
-  },
-  {
-    userName: 'مريم حسن',
-    rating: 5,
-    body: 'أعجبتني كثيراً. التشبيهات رائعة والحوار طبيعي. سأعيد قراءتها قريباً إن شاء الله.',
-    daysAgo: 15,
-  },
-  {
-    userName: 'كريم فؤاد',
-    rating: 3,
-    body: 'بداية قوية ثم تباطؤ ملحوظ. النهاية جيدة لكن كنت أتوقع تطوراً أكبر للشخصية الرئيسية.',
-    daysAgo: 18,
-  },
-  {
-    userName: 'ليلى منصور',
-    rating: 5,
-    body: 'رواية تلامس القلب. كل فصل يحمل مفاجأة، والكتابة أنيقة ومؤثرة في آن واحد.',
-    daysAgo: 22,
-  },
-  {
-    userName: 'عمر الشامي',
-    rating: 4,
-    body: 'أسلوب الكاتب مميز. أحببت التفاصيل الدقيقة في وصف الأماكن والأجواء.',
-    daysAgo: 27,
-  },
-  {
-    userName: 'هند جابر',
-    rating: 5,
-    body: 'من الروايات التي تبقى في الذاكرة. أنصح بها لكل من يبحث عن قصة عميقة وممتعة.',
-    daysAgo: 31,
-  },
-  {
-    userName: 'طلال ع.',
-    rating: 4,
-    body: 'قراءة سلسة وممتعة. بعض الحوارات طويلة قليلاً لكنها تخدم الحبكة جيداً.',
-    daysAgo: 36,
-  },
-  {
-    userName: 'رنيم س.',
-    rating: 5,
-    body: 'رواية مكتوبة بروح صادقة. شعرت أني جزء من الأحداث من الصفحة الأولى.',
-    daysAgo: 40,
-  },
-  {
-    userName: 'باسم نبيل',
-    rating: 4,
-    body: 'مستوى أدبي راقٍ. أنصح بها لمحبي الروايات الاجتماعية والواقعية.',
-    daysAgo: 45,
-  },
-];
-
-const PAGE_SIZE = 4;
-
-/** عدّاد ثابت يعتمد على الـ slug فقط (نص/حساب محلي — بدون قاعدة بيانات) */
-function staticCountFromSlug(slug: string): number {
-  let h = 0;
-  for (let i = 0; i < slug.length; i++) h = (h * 31 + slug.charCodeAt(i)) >>> 0;
-  // بين 12 و 87 تقريباً حتى يبدو العداد «يزيد» حسب الرواية
-  return 12 + (h % 76);
+function formatDate(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const diff = Date.now() - d.getTime();
+  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+  if (days <= 0) return 'اليوم';
+  if (days === 1) return 'أمس';
+  if (days < 7) return `منذ ${days} أيام`;
+  if (days < 30) return `منذ ${Math.floor(days / 7)} أسابيع`;
+  return d.toLocaleDateString('ar', { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
-function formatRelativeDate(daysAgo: number): string {
-  if (daysAgo <= 1) return 'اليوم';
-  if (daysAgo <= 2) return 'أمس';
-  if (daysAgo < 7) return `منذ ${daysAgo} أيام`;
-  if (daysAgo < 30) return `منذ ${Math.floor(daysAgo / 7)} أسابيع`;
-  return `منذ ${Math.floor(daysAgo / 30)} شهر`;
-}
+const PAGE_SIZE = 6;
 
 export function NovelReviews({
   slug,
   avgRating,
+  ratingCount = 0,
 }: {
   slug: string;
   avgRating: number;
   ratingCount?: number;
 }) {
+  const { user } = useAuth();
   const [visible, setVisible] = useState(PAGE_SIZE);
+  const [body, setBody] = useState('');
+  const [myStars, setMyStars] = useState(0);
+  const [prefilled, setPrefilled] = useState(false);
+
+  const list = trpc.reviews.list.useQuery({ slug, limit: 100 }, { enabled: Boolean(slug) });
+  const mine = trpc.reviews.mine.useQuery({ slug }, { enabled: Boolean(user && slug) });
+  const utils = trpc.useUtils();
+
+  useEffect(() => {
+    if (prefilled || !mine.data) return;
+    if (mine.data.body) setBody(mine.data.body);
+    if (mine.data.rating) setMyStars(Number(mine.data.rating));
+    setPrefilled(true);
+  }, [mine.data, prefilled]);
+
+  const upsert = trpc.reviews.upsert.useMutation({
+    onSuccess: () => {
+      toast.success('تم إرسال رأيك — سيظهر بعد المراجعة إن لزم');
+      setBody('');
+      void utils.reviews.list.invalidate({ slug });
+      void utils.reviews.mine.invalidate({ slug });
+    },
+    onError: (error) => toast.error(error.message),
+  });
 
   const displayAvg = avgRating > 10 ? avgRating / 100 : avgRating;
-  const totalCount = useMemo(() => staticCountFromSlug(slug || 'default'), [slug]);
+  const items = list.data ?? [];
+  const totalCount = items.length || ratingCount || 0;
+  const shown = items.slice(0, visible);
+  const hasMore = visible < items.length;
 
-  // نكرر الآراء النصية حسب الحاجة لملء العداد الظاهر
-  const allItems = useMemo(() => {
-    const items: { id: string; userName: string; rating: number; body: string; label: string }[] = [];
-    for (let i = 0; i < totalCount; i++) {
-      const base = STATIC_REVIEWS[i % STATIC_REVIEWS.length]!;
-      items.push({
-        id: `static-${i}`,
-        userName: base.userName,
-        rating: base.rating,
-        body: base.body,
-        label: formatRelativeDate(base.daysAgo + Math.floor(i / STATIC_REVIEWS.length) * 3),
-      });
+  const computedAvg = useMemo(() => {
+    if (!items.length) return displayAvg;
+    const withRating = items.filter((r) => typeof r.rating === 'number' && r.rating > 0);
+    if (!withRating.length) return displayAvg;
+    const sum = withRating.reduce((acc, r) => acc + Number(r.rating), 0);
+    return sum / withRating.length;
+  }, [items, displayAvg]);
+
+  const submit = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!user) {
+      toast.error('سجّل الدخول لكتابة رأيك');
+      return;
     }
-    return items;
-  }, [totalCount]);
-
-  const shown = allItems.slice(0, visible);
-  const hasMore = visible < allItems.length;
+    if (body.trim().length < 20) {
+      toast.error('اكتب رأياً أوضح (20 حرفاً على الأقل)');
+      return;
+    }
+    upsert.mutate({
+      slug,
+      body: body.trim(),
+      rating: myStars > 0 ? myStars : undefined,
+    });
+  };
 
   return (
-    <section className="mb-12 space-y-6">
-      <div className="rounded-[20px] border border-border bg-card p-5 md:p-6">
-        <div className="mb-5 flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <h2 className="text-base font-extrabold md:text-lg">تقييمات القراء</h2>
-            <p className="mt-1 text-xs text-muted-foreground">آراء معروضة كنص فقط</p>
+    <section className="mb-14 grid gap-6" aria-labelledby="reviews-heading">
+      <div className="grid gap-4 md:grid-cols-[220px_1fr]">
+        <div className="rounded-[20px] border border-border bg-card p-5 text-center">
+          <p id="reviews-heading" className="text-xs font-bold text-muted-foreground">
+            تقييم القراء
+          </p>
+          <p className="mt-2 text-4xl font-black text-[#b9761e]">
+            {computedAvg > 0 ? computedAvg.toFixed(1) : '—'}
+          </p>
+          <div className="mt-2 flex justify-center">
+            <Stars value={Math.round(computedAvg)} size={18} />
           </div>
-          <div className="flex items-center gap-3 rounded-2xl border border-[#c28228]/25 bg-[#fff8ee] px-4 py-2 dark:bg-[#2a2218]">
-            <Stars value={Math.round(displayAvg) || 4} size={18} />
-            <div className="text-sm font-extrabold text-[#9b6417] dark:text-[#e8c48a]">
-              {displayAvg ? displayAvg.toFixed(1) : '4.2'}
-              <span className="ms-1 text-[11px] font-medium text-muted-foreground">({totalCount})</span>
-            </div>
-          </div>
+          <p className="mt-2 text-[11px] text-muted-foreground">
+            {totalCount > 0 ? `${totalCount} رأي منشور` : 'لا توجد آراء منشورة بعد'}
+          </p>
         </div>
 
-        <div className="rounded-2xl border border-[#675de8]/20 bg-gradient-to-br from-[#f8f7ff] to-transparent p-4 dark:from-[#1a1a2e]">
+        <div className="rounded-[20px] border border-[#675de8]/20 bg-gradient-to-br from-[#f8f7ff] to-transparent p-4 dark:from-[#1a1a2e]">
           <div className="mb-2 flex items-center gap-2">
             <MessageSquare size={16} className="text-[#675de8]" />
-            <h3 className="text-sm font-extrabold">آراء القراء</h3>
+            <h3 className="text-sm font-extrabold">آراء حقيقية من القرّاء</h3>
           </div>
           <p className="text-[11px] leading-6 text-muted-foreground">
-            هذا القسم يعرض نصوصاً ثابتة للعرض فقط وغير مرتبط بقاعدة البيانات.
+            يُعرض هنا فقط ما أرسله مستخدمون مسجّلون. لا توجد تعليقات تجريبية أو ثابتة.
           </p>
         </div>
       </div>
+
+      {user ? (
+        <form onSubmit={submit} className="rounded-[20px] border border-border bg-card p-5">
+          <h3 className="mb-3 text-sm font-extrabold">
+            {mine.data ? 'عدّل رأيك' : 'اكتب رأيك'}
+          </h3>
+          <div className="mb-3">
+            <Stars value={myStars || Number(mine.data?.rating) || 0} size={22} interactive onPick={setMyStars} />
+          </div>
+          <textarea
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+            rows={4}
+            placeholder="شارك انطباعك الحقيقي عن الرواية (٢٠ حرفاً على الأقل)…"
+            className="w-full rounded-xl border border-border bg-background p-3 text-sm outline-none focus:border-[#8279ee]"
+          />
+          <button
+            type="submit"
+            disabled={upsert.isPending}
+            className="mt-3 inline-flex items-center gap-2 rounded-xl bg-[#171e42] px-4 py-2.5 text-xs font-bold text-white disabled:opacity-60"
+          >
+            {upsert.isPending ? <Loader2 size={14} className="animate-spin" /> : null}
+            نشر الرأي
+          </button>
+        </form>
+      ) : (
+        <p className="text-center text-xs text-muted-foreground">
+          <a href="/login" className="font-bold text-[#675de8]">
+            سجّل الدخول
+          </a>{' '}
+          لكتابة رأيك الحقيقي عن الرواية.
+        </p>
+      )}
 
       <div className="rounded-[20px] border border-border bg-card p-5 md:p-6">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
@@ -183,35 +183,41 @@ export function NovelReviews({
           <span className="text-[11px] text-muted-foreground">{totalCount} رأي</span>
         </div>
 
-        <ul className="space-y-4">
-          {shown.map((item) => (
-            <li key={item.id} className="rounded-2xl border border-border/70 bg-background/50 p-4">
-              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                <span className="text-xs font-bold">{item.userName}</span>
-                <div className="flex items-center gap-2">
-                  <Stars value={item.rating} size={14} />
-                  <time className="text-[10px] text-muted-foreground">{item.label}</time>
+        {list.isLoading ? (
+          <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
+            <Loader2 size={16} className="animate-spin" /> جارٍ التحميل…
+          </div>
+        ) : shown.length === 0 ? (
+          <p className="py-8 text-center text-sm text-muted-foreground">
+            لا توجد آراء منشورة لهذه الرواية بعد. كن أول من يكتب رأياً حقيقياً.
+          </p>
+        ) : (
+          <ul className="space-y-4">
+            {shown.map((item) => (
+              <li key={item.id} className="rounded-2xl border border-border/70 bg-background/50 p-4">
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-xs font-bold">{item.userName || 'قارئ'}</span>
+                  <div className="flex items-center gap-2">
+                    {item.rating ? <Stars value={Number(item.rating)} size={14} /> : null}
+                    <time className="text-[10px] text-muted-foreground">{formatDate(item.createdAt)}</time>
+                  </div>
                 </div>
-              </div>
-              <p className="text-sm leading-7 text-foreground/90 whitespace-pre-wrap">{item.body}</p>
-            </li>
-          ))}
-        </ul>
+                <p className="text-sm leading-7 text-foreground/90 whitespace-pre-wrap">{item.body}</p>
+              </li>
+            ))}
+          </ul>
+        )}
 
         {hasMore ? (
           <div className="mt-5 flex justify-center">
             <button
               type="button"
-              onClick={() => setVisible((v) => Math.min(v + PAGE_SIZE, allItems.length))}
+              onClick={() => setVisible((v) => Math.min(v + PAGE_SIZE, items.length))}
               className="rounded-xl border border-[#675de8]/35 bg-[#f0eeff] px-5 py-2.5 text-xs font-extrabold text-[#5548d1] transition hover:bg-[#e8e5ff] dark:bg-[#24224c] dark:text-[#c8c4ff]"
             >
-              عرض المزيد ({allItems.length - visible} متبقية)
+              عرض المزيد ({items.length - visible} متبقية)
             </button>
           </div>
-        ) : null}
-
-        {!hasMore && allItems.length > PAGE_SIZE ? (
-          <p className="mt-4 text-center text-[11px] text-muted-foreground">تم عرض كل الآراء</p>
         ) : null}
       </div>
     </section>

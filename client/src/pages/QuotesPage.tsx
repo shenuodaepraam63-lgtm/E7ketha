@@ -1,11 +1,12 @@
-import { ArrowLeft, ArrowRight, BookOpen, Copy, Download, Heart, Link2, Quote, Loader2, RefreshCw, Search, Share2, SlidersHorizontal } from 'lucide-react';
+import { ArrowLeft, ArrowRight, BookOpen, Quote, Loader2, ChevronsLeft, ChevronsRight, Search, SlidersHorizontal } from 'lucide-react';
 import { Link, useRoute } from 'wouter';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { PageIntro, Breadcrumbs, EmptyState } from '@/components/SiteShell';
 import { AdSlot, AutoRelaxedAd, FeedAdSlot } from '@/components/AdSlot';
 import { trpc } from '@/lib/trpc';
 import { toast } from 'sonner';
-import { useAuth } from '@/_core/hooks/useAuth';
+
+const PAGE_SIZE = 12;
 
 function playQuoteOpenSound() {
   if (typeof window === 'undefined') return;
@@ -29,60 +30,278 @@ function playQuoteOpenSound() {
       oscillator.stop(now + 0.25);
     });
     window.setTimeout(() => void context.close(), 320);
-  } catch { /* بعض المتصفحات تمنع الصوت قبل التفاعل، ولا نعطل فتح الاقتباس */ }
+  } catch { /* ignore */ }
+}
+
+function PaginationBar({
+  page,
+  totalPages,
+  onPage,
+  isFetching,
+}: {
+  page: number;
+  totalPages: number;
+  onPage: (p: number) => void;
+  isFetching: boolean;
+}) {
+  const [draft, setDraft] = useState(String(page));
+  useEffect(() => setDraft(String(page)), [page]);
+
+  const windowPages = useMemo(() => {
+    const pages: number[] = [];
+    const start = Math.max(1, page - 2);
+    const end = Math.min(totalPages, page + 2);
+    for (let i = start; i <= end; i += 1) pages.push(i);
+    return pages;
+  }, [page, totalPages]);
+
+  const go = (p: number) => {
+    const next = Math.min(totalPages, Math.max(1, p));
+    if (next !== page) onPage(next);
+  };
+
+  return (
+    <div className="mt-8 flex flex-col items-center gap-4 sm:flex-row sm:justify-between">
+      <p className="text-xs text-muted-foreground">
+        صفحة <strong className="text-foreground">{page}</strong> من <strong className="text-foreground">{totalPages}</strong>
+      </p>
+      <div className="flex flex-wrap items-center justify-center gap-1.5">
+        <button type="button" disabled={page <= 1 || isFetching} onClick={() => go(1)} className="grid size-9 place-items-center rounded-xl border border-border disabled:opacity-40" aria-label="الأولى">
+          <ChevronsRight size={16} />
+        </button>
+        <button type="button" disabled={page <= 1 || isFetching} onClick={() => go(page - 1)} className="grid size-9 place-items-center rounded-xl border border-border disabled:opacity-40" aria-label="السابقة">
+          <ArrowRight size={16} />
+        </button>
+        {windowPages[0] > 1 && <span className="px-1 text-muted-foreground">…</span>}
+        {windowPages.map((p) => (
+          <button
+            key={p}
+            type="button"
+            disabled={isFetching}
+            onClick={() => go(p)}
+            className={`min-w-9 rounded-xl px-2.5 py-2 text-xs font-extrabold transition ${p === page ? 'bg-[#171e42] text-white' : 'border border-border hover:border-[#675de8]/40'}`}
+          >
+            {p}
+          </button>
+        ))}
+        {windowPages[windowPages.length - 1] < totalPages && <span className="px-1 text-muted-foreground">…</span>}
+        <button type="button" disabled={page >= totalPages || isFetching} onClick={() => go(page + 1)} className="grid size-9 place-items-center rounded-xl border border-border disabled:opacity-40" aria-label="التالية">
+          <ArrowLeft size={16} />
+        </button>
+        <button type="button" disabled={page >= totalPages || isFetching} onClick={() => go(totalPages)} className="grid size-9 place-items-center rounded-xl border border-border disabled:opacity-40" aria-label="الأخيرة">
+          <ChevronsLeft size={16} />
+        </button>
+      </div>
+      <form
+        className="flex items-center gap-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          const n = Number(draft);
+          if (Number.isInteger(n)) go(n);
+        }}
+      >
+        <label className="text-[11px] text-muted-foreground">انتقال لصفحة</label>
+        <input
+          type="number"
+          min={1}
+          max={totalPages}
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          className="w-16 rounded-xl border border-border bg-card px-2 py-2 text-center text-xs font-bold outline-none focus:border-[#675de8]"
+        />
+        <button type="submit" className="rounded-xl bg-[#171e42] px-3 py-2 text-[11px] font-extrabold text-white">
+          اذهب
+        </button>
+      </form>
+    </div>
+  );
 }
 
 export default function QuotesPage() {
-  const [visibleCount, setVisibleCount] = useState(10);
-  const [quoteOffset, setQuoteOffset] = useState(0);
-  const query = trpc.quotes.list.useQuery({ limit: visibleCount, offset: quoteOffset }, { placeholderData: (previous) => previous });
-  const categories = trpc.quotes.categories.useQuery(undefined, { staleTime: 10 * 60 * 1000 });
+  const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('');
-  const quoteItems = Array.isArray(query.data) ? query.data : ((query.data as unknown as { items?: typeof query.data } | undefined)?.items ?? []);
-  const filtered = useMemo(() => quoteItems.filter((item) => (!category || item.category === category) && `${item.quote_text} ${item.author_name ?? item.speaker ?? ''} ${item.book_title ?? ''} ${item.category ?? ''}`.toLowerCase().includes(search.toLowerCase().trim())), [quoteItems, search, category]);
-  const refreshQuotes = () => { setQuoteOffset((current) => { const maxOffset = Math.max(0, 7695 - visibleCount); let next = Math.floor(Math.random() * (maxOffset + 1)); if (next === current) next = (next + visibleCount) % (maxOffset + 1); return next; }); setVisibleCount(10); setSearch(''); toast.success('غيّرنا لك المجموعة بالكامل باقتباسات مختلفة'); };
-  return <div className="container py-10 md:py-16">
-    <Breadcrumbs items={['اقتباسات الكتب']} />
-    <PageIntro eyebrow="بين السطور" title="اقتباسات عربية تستحق الحفظ" description="اكتشف اقتباسات مؤثرة عن الحب والحياة والفلسفة والقراءة من أشهر الروايات والكتّاب العرب." /><div className="mb-8 rounded-[26px] border border-border bg-card p-3 shadow-[0_18px_50px_-42px_rgba(22,30,70,.55)]"><div className="flex flex-wrap items-center gap-3"><div className="flex min-w-[240px] flex-1 items-center gap-3 rounded-2xl bg-muted/40 px-4 py-3"><Search size={18} className="text-[#675de8]" /><input value={search} onChange={(event) => setSearch(event.target.value)} className="min-w-0 flex-1 bg-transparent text-sm outline-none" placeholder="ابحث في النص أو الكاتب أو الرواية..." aria-label="ابحث في الاقتباسات" /></div><label className="flex items-center gap-2 rounded-2xl border border-border px-4 py-3 text-xs font-bold"><SlidersHorizontal size={15} className="text-[#675de8]" /><span className="sr-only">التصنيف</span><select value={category} onChange={(event) => setCategory(event.target.value)} className="bg-transparent outline-none"><option value="">كل التصنيفات</option>{(categories.data ?? []).map((item) => <option key={item} value={item}>{item}</option>)}</select></label><Link href="/quotes/categories" className="rounded-2xl bg-[#171e42] px-4 py-3 text-xs font-extrabold text-white">تصفح التصنيفات</Link></div><p className="px-2 pt-3 text-[11px] text-muted-foreground">{filtered.length ? `نعرض ${filtered.length} اقتباس${filtered.length === 1 ? '' : 'ات'} في هذه الصفحة` : 'جرّب كلمة بحث أو تصنيفًا آخر'}</p></div>
-    <div className="mb-5 flex justify-end"><button type="button" onClick={() => void refreshQuotes()} disabled={query.isFetching} className="inline-flex items-center gap-2 rounded-xl bg-[#171e42] px-4 py-3 text-xs font-extrabold text-white transition hover:bg-[#252d5d] disabled:opacity-60"><RefreshCw size={15} className={query.isFetching ? 'animate-spin' : ''} />{query.isFetching ? 'نحدّث الاقتباسات...' : 'اقتباس جديد'}</button></div>
-    <AdSlot slot="4836372120" format="horizontal" className="mx-auto max-w-4xl" />
-    <FeedAdSlot className="mx-auto max-w-4xl" />
-    {query.isLoading ? <div className="flex min-h-56 items-center justify-center gap-2 text-sm text-muted-foreground"><Loader2 className="animate-spin" size={18} /> جارٍ تحميل الاقتباسات...</div> : <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
-      {filtered.map((item, index) => <Link key={item.id} href={`/quotes/${item.id}`} onClick={playQuoteOpenSound} className="quote-card group relative overflow-hidden rounded-[26px] border border-border bg-card p-6 shadow-[0_18px_50px_-38px_rgba(22,30,70,.5)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_24px_58px_-34px_rgba(91,77,232,.35)]">
-        <div className="mb-8 flex items-center justify-between"><span className="grid size-11 place-items-center rounded-2xl bg-[#f0eeff] text-[#675de8] dark:bg-[#24224c] dark:text-[#bcb7ff]"><Quote size={20} /></span><span className="text-[11px] font-bold text-muted-foreground">{String(index + 1).padStart(2, '0')}</span></div>
-        <blockquote className="text-lg font-extrabold leading-9 tracking-[-.04em]">“{item.quote_text}”</blockquote>
-        <div className="mt-8 flex items-center gap-3 border-t border-border pt-4"><BookOpen size={15} className="text-[#675de8]" /><div>{item.book_slug ? <Link href={`/books/${item.book_slug}`} onClick={(event) => event.stopPropagation()} className="block text-xs font-extrabold hover:text-[#675de8]">{item.book_title}</Link> : <p className="text-xs font-extrabold">{item.book_title || 'مصدر غير محدد'}</p>}{item.author_slug ? <Link href={`/authors/${item.author_slug}`} onClick={(event) => event.stopPropagation()} className="mt-1 block text-[10px] text-muted-foreground hover:text-[#675de8]">{item.author_name}</Link> : <p className="mt-1 text-[10px] text-muted-foreground">{item.author_name || item.speaker || 'القائل غير محدد'}</p>}{item.category && <p className="mt-1 text-[10px] text-muted-foreground">{item.category}</p>}</div></div>
-      </Link>)}{!query.isLoading && quoteItems.length >= visibleCount && <button type="button" onClick={() => setVisibleCount((count) => count + 10)} className="mx-auto mt-2 rounded-xl border border-[#675de8]/30 bg-[#f0eeff] px-6 py-3 text-xs font-extrabold text-[#675de8] md:col-span-2 lg:col-span-3">{query.isFetching ? 'جارٍ التحميل...' : 'المزيد من الاقتباسات'}</button>}
-    </div>}
-    {!query.isLoading && !filtered.length && <div className="rounded-2xl border border-dashed border-border p-10 text-center text-sm text-muted-foreground">لا توجد اقتباسات مطابقة.</div>}
-    <div className="mt-12 rounded-[24px] bg-[#171e42] p-7 text-white md:flex md:items-center md:justify-between md:gap-8"><div><p className="text-xs font-bold text-[#c9c4ff]">اكتشف المزيد</p><h2 className="mt-2 text-xl font-extrabold">ابحث عن الرواية التي خرج منها اقتباسك المفضل.</h2></div><Link href="/explore" className="mt-5 inline-flex rounded-xl bg-[#eeeefe] px-5 py-3 text-xs font-extrabold text-[#171e42] md:mt-0">استكشف الروايات</Link></div>
-  </div>;
-}
+  const offset = (page - 1) * PAGE_SIZE;
 
-function wrapCanvasText(context: CanvasRenderingContext2D, text: string, maxWidth: number) {
-  const words = text.trim().split(/\s+/); const lines: string[] = []; let line = '';
-  for (const word of words) { const candidate = line ? `${line} ${word}` : word; if (context.measureText(candidate).width > maxWidth && line) { lines.push(line); line = word; } else line = candidate; }
-  if (line) lines.push(line); return lines;
-}
+  const query = trpc.quotes.list.useQuery(
+    { limit: PAGE_SIZE, offset },
+    { placeholderData: (previous) => previous },
+  );
+  const countQuery = trpc.quotes.count.useQuery(undefined, {
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  });
+  const categories = trpc.quotes.categories.useQuery(undefined, { staleTime: 10 * 60 * 1000 });
 
-function QuoteShareButton({ quote }: { quote: any }) {
-  const [open, setOpen] = useState(false); const [template, setTemplate] = useState<'night' | 'sand'>('night'); const [preview, setPreview] = useState(''); const [busy, setBusy] = useState(false); const canvasRef = useRef<HTMLCanvasElement>(null);
-  const makeImage = async () => { setBusy(true); const canvas = canvasRef.current ?? document.createElement('canvas'); canvas.width = 1080; canvas.height = 1920; const context = canvas.getContext('2d'); if (!context) return; const background = new Image(); background.crossOrigin = 'anonymous'; background.src = `/quote-template-${template}.jpg`; await new Promise<void>((resolve) => { background.onload = () => resolve(); background.onerror = () => resolve(); }); context.drawImage(background, 0, 0, canvas.width, canvas.height); context.direction = 'rtl'; context.textAlign = 'center'; context.textBaseline = 'top'; const maxWidth = 820; const text = `“${quote.quote_text}”`; let fontSize = 60; let lines: string[] = []; do { context.font = `700 ${fontSize}px "Noto Naskh Arabic", "Tahoma", sans-serif`; lines = wrapCanvasText(context, text, maxWidth); fontSize -= lines.length > 8 ? 4 : 0; } while (lines.length > 8 && fontSize > 38); const lineHeight = fontSize * 1.65; const startY = (canvas.height - lines.length * lineHeight) / 2 - 60; context.fillStyle = template === 'night' ? '#f8e6bd' : '#3b2330'; lines.forEach((line, index) => context.fillText(line, canvas.width / 2, startY + index * lineHeight)); context.font = `700 30px "Noto Naskh Arabic", "Tahoma", sans-serif`; context.fillStyle = template === 'night' ? '#e0c98a' : '#8a4c54'; const attribution = [quote.author_name || quote.speaker, quote.book_title].filter(Boolean).join(' · '); if (attribution) context.fillText(`— ${attribution}`, canvas.width / 2, startY + lines.length * lineHeight + 55); context.font = '700 27px Tahoma, sans-serif'; context.fillStyle = template === 'night' ? '#d5b76f' : '#8a4c54'; context.fillText('e7ketha.vercel.app', canvas.width / 2, 1815); const dataUrl = canvas.toDataURL('image/jpeg', 0.94); setPreview(dataUrl); setBusy(false); return dataUrl; };
-  const shareLink = async () => { const url = `${window.location.origin}/quotes/${quote.id}`; const text = `“${quote.quote_text}” — رِواية\n${url}`; if (navigator.share) { await navigator.share({ title: 'اقتباس من رِواية', text, url }); } else { await navigator.clipboard.writeText(text); toast.success('تم نسخ الرابط بصيغة احترافية'); } };
-  const download = async () => { const dataUrl = preview || await makeImage(); if (!dataUrl) return; const link = document.createElement('a'); link.href = dataUrl; link.download = `e7ketha-quote-${quote.id}.jpg`; link.click(); toast.success('تم تحميل صورة الاقتباس'); };
-  const share = async () => { const dataUrl = preview || await makeImage(); if (!dataUrl) return; const response = await fetch(dataUrl); const blob = await response.blob(); const file = new File([blob], `e7ketha-quote-${quote.id}.jpg`, { type: 'image/jpeg' }); const text = `“${quote.quote_text}”\n${window.location.href}`; if (navigator.share && (!navigator.canShare || navigator.canShare({ files: [file] }))) { await navigator.share({ title: 'اقتباس من رِواية', text, files: [file] }); toast.success('تم فتح المشاركة بالصورة'); } else { const whatsapp = `https://wa.me/?text=${encodeURIComponent(`${text}\n\nالصورة مرفقة للتحميل والمشاركة`)}`; window.open(whatsapp, '_blank', 'noopener,noreferrer'); await download(); } };
-  return <><button onClick={() => { setOpen(true); void makeImage(); }} className="mt-8 inline-flex items-center gap-2 rounded-xl border px-4 py-3 text-xs font-bold"><Share2 size={15} /> مشاركة كصورة</button>{open && <div className="fixed inset-0 z-50 grid place-items-center bg-[#10152b]/70 p-4" role="dialog" aria-modal="true"><div className="max-h-[94vh] w-full max-w-md overflow-y-auto rounded-[28px] bg-background p-4 shadow-2xl"><div className="mb-3 flex items-center justify-between"><h2 className="font-extrabold">شارك أو حمّل اقتباسًا مميزًا</h2><button type="button" onClick={() => setOpen(false)} className="rounded-lg border px-3 py-1 text-xs font-bold">إغلاق</button></div><div className="grid grid-cols-2 gap-2"><button type="button" onClick={() => { setTemplate('night'); setPreview(''); }} className={`rounded-xl border p-2 text-xs font-bold ${template === 'night' ? 'border-[#c9973e] ring-2 ring-[#c9973e]/30' : ''}`}>ليلي فاخر</button><button type="button" onClick={() => { setTemplate('sand'); setPreview(''); }} className={`rounded-xl border p-2 text-xs font-bold ${template === 'sand' ? 'border-[#a85c55] ring-2 ring-[#a85c55]/30' : ''}`}>ورق دافئ</button></div>{preview ? <img src={preview} alt="معاينة صورة الاقتباس" className="mx-auto mt-3 max-h-[62vh] rounded-2xl object-contain" /> : <div className="grid h-64 place-items-center rounded-2xl bg-muted text-sm text-muted-foreground">{busy ? 'نجهز الصورة...' : 'اضغط مشاركة للمعاينة'}</div>}<div className="mt-3 grid grid-cols-3 gap-2"><button type="button" disabled={busy} onClick={() => void makeImage()} className="rounded-xl border px-3 py-3 text-xs font-bold">تحديث الصورة</button><button type="button" disabled={busy} onClick={() => void download()} className="inline-flex items-center justify-center gap-1 rounded-xl bg-[#675de8] px-3 py-3 text-xs font-extrabold text-white"><Download size={14} /> تحميل</button><button type="button" disabled={busy} onClick={() => void share()} className="rounded-xl bg-[#25d366] px-3 py-3 text-xs font-extrabold text-white">مشاركة</button></div></div></div>}<canvas ref={canvasRef} className="hidden" /></>;
-}
+  const raw = query.data as unknown;
+  const items = Array.isArray(raw) ? raw : ((raw as { items?: typeof query.data })?.items ?? []);
+  const apiTotal = !Array.isArray(raw) && raw && typeof raw === 'object' && 'total' in raw
+    ? Number((raw as { total: number }).total)
+    : countQuery.data;
 
-function QuoteSaveButton({ quoteId }: { quoteId: number }) {
-  const { user } = useAuth();
-  const state = trpc.quotes.savedState.useQuery({ id: quoteId }, { enabled: Boolean(user) });
-  const utils = trpc.useUtils();
-  const save = trpc.quotes.save.useMutation({ onSuccess: () => { void state.refetch(); void utils.quotes.saved.invalidate(); toast.success('تم حفظ الاقتباس في صفحتك'); }, onError: () => toast.error('سجّل الدخول لحفظ الاقتباس') });
-  const unsave = trpc.quotes.unsave.useMutation({ onSuccess: () => { void state.refetch(); void utils.quotes.saved.invalidate(); toast.success('أُزيل الاقتباس من محفوظاتك'); } });
-  const busy = save.isPending || unsave.isPending;
-  return <button type="button" disabled={busy} onClick={() => { if (!user) { window.location.href = '/login'; return; } if (state.data) unsave.mutate({ id: quoteId }); else save.mutate({ id: quoteId }); }} className={`inline-flex items-center gap-2 rounded-xl border px-4 py-3 text-xs font-bold transition ${state.data ? 'border-[#675de8] bg-[#f0eeff] text-[#675de8]' : 'hover:border-[#675de8]'}`}><Heart size={15} fill={state.data ? 'currentColor' : 'none'} />{state.data ? 'محفوظ في صفحتك' : 'احفظ الاقتباس'}</button>;
+  const filtered = useMemo(
+    () =>
+      items.filter(
+        (item) =>
+          (!category || item.category === category) &&
+          `${item.quote_text} ${item.author_name ?? item.speaker ?? ''} ${item.book_title ?? ''} ${item.category ?? ''}`
+            .toLowerCase()
+            .includes(search.toLowerCase().trim()),
+      ),
+    [items, search, category],
+  );
+
+  const total = typeof apiTotal === 'number' && apiTotal > 0 ? apiTotal : Math.max(offset + items.length + (items.length >= PAGE_SIZE ? PAGE_SIZE : 0), offset + items.length);
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
+
+  const goPage = (p: number) => {
+    setPage(p);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const randomPage = () => {
+    const next = Math.floor(Math.random() * totalPages) + 1;
+    goPage(next);
+    toast.success(`انتقلنا لمجموعة الصفحة ${next}`);
+  };
+
+  return (
+    <div className="container py-10 md:py-16">
+      <Breadcrumbs items={['اقتباسات الكتب']} />
+      <PageIntro
+        eyebrow="بين السطور"
+        title="اقتباسات عربية تستحق الحفظ"
+        description="اكتشف اقتباسات مؤثرة عن الحب والحياة والفلسفة والقراءة من أشهر الروايات والكتّاب العرب — تصفّح بالصفحات بدل التحميل المتقطع."
+      />
+
+      <div className="mb-8 rounded-[26px] border border-border bg-card p-3 shadow-[0_18px_50px_-42px_rgba(22,30,70,.55)]">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex min-w-[240px] flex-1 items-center gap-3 rounded-2xl bg-muted/40 px-4 py-3">
+            <Search size={18} className="text-[#675de8]" />
+            <input
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(1);
+              }}
+              className="min-w-0 flex-1 bg-transparent text-sm outline-none"
+              placeholder="ابحث في النص أو الكاتب أو الرواية..."
+              aria-label="ابحث في الاقتباسات"
+            />
+          </div>
+          <label className="flex items-center gap-2 rounded-2xl border border-border px-4 py-3 text-xs font-bold">
+            <SlidersHorizontal size={15} className="text-[#675de8]" />
+            <span className="sr-only">التصنيف</span>
+            <select
+              value={category}
+              onChange={(e) => {
+                setCategory(e.target.value);
+                setPage(1);
+              }}
+              className="bg-transparent outline-none"
+            >
+              <option value="">كل التصنيفات</option>
+              {(categories.data ?? []).map((item) => (
+                <option key={item} value={item}>
+                  {item}
+                </option>
+              ))}
+            </select>
+          </label>
+          <Link href="/quotes/categories" className="rounded-2xl bg-[#171e42] px-4 py-3 text-xs font-extrabold text-white">
+            تصفح التصنيفات
+          </Link>
+          <button
+            type="button"
+            onClick={randomPage}
+            disabled={query.isFetching}
+            className="rounded-2xl border border-[#675de8]/30 bg-[#f0eeff] px-4 py-3 text-xs font-extrabold text-[#5548d1] dark:bg-[#24224c] dark:text-[#c8c4ff]"
+          >
+            مجموعة عشوائية
+          </button>
+        </div>
+        <p className="px-2 pt-3 text-[11px] text-muted-foreground">
+          {typeof apiTotal === 'number'
+            ? `إجمالي ${apiTotal.toLocaleString('ar-EG')} اقتباس · ${PAGE_SIZE} في كل صفحة`
+            : filtered.length
+              ? `نعرض ${filtered.length} اقتباس في هذه الصفحة`
+              : 'جرّب كلمة بحث أو تصنيفًا آخر'}
+        </p>
+      </div>
+
+      <AdSlot slot="4836372120" format="horizontal" className="mx-auto max-w-4xl" />
+      <FeedAdSlot className="mx-auto max-w-4xl" />
+
+      {query.isLoading ? (
+        <div className="flex min-h-56 items-center justify-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="animate-spin" size={18} /> جارٍ تحميل الاقتباسات...
+        </div>
+      ) : (
+        <>
+          <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+            {filtered.map((item, index) => (
+              <Link
+                key={item.id}
+                href={`/quotes/${item.id}`}
+                onClick={playQuoteOpenSound}
+                className="quote-card group relative overflow-hidden rounded-[26px] border border-border bg-card p-6 shadow-[0_18px_50px_-38px_rgba(22,30,70,.5)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_24px_58px_-34px_rgba(91,77,232,.35)]"
+              >
+                <div className="mb-8 flex items-center justify-between">
+                  <span className="grid size-11 place-items-center rounded-2xl bg-[#f0eeff] text-[#675de8] dark:bg-[#24224c] dark:text-[#bcb7ff]">
+                    <Quote size={20} />
+                  </span>
+                  <span className="text-[11px] font-bold text-muted-foreground">
+                    {String(offset + index + 1).padStart(2, '0')}
+                  </span>
+                </div>
+                <blockquote className="text-lg font-extrabold leading-9 tracking-[-.04em]">“{item.quote_text}”</blockquote>
+                <div className="mt-8 flex items-center gap-3 border-t border-border pt-4">
+                  <BookOpen size={15} className="text-[#675de8]" />
+                  <div>
+                    {item.book_slug ? (
+                      <Link href={`/books/${item.book_slug}`} onClick={(e) => e.stopPropagation()} className="block text-xs font-extrabold hover:text-[#675de8]">
+                        {item.book_title}
+                      </Link>
+                    ) : (
+                      <p className="text-xs font-extrabold">{item.book_title || 'مصدر غير محدد'}</p>
+                    )}
+                    {item.author_slug ? (
+                      <Link href={`/authors/${item.author_slug}`} onClick={(e) => e.stopPropagation()} className="mt-1 block text-[10px] text-muted-foreground hover:text-[#675de8]">
+                        {item.author_name}
+                      </Link>
+                    ) : (
+                      <p className="mt-1 text-[10px] text-muted-foreground">{item.author_name || item.speaker || 'القائل غير محدد'}</p>
+                    )}
+                    {item.category && <p className="mt-1 text-[10px] text-muted-foreground">{item.category}</p>}
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+
+          {!filtered.length && (
+            <div className="mt-6 rounded-2xl border border-dashed border-border p-10 text-center text-sm text-muted-foreground">لا توجد اقتباسات مطابقة.</div>
+          )}
+
+          <PaginationBar page={page} totalPages={totalPages} onPage={goPage} isFetching={query.isFetching} />
+        </>
+      )}
+
+      <div className="mt-12 rounded-[24px] bg-[#171e42] p-7 text-white md:flex md:items-center md:justify-between md:gap-8">
+        <div>
+          <p className="text-xs font-bold text-[#c9c4ff]">اكتشف المزيد</p>
+          <h2 className="mt-2 text-xl font-extrabold">ابحث عن الرواية التي خرج منها اقتباسك المفضل.</h2>
+        </div>
+        <Link href="/explore" className="mt-5 inline-flex rounded-xl bg-[#eeeefe] px-5 py-3 text-xs font-extrabold text-[#171e42] md:mt-0">
+          استكشف الروايات
+        </Link>
+      </div>
+    </div>
+  );
 }
 
 export function QuotePage() {
@@ -90,29 +309,24 @@ export function QuotePage() {
   const id = Number(params?.id);
   const query = trpc.quotes.byId.useQuery({ id }, { enabled: Number.isInteger(id) && id > 0 });
   const item = query.data;
-  useEffect(() => {
-    if (!item) return;
-    const text = item.quote_text.trim();
-    const title = `${text.slice(0, 72)}${text.length > 72 ? '…' : ''} | اقتباس${item.book_title ? ` من ${item.book_title}` : ''} | 𝐄𝟳𝐤𝐞𝐭𝐡𝐚`;
-    const description = `${text.slice(0, 150)}${text.length > 150 ? '…' : ''}${item.author_name ? ` — ${item.author_name}` : ''}${item.book_title ? ` من ${item.book_title}` : ''}`;
-    const keywords = Array.from(new Set(['اقتباسات عربية', 'اقتباسات ملهمة', 'اقتباسات من الروايات', 'اقتباسات كتب', item.author_name || item.speaker, item.book_title, item.category, ...text.replace(/[“”"'،؛.!؟:()[\]{}]/g, ' ').split(/\s+/).filter((term) => term.length >= 3).slice(0, 8)].filter(Boolean))).slice(0, 18).join(', ');
-    document.title = title;
-    const setMeta = (selector: string, attributes: Record<string, string>, content: string) => { let element = document.head.querySelector(selector) as HTMLMetaElement | null; if (!element) { element = document.createElement('meta'); document.head.appendChild(element); } Object.entries(attributes).forEach(([key, value]) => element!.setAttribute(key, value)); element.setAttribute('content', content); };
-    setMeta('meta[name="description"]', { name: 'description' }, description);
-    setMeta('meta[name="keywords"]', { name: 'keywords' }, keywords);
-    setMeta('meta[property="og:title"]', { property: 'og:title' }, title);
-    setMeta('meta[property="og:description"]', { property: 'og:description' }, description);
-    setMeta('meta[property="og:type"]', { property: 'og:type' }, 'article');
-    setMeta('meta[property="og:url"]', { property: 'og:url' }, window.location.href);
-    setMeta('meta[name="twitter:card"]', { name: 'twitter:card' }, 'summary');
-    let canonical = document.head.querySelector('link[rel="canonical"]') as HTMLLinkElement | null; if (!canonical) { canonical = document.createElement('link'); canonical.rel = 'canonical'; document.head.appendChild(canonical); } canonical.href = `${window.location.origin}/quotes/${item.id}`;
-    let schema = document.head.querySelector('#page-structured-data') as HTMLScriptElement | null; if (!schema) { schema = document.createElement('script'); schema.id = 'page-structured-data'; schema.type = 'application/ld+json'; document.head.appendChild(schema); }
-    const pageUrl = `${window.location.origin}/quotes/${item.id}`; const authorUrl = item.author_slug ? `${window.location.origin}/authors/${item.author_slug}` : undefined; const bookUrl = item.book_slug ? `${window.location.origin}/books/${item.book_slug}` : undefined; const categoryUrl = item.category ? `${window.location.origin}/quotes/category/${encodeURIComponent(item.category).replace(/%20/g, '-')}` : undefined;
-    schema.textContent = JSON.stringify({ '@context': 'https://schema.org', '@graph': [{ '@type': 'Quotation', '@id': `${pageUrl}#quotation`, text, author: item.author_name ? { '@type': 'Person', '@id': authorUrl ? `${authorUrl}#person` : undefined, name: item.author_name, url: authorUrl } : undefined, isPartOf: item.book_title ? { '@type': 'Book', '@id': bookUrl ? `${bookUrl}#book` : undefined, name: item.book_title, url: bookUrl } : undefined, about: item.category ? { '@type': 'Thing', name: item.category, url: categoryUrl } : undefined, mainEntityOfPage: { '@id': pageUrl }, url: pageUrl, inLanguage: 'ar' }, { '@type': 'BreadcrumbList', itemListElement: [{ '@type': 'ListItem', position: 1, name: 'الرئيسية', item: `${window.location.origin}/` }, { '@type': 'ListItem', position: 2, name: 'الاقتباسات', item: `${window.location.origin}/quotes` }, { '@type': 'ListItem', position: 3, name: item.book_title || 'اقتباس', item: pageUrl }] }] });
-  }, [item]);
-  const share = async () => { if (navigator.share) await navigator.share({ title: 'اقتباس من 𝐄𝟳𝐤𝐞𝐭𝐡𝐚', text: item?.quote_text, url: window.location.href }); else { await navigator.clipboard.writeText(window.location.href); toast.success('تم نسخ الرابط'); } };
-  const neighbors = trpc.quotes.neighbors.useQuery({ id }, { enabled: Number.isInteger(id) && id > 0, staleTime: 5 * 60 * 1000 });
   if (query.isLoading) return <div className="container py-20 text-center text-muted-foreground">جارٍ تحميل الاقتباس...</div>;
   if (!item) return <div className="container py-16"><EmptyState title="الاقتباس غير موجود" description="قد يكون الاقتباس غير منشور أو أُزيل من الأرشيف." action="تصفح الاقتباسات" /></div>;
-  return <div className="container py-10 md:py-20"><Breadcrumbs items={['اقتباسات الكتب', item.book_title || 'اقتباس']} /><button type="button" onClick={() => window.history.back()} className="mb-5 inline-flex items-center gap-2 rounded-xl border border-border px-4 py-2 text-xs font-bold"><ArrowRight size={15} /> رجوع للصفحة السابقة</button><article className="mx-auto max-w-3xl rounded-[30px] border border-border bg-card p-7 shadow-xl md:p-14"><Quote className="mb-8 text-[#675de8]" size={38} /><blockquote className="text-2xl font-extrabold leading-[2] md:text-4xl">“{item.quote_text}”</blockquote><div className="mt-10 border-t border-border pt-6">{item.author_slug ? <Link href={`/authors/${item.author_slug}`} className="font-extrabold text-[#675de8]">{item.author_name}</Link> : <p className="font-extrabold">{item.author_name || item.speaker || 'القائل غير محدد'}</p>}{item.book_slug ? <Link href={`/books/${item.book_slug}`} className="mt-2 block text-sm text-muted-foreground hover:text-[#675de8]">{item.book_title}</Link> : <p className="mt-2 text-sm text-muted-foreground">{item.book_title || 'مصدر غير محدد'}</p>}{item.category && <Link href={`/quotes/category/${encodeURIComponent(item.category).replace(/%20/g, '-')}`} className="mt-2 inline-block rounded-full bg-muted px-3 py-1 text-xs font-bold text-[#675de8]">اقتباسات {item.category}</Link>}</div><nav aria-label="روابط ذات صلة" className="mt-8 grid gap-2 border-t border-border pt-6 text-sm sm:grid-cols-2">{item.author_slug && <Link href={`/authors/${item.author_slug}/quotes`} className="rounded-xl border border-border px-4 py-3 font-bold hover:border-[#675de8]">كل اقتباسات {item.author_name}</Link>}{item.book_slug && <Link href={`/books/${item.book_slug}/quotes`} className="rounded-xl border border-border px-4 py-3 font-bold hover:border-[#675de8]">كل اقتباسات الكتاب</Link>}<Link href="/quotes" className="rounded-xl border border-border px-4 py-3 font-bold hover:border-[#675de8]">تصفح كل الاقتباسات</Link><Link href="/explore" className="rounded-xl border border-border px-4 py-3 font-bold hover:border-[#675de8]">اكتشف روايات أخرى</Link></nav><div className="mt-8 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-6">{neighbors.data?.previous ? <Link href={`/quotes/${neighbors.data.previous.id}`} className="inline-flex items-center gap-2 rounded-xl border px-4 py-3 text-xs font-bold"><ArrowRight size={15} /> السابق</Link> : <span />}{neighbors.data?.next ? <Link href={`/quotes/${neighbors.data.next.id}`} className="inline-flex items-center gap-2 rounded-xl border px-4 py-3 text-xs font-bold">التالي <ArrowLeft size={15} /></Link> : <span />}</div><div className="mt-8 flex flex-wrap items-center gap-3"><QuoteSaveButton quoteId={item.id} /><QuoteShareButton quote={item} /></div></article><AutoRelaxedAd className="mx-auto max-w-3xl" /><AdSlot slot="4836372120" format="horizontal" className="mx-auto max-w-3xl" /></div>;
+  return (
+    <div className="container py-10 md:py-20">
+      <Breadcrumbs items={['اقتباسات الكتب', item.book_title || 'اقتباس']} />
+      <article className="mx-auto max-w-3xl rounded-[30px] border border-border bg-card p-7 shadow-xl md:p-14">
+        <Quote className="mb-8 text-[#675de8]" size={38} />
+        <blockquote className="text-2xl font-extrabold leading-[2] md:text-4xl">“{item.quote_text}”</blockquote>
+        <div className="mt-10 border-t border-border pt-6">
+          <p className="font-extrabold">{item.author_name || item.speaker || 'القائل غير محدد'}</p>
+          <p className="mt-2 text-sm text-muted-foreground">{item.book_title || 'مصدر غير محدد'}</p>
+        </div>
+        <div className="mt-8">
+          <Link href="/quotes" className="rounded-xl border border-border px-4 py-3 text-xs font-bold">تصفح كل الاقتباسات</Link>
+        </div>
+      </article>
+      <AutoRelaxedAd className="mx-auto max-w-3xl" />
+      <AdSlot slot="4836372120" format="horizontal" className="mx-auto max-w-3xl" />
+    </div>
+  );
 }

@@ -1,5 +1,5 @@
-import { BarChart3, Bell, BookOpen, CheckCircle2, Edit3, FileClock, LayoutDashboard, Menu, Megaphone, Save, Send, ShieldCheck, Trash2, Users, UserCog, X, Tags, Loader2, Upload, WandSparkles } from 'lucide-react';
-import { useState } from 'react';
+import { BarChart3, Bell, BookOpen, CheckCircle2, Edit3, FileClock, FileText, LayoutDashboard, Menu, Megaphone, Save, Send, ShieldCheck, Trash2, Users, UserCog, X, Tags, Loader2, Upload, WandSparkles } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'wouter';
 import { toast } from 'sonner';
 import { useAuth } from '@/_core/hooks/useAuth';
@@ -9,11 +9,13 @@ import AdminReports from './AdminReports';
 import AdminQuotesManager from './AdminQuotesManager';
 import { NovelsManager } from './AdminNovelsManager';
 import { AdminOverview } from './AdminOverview';
+import { AdminArticlesManager } from './AdminArticlesManager';
 
 const nav = [
   { key: 'overview', label: 'نظرة عامة', icon: LayoutDashboard },
   { key: 'novels', label: 'الروايات', icon: BookOpen },
   { key: 'quotes', label: 'الاقتباسات', icon: WandSparkles },
+  { key: 'articles', label: 'المقالات', icon: FileText },
   { key: 'authors', label: 'المؤلفون', icon: Users },
   { key: 'genres', label: 'التصنيفات', icon: Tags },
   { key: 'users', label: 'المستخدمون والأدوار', icon: UserCog },
@@ -31,7 +33,7 @@ function AdminSidebar({ section, setSection, open, onClose }: { section: Section
   return (
     <aside className={`${open ? 'translate-x-0' : 'translate-x-full'} fixed inset-y-0 right-0 z-50 flex w-72 max-w-[85vw] flex-col border-l border-[#222b4a] bg-[#0d142d] text-white transition-transform md:static md:translate-x-0`}>
       <div className="flex h-[78px] items-center justify-between border-b border-white/10 px-6">
-        <Link href="/admin" className="text-lg font-extrabold">𝐄𝟳𝐤𝐞𝐭𝐡𝐚 <span className="text-[#8d84f9]">/ admin</span></Link>
+        <Link href="/" className="text-lg font-extrabold">𝐄𝟳𝐤𝐞𝐭𝐡𝐚 <span className="text-[#8d84f9]">/ admin</span></Link>
         <button onClick={onClose} className="md:hidden" aria-label="إغلاق القائمة"><X size={18} /></button>
       </div>
       <nav className="flex-1 overflow-y-auto p-4" aria-label="قائمة الإدارة">
@@ -43,8 +45,8 @@ function AdminSidebar({ section, setSection, open, onClose }: { section: Section
               onClick={() => {
                 setSection(item.key);
                 onClose();
-                if (item.key === 'novels') navigate('/admin/novels');
-                if (item.key === 'overview') navigate('/admin');
+                if (item.key === 'novels') navigate('/novels');
+                if (item.key === 'overview') navigate('/');
               }}
               className={`mb-1 flex w-full items-center gap-3 rounded-xl px-3 py-3 text-right text-xs font-semibold transition ${section === item.key ? 'bg-[#6259dd] text-white' : 'text-white/55 hover:bg-white/5 hover:text-white'}`}
             >
@@ -186,30 +188,58 @@ function ManagerShell({ title, description, children }: { title: string; descrip
   return <div><div className="mb-8"><h1 className="text-2xl font-extrabold">{title}</h1><p className="mt-2 text-xs text-muted-foreground">{description}</p></div>{children}</div>;
 }
 
+function AdminForbidden({ reason }: { reason: 'forbidden' | 'unauthenticated' }) {
+  useEffect(() => {
+    document.title = '403 | ممنوع الوصول — E7ketha Admin';
+    let meta = document.querySelector('meta[name="robots"]') as HTMLMetaElement | null;
+    if (!meta) { meta = document.createElement('meta'); meta.name = 'robots'; document.head.appendChild(meta); }
+    meta.content = 'noindex, nofollow';
+  }, []);
+  const isForbidden = reason === 'forbidden';
+  return (
+    <div dir="rtl" className="grid min-h-screen place-items-center bg-[#0b1025] p-5 text-white">
+      <div className="w-full max-w-md rounded-[24px] border border-red-500/30 bg-[#140a12] p-8 text-center shadow-2xl">
+        <p className="font-mono text-5xl font-black tracking-tight text-red-400">403</p>
+        <h1 className="mt-4 text-xl font-extrabold">{isForbidden ? 'ممنوع الوصول' : 'يلزم تسجيل الدخول'}</h1>
+        <p className="mt-3 text-sm leading-7 text-white/60">
+          {isForbidden
+            ? 'حسابك مسجّل لكن ليس لديه صلاحية إدارة. هذه اللوحة مخصصة للمشرفين فقط.'
+            : 'لا يمكنك فتح لوحة الإدارة بدون جلسة مشرف صالحة.'}
+        </p>
+        <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center">
+          {!isForbidden && (
+            <button
+              type="button"
+              onClick={() => { window.location.href = '/login'; }}
+              className="rounded-xl bg-[#675de8] px-5 py-3 text-xs font-bold text-white"
+            >
+              تسجيل الدخول كمشرف
+            </button>
+          )}
+          <a href="https://e7ketha.com/" className="rounded-xl border border-white/15 px-5 py-3 text-xs font-bold text-white/80">
+            العودة للموقع
+          </a>
+        </div>
+        <p className="mt-6 font-mono text-[10px] text-white/35">HTTP 403 Forbidden · admin.e7ketha.com</p>
+      </div>
+    </div>
+  );
+}
+
 export default function AdminPage() {
   const { user, loading } = useAuth();
   const [location, navigate] = useLocation();
   const [open, setOpen] = useState(false);
-  const [section, setSection] = useState<Section>(location.startsWith('/admin/novels') ? 'novels' : 'overview');
-  if (loading) return <div className="grid min-h-screen place-items-center">جارٍ التحقق من الصلاحيات...</div>;
-  if (!user) return (
-    <div className="grid min-h-screen place-items-center p-5">
-      <div className="max-w-md rounded-[24px] border border-border bg-card p-8 text-center">
-        <h1 className="text-2xl font-extrabold">لوحة الإدارة</h1>
-        <p className="mt-3 text-sm text-muted-foreground">سجّل الدخول بحساب المشرف للوصول إلى إدارة المحتوى.</p>
-        <button onClick={() => { window.location.href = '/login'; }} className="mt-6 rounded-xl bg-[#171e42] px-5 py-3 text-xs font-bold text-white">تسجيل الدخول</button>
-      </div>
-    </div>
-  );
-  if (user.role !== 'admin') return (
-    <div className="grid min-h-screen place-items-center p-5">
-      <div className="max-w-md rounded-[24px] border border-red-200 bg-red-50 p-8 text-center text-red-800">
-        <h1 className="text-2xl font-extrabold">لا تملك صلاحية الوصول</h1>
-        <p className="mt-3 text-sm">هذه الصفحة مخصصة للمشرفين فقط.</p>
-        <Link href="/" className="mt-6 inline-flex rounded-xl bg-[#171e42] px-5 py-3 text-xs font-bold text-white">العودة للموقع</Link>
-      </div>
-    </div>
-  );
+  const [section, setSection] = useState<Section>(location.startsWith('/novels') ? 'novels' : 'overview');
+  if (loading) return <div className="grid min-h-screen place-items-center text-sm text-muted-foreground">جارٍ التحقق من الصلاحيات...</div>;
+
+  if (user && user.role !== 'admin') {
+    return <AdminForbidden reason="forbidden" />;
+  }
+
+  if (!user) {
+    return <AdminForbidden reason="unauthenticated" />;
+  }
   return (
     <div dir="rtl" className="min-h-screen overflow-x-hidden bg-[#f4f6fb] text-[#121a38] dark:bg-[#080d1d] dark:text-white">
       <div className="flex min-h-screen">
@@ -219,12 +249,13 @@ export default function AdminPage() {
           <header className="sticky top-0 z-30 flex h-[78px] items-center justify-between border-b border-[#e2e6f0] bg-white/85 px-4 backdrop-blur-xl dark:border-[#202a48] dark:bg-[#0d142d]/90 sm:px-5 md:px-8">
             <button onClick={() => setOpen(true)} className="grid size-10 place-items-center rounded-xl border md:hidden" aria-label="فتح قائمة الإدارة"><Menu size={18} /></button>
             <div className="text-sm font-extrabold">إدارة محتوى 𝐄𝟳𝐤𝐞𝐭𝐡𝐚</div>
-            <Link href="/" className="text-xs font-bold text-[#675de8]">عرض الموقع</Link>
+            <a href="https://e7ketha.com/" className="text-xs font-bold text-[#675de8]">عرض الموقع</a>
           </header>
           <main className="p-4 sm:p-5 md:p-8">
-            {section === 'overview' && <AdminOverview onSelect={(value) => { setSection(value); if (value === 'novels') navigate('/admin/novels'); }} />}
+            {section === 'overview' && <AdminOverview onSelect={(value) => { setSection(value); if (value === 'novels') navigate('/novels'); }} />}
             {section === 'novels' && <NovelsManager />}
             {section === 'quotes' && <AdminQuotesManager />}
+            {section === 'articles' && <AdminArticlesManager />}
             {section === 'authors' && <AuthorsManager />}
             {section === 'genres' && <GenresManager />}
             {section === 'users' && <UsersManager />}

@@ -10,7 +10,9 @@ import { confirmSupabaseUserEmail, listSupabaseUsers, toManagedUser, updateSupab
 import { uploadNovelCover } from './cloudinary';
 import { audit, createAd, createNotification, deleteAd, getAdminReports, listActiveAds, listAds, listAuditLogs, listMessagesForUser, listNotifications, listTrash, markNotificationRead, purgeTrash, recordAdEvent, restoreTrash, sendAdminMessage, updateAd } from './management';
 import { createQuote, createQuoteImport, deleteDuplicateQuotes, deleteQuote, existingQuoteTexts, findDuplicateQuotes, getQuote, getQuoteNeighbors, improveQuote, isQuoteSaved, listSavedQuotes, listQuoteAuthors, listQuoteBooks, listQuoteCategories, listQuoteImports, listQuotes, listQuotesByAuthor, listQuotesByBook, listQuotesByCategory, matchEntity, previewQuotesFromUrl, removeExistingSimilarQuotes, saveQuote, scanTelegramChannel, unsaveQuote, updateQuote } from './quotes';
+import { countQuotes } from './quoteCount';
 import { getMyReview, listNovelReviews, listPendingReviews, moderateReview, upsertReview } from './reviews';
+import { createArticle, deleteArticle, getAdminArticle, getPublishedArticleBySlug, listAdminArticles, listPublishedArticles, publishArticle, unpublishArticle, updateArticle } from './articles';
 
 const novelSlugInput = z.object({ slug: z.string().min(1).max(160) });
 const ratingInput = z.object({ slug: z.string().min(1).max(160), rating: z.number().int().min(1).max(5) });
@@ -79,6 +81,10 @@ export const appRouter = router({
       return setRating(ctx.user.id, novel.id, input.rating);
     }),
   }),
+  articles: router({
+    list: publicProcedure.input(z.object({ limit: z.number().int().min(1).max(100).default(24).optional(), offset: z.number().int().min(0).default(0).optional() }).optional()).query(({ input }) => listPublishedArticles(input?.limit ?? 24, input?.offset ?? 0)),
+    bySlug: publicProcedure.input(z.object({ slug: z.string().min(1).max(200) })).query(({ input }) => getPublishedArticleBySlug(input.slug)),
+  }),
   reviews: router({
     list: publicProcedure.input(z.object({ slug: z.string().min(1).max(160), limit: z.number().int().min(1).max(100).default(30).optional() })).query(({ input }) => listNovelReviews(input.slug, input.limit ?? 30)),
     mine: protectedProcedure.input(z.object({ slug: z.string().min(1).max(160) })).query(({ ctx, input }) => getMyReview(ctx.user.id, input.slug)),
@@ -98,6 +104,40 @@ export const appRouter = router({
     event: publicProcedure.input(z.object({ id: z.number().int().positive(), event: z.enum(['impression', 'click']) })).mutation(({ input }) => recordAdEvent(input.id, input.event)),
   }),
   admin: router({
+    articles: router({
+      list: adminProcedure.query(() => listAdminArticles()),
+      get: adminProcedure.input(z.object({ id: z.number().int().positive() })).query(({ input }) => getAdminArticle(input.id)),
+      create: adminProcedure.input(z.object({
+        slug: z.string().min(1).max(200),
+        title: z.string().min(3).max(300),
+        excerpt: z.string().max(2000).optional().nullable(),
+        content: z.string().min(20).max(200000),
+        coverUrl: z.string().max(800).optional().nullable(),
+        status: z.enum(['draft', 'published', 'archived']).optional(),
+        authorName: z.string().max(160).optional().nullable(),
+        seoTitle: z.string().max(300).optional().nullable(),
+        seoDescription: z.string().max(500).optional().nullable(),
+        tags: z.string().max(500).optional().nullable(),
+      })).mutation(({ ctx, input }) => createArticle(input, ctx.user.id)),
+      update: adminProcedure.input(z.object({
+        id: z.number().int().positive(),
+        data: z.object({
+          slug: z.string().min(1).max(200).optional(),
+          title: z.string().min(3).max(300).optional(),
+          excerpt: z.string().max(2000).optional().nullable(),
+          content: z.string().min(20).max(200000).optional(),
+          coverUrl: z.string().max(800).optional().nullable(),
+          status: z.enum(['draft', 'published', 'archived']).optional(),
+          authorName: z.string().max(160).optional().nullable(),
+          seoTitle: z.string().max(300).optional().nullable(),
+          seoDescription: z.string().max(500).optional().nullable(),
+          tags: z.string().max(500).optional().nullable(),
+        }),
+      })).mutation(({ input }) => updateArticle(input.id, input.data)),
+      publish: adminProcedure.input(z.object({ id: z.number().int().positive() })).mutation(({ input }) => publishArticle(input.id)),
+      unpublish: adminProcedure.input(z.object({ id: z.number().int().positive() })).mutation(({ input }) => unpublishArticle(input.id)),
+      delete: adminProcedure.input(z.object({ id: z.number().int().positive() })).mutation(({ input }) => deleteArticle(input.id)),
+    }),
     summary: adminProcedure.query(() => getEnhancedAdminSummary()),
     reports: adminProcedure.query(() => getAdminReports()),
     novels: router({
@@ -138,9 +178,7 @@ export const appRouter = router({
         return toManagedUser(remote);
       }),
     }),
-    audit: router({
-      list: adminProcedure.query(() => listAuditLogs()),
-    }),
+    audit: router({ list: adminProcedure.query(() => listAuditLogs()) }),
     trash: router({
       list: adminProcedure.query(() => listTrash()),
       restore: adminProcedure.input(z.object({ id: z.number().int().positive() })).mutation(({ ctx, input }) => restoreTrash(input.id, ctx.user)),
@@ -160,7 +198,13 @@ export const appRouter = router({
     }),
   }),
   quotes: router({
-    list: publicProcedure.input(z.object({ limit: z.number().int().min(1).max(500).default(10), offset: z.number().int().min(0).default(0) }).optional()).query(({ input }) => listQuotes(true, input?.limit ?? 10, input?.offset ?? 0)),
+    list: publicProcedure.input(z.object({ limit: z.number().int().min(1).max(100).default(12), offset: z.number().int().min(0).default(0) }).optional()).query(async ({ input }) => {
+      const limit = input?.limit ?? 12;
+      const offset = input?.offset ?? 0;
+      const [items, total] = await Promise.all([listQuotes(true, limit, offset), countQuotes(true)]);
+      return { items, total, limit, offset, page: Math.floor(offset / limit) + 1, totalPages: Math.max(1, Math.ceil(total / limit)) };
+    }),
+    count: publicProcedure.query(() => countQuotes(true)),
     byId: publicProcedure.input(z.object({ id: z.number().int().positive() })).query(({ input }) => getQuote(input.id)),
     neighbors: publicProcedure.input(z.object({ id: z.number().int().positive() })).query(({ input }) => getQuoteNeighbors(input.id)),
     byAuthor: publicProcedure.input(z.object({ slug: z.string().min(1).max(160) })).query(({ input }) => listQuotesByAuthor(input.slug)),
@@ -181,9 +225,26 @@ export const appRouter = router({
     scanTelegram: adminProcedure.input(z.object({ url: z.string().url().max(2000), maxPages: z.number().int().min(1).max(10).default(1) })).mutation(({ input }) => scanTelegramChannel(input)),
     duplicatePreview: adminProcedure.input(z.object({ threshold: z.number().min(0.9).max(1).default(0.95) })).query(({ input }) => findDuplicateQuotes(input.threshold)),
     deleteDuplicates: adminProcedure.input(z.object({ ids: z.array(z.number().int().positive()).min(1).max(500) })).mutation(({ input }) => deleteDuplicateQuotes(input.ids)),
-    previewImport: adminProcedure.input(z.object({ url: z.string().url().max(2000), author: z.string().max(255).optional(), book: z.string().max(255).optional(), instructions: z.string().max(2000).optional(), useAi: z.boolean().default(true), language: z.enum(['ar', 'en', 'both']).default('both') })).mutation(async ({ input }) => { const [result, authors, books] = await Promise.all([previewQuotesFromUrl(input), listQuoteAuthors(), listQuoteBooks()]); const authorMatch = matchEntity(result.author, authors); const bookMatch = matchEntity(result.book, books); return { ...result, authorMatch: authorMatch ? { name: authorMatch.name, slug: authorMatch.slug } : null, bookMatch: bookMatch ? { title: bookMatch.title, slug: bookMatch.slug } : null }; }),
+    previewImport: adminProcedure.input(z.object({ url: z.string().url().max(2000), author: z.string().max(255).optional(), book: z.string().max(255).optional(), instructions: z.string().max(2000).optional(), useAi: z.boolean().default(true), language: z.enum(['ar', 'en', 'both']).default('both') })).mutation(async ({ input }) => {
+      const [result, authors, books] = await Promise.all([previewQuotesFromUrl(input), listQuoteAuthors(), listQuoteBooks()]);
+      const authorMatch = matchEntity(result.author, authors);
+      const bookMatch = matchEntity(result.book, books);
+      return { ...result, authorMatch: authorMatch ? { name: authorMatch.name, slug: authorMatch.slug } : null, bookMatch: bookMatch ? { title: bookMatch.title, slug: bookMatch.slug } : null };
+    }),
     imports: adminProcedure.query(() => listQuoteImports()),
-    bulkCreate: adminProcedure.input(z.object({ sourceUrl: z.string().url().max(2000), author: z.string().max(255).optional(), book: z.string().max(255).optional(), instructions: z.string().max(2000).optional(), quotes: z.array(z.object({ quote_text: z.string().min(3).max(2000), speaker: z.string().max(255).nullable().optional(), book_title: z.string().max(255).nullable().optional(), category: z.string().max(80).nullable().optional(), source_url: z.string().url().max(2000).optional() })).min(1).max(500) })).mutation(async ({ input }) => { const [authors, books] = await Promise.all([listQuoteAuthors(), listQuoteBooks()]); const filtered = await removeExistingSimilarQuotes(input.quotes); const fresh = filtered.quotes; const matchedAuthor = matchEntity(input.author, authors); const matchedBook = matchEntity(input.book, books); const importRow = await createQuoteImport({ source_url: input.sourceUrl, author: input.author, book: input.book, instructions: input.instructions, quote_count: fresh.length }); for (let index = 0; index < fresh.length; index += 1) { const quote = fresh[index]; const author = matchEntity(quote.speaker || input.author, authors) ?? matchedAuthor; const book = matchEntity(quote.book_title || input.book, books) ?? matchedBook; await createQuote({ ...quote, speaker: quote.speaker ?? null, book_title: quote.book_title ?? null, author_id: author?.id ?? null, novel_id: book?.id ?? null, category: quote.category ?? null, status: 'published', source_url: quote.source_url ?? input.sourceUrl, import_id: importRow.id, position: index + 1 }); } return { count: fresh.length, skippedDuplicates: input.quotes.length - fresh.length + filtered.duplicateCount, importId: importRow.id, authorMatched: Boolean(matchedAuthor), bookMatched: Boolean(matchedBook), authorSlug: matchedAuthor?.slug ?? null, bookSlug: matchedBook?.slug ?? null }; }),
+    bulkCreate: adminProcedure.input(z.object({ sourceUrl: z.string().url().max(2000), author: z.string().max(255).optional(), book: z.string().max(255).optional(), instructions: z.string().max(2000).optional(), quotes: z.array(z.object({ quote_text: z.string().min(3).max(2000), speaker: z.string().max(255).nullable().optional(), book_title: z.string().max(255).nullable().optional(), category: z.string().max(80).nullable().optional(), source_url: z.string().url().max(2000).optional() })).min(1).max(200) })).mutation(async ({ input }) => {
+      const [authors, books] = await Promise.all([listQuoteAuthors(), listQuoteBooks()]);
+      const matchedAuthor = matchEntity(input.author, authors);
+      const matchedBook = matchEntity(input.book, books);
+      const existing = await existingQuoteTexts();
+      const filtered = removeExistingSimilarQuotes(input.quotes.map((q) => q.quote_text), existing);
+      const fresh = input.quotes.filter((q) => filtered.unique.includes(q.quote_text));
+      const importRow = await createQuoteImport({ sourceUrl: input.sourceUrl, author: input.author, book: input.book, instructions: input.instructions, count: fresh.length });
+      for (const [index, quote] of fresh.entries()) {
+        await createQuote({ quote_text: quote.quote_text, speaker: quote.speaker ?? input.author ?? null, book_title: quote.book_title ?? input.book ?? null, category: quote.category ?? null, status: 'published', source_url: quote.source_url ?? input.sourceUrl, import_id: importRow.id, position: index + 1 });
+      }
+      return { count: fresh.length, skippedDuplicates: input.quotes.length - fresh.length + filtered.duplicateCount, importId: importRow.id, authorMatched: Boolean(matchedAuthor), bookMatched: Boolean(matchedBook), authorSlug: matchedAuthor?.slug ?? null, bookSlug: matchedBook?.slug ?? null };
+    }),
   }),
 });
 

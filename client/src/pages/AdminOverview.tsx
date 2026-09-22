@@ -4,121 +4,92 @@ import { trpc } from '@/lib/trpc';
 
 type Section = 'overview' | 'novels' | 'quotes' | 'authors' | 'genres' | 'users' | 'reports' | 'audit' | 'trash' | 'notifications' | 'messages' | 'ads';
 
-const fmt = (n: number | undefined) => (n ?? 0).toLocaleString('ar-EG');
-
 export function AdminOverview({ onSelect }: { onSelect: (section: Section) => void }) {
   const summary = trpc.admin.summary.useQuery();
-  const s = summary.data;
+  const data = summary.data;
 
-  const cards = [
-    { label: 'الروايات', value: s?.novels, section: 'novels' as const, icon: BookOpen, hint: 'كل الكتب المنشورة' },
-    { label: 'الاقتباسات', value: s?.quotes, section: 'quotes' as const, icon: WandSparkles, hint: s ? `${fmt((s as any).publishedQuotes)} منشور · ${fmt((s as any).draftQuotes)} مسودة` : '—' },
-    { label: 'المؤلفون', value: s?.authors, section: 'authors' as const, icon: Users, hint: 'مرتبطون بالروايات' },
-    { label: 'التصنيفات', value: (s as any)?.genres, section: 'genres' as const, icon: Tags, hint: 'أبواب الاستكشاف' },
-    { label: 'المستخدمون', value: (s as any)?.users, section: 'users' as const, icon: UserCog, hint: 'حسابات مسجّلة' },
-    { label: 'بانتظار المراجعة', value: s?.needsReview, section: 'reports' as const, icon: FileClock, hint: 'مراجعات معلّقة' },
+  const stats = [
+    { label: 'الروايات', value: data?.novels ?? 0, icon: BookOpen },
+    { label: 'المؤلفون', value: data?.authors ?? 0, icon: Users },
+    { label: 'التصنيفات', value: data?.genres ?? 0, icon: Tags },
+    { label: 'الاقتباسات', value: data?.quotes ?? 0, icon: WandSparkles },
+    { label: 'المستخدمون', value: data?.users ?? 0, icon: UserCog },
+    { label: 'التقارير', value: data?.reports ?? 0, icon: BarChart3 },
   ];
 
-  const chartItems = [
-    { label: 'روايات', value: s?.novels ?? 0, color: '#675de8' },
-    { label: 'اقتباسات', value: (s as any)?.quotes ?? 0, color: '#25d366' },
-    { label: 'مؤلفون', value: s?.authors ?? 0, color: '#f59e0b' },
-    { label: 'تصنيفات', value: (s as any)?.genres ?? 0, color: '#3b82f6' },
-    { label: 'مستخدمون', value: (s as any)?.users ?? 0, color: '#ec4899' },
-  ];
+  const chartItems = data?.chart ?? [];
   const maxVal = Math.max(1, ...chartItems.map((i) => i.value));
 
   const actions = [
-    { label: 'إضافة رواية', href: '/admin/novels/new', icon: Plus },
+    { label: 'إضافة رواية', href: '/novels/new', icon: Plus },
     { label: 'إدارة الاقتباسات', section: 'quotes' as const, icon: WandSparkles },
     { label: 'المؤلفون', section: 'authors' as const, icon: Users },
     { label: 'التقارير', section: 'reports' as const, icon: BarChart3 },
-    { label: 'الإعلانات', section: 'ads' as const, icon: Megaphone },
   ];
+
+  if (summary.isLoading) {
+    return <div className="grid min-h-[360px] place-items-center text-sm text-muted-foreground"><Loader2 className="animate-spin" /> جارٍ التحميل...</div>;
+  }
 
   return (
     <div className="grid gap-6">
       <div>
         <h1 className="text-2xl font-extrabold">نظرة عامة</h1>
-        <p className="mt-2 text-xs text-muted-foreground">ملخص حي من قاعدة البيانات — كل الأرقام حقيقية.</p>
+        <p className="mt-2 text-xs text-muted-foreground">ملخص سريع لمحتوى المنصة والوصول السريع لأهم الإجراءات.</p>
       </div>
 
-      {summary.isLoading ? (
-        <div className="grid min-h-[200px] place-items-center"><Loader2 className="animate-spin text-[#675de8]" size={28} /></div>
-      ) : summary.error ? (
-        <div className="rounded-[20px] border border-red-200 bg-red-50 p-5 text-sm text-red-700 dark:border-red-500/30 dark:bg-red-950/20 dark:text-red-200">
-          تعذر تحميل الإحصائيات: {summary.error.message}
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {stats.map((item) => {
+          const Icon = item.icon;
+          return (
+            <div key={item.label} className="rounded-[20px] border border-border bg-card p-5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-muted-foreground">{item.label}</span>
+                <span className="grid size-9 place-items-center rounded-xl bg-[#efeeff] text-[#675de8]"><Icon size={16} /></span>
+              </div>
+              <div className="mt-3 text-2xl font-extrabold">{item.value}</div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {actions.map((action) => {
+          const Icon = action.icon;
+          if ('href' in action && action.href) {
+            return (
+              <Link key={action.label} href={action.href} className="flex items-center gap-3 rounded-[18px] border border-border bg-card p-4 text-sm font-bold transition hover:border-[#675de8]/40">
+                <span className="grid size-10 place-items-center rounded-xl bg-[#171e42] text-white"><Icon size={16} /></span>
+                {action.label}
+              </Link>
+            );
+          }
+          return (
+            <button key={action.label} type="button" onClick={() => action.section && onSelect(action.section)} className="flex items-center gap-3 rounded-[18px] border border-border bg-card p-4 text-sm font-bold transition hover:border-[#675de8]/40">
+              <span className="grid size-10 place-items-center rounded-xl bg-[#171e42] text-white"><Icon size={16} /></span>
+              {action.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {chartItems.length > 0 && (
+        <div className="rounded-[20px] border border-border bg-card p-5">
+          <div className="mb-4 flex items-center gap-2 text-sm font-extrabold"><FileClock size={16} /> نشاط حديث</div>
+          <div className="grid gap-2">
+            {chartItems.map((item) => (
+              <div key={item.label} className="grid grid-cols-[1fr_auto] items-center gap-3 text-xs">
+                <div>
+                  <div className="mb-1 font-bold">{item.label}</div>
+                  <div className="h-2 overflow-hidden rounded-full bg-muted">
+                    <div className="h-full rounded-full bg-[#675de8]" style={{ width: `${Math.round((item.value / maxVal) * 100)}%` }} />
+                  </div>
+                </div>
+                <span className="font-extrabold text-[#675de8]">{item.value}</span>
+              </div>
+            ))}
+          </div>
         </div>
-      ) : (
-        <>
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {cards.map((card) => {
-              const Icon = card.icon;
-              return (
-                <button
-                  key={card.label}
-                  type="button"
-                  onClick={() => onSelect(card.section)}
-                  className="rounded-[20px] border border-border bg-card p-5 text-right transition hover:-translate-y-0.5 hover:border-[#8279ee] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#675de8]"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <span className="text-xs text-muted-foreground">{card.label}</span>
-                      <strong className="mt-2 block text-3xl font-extrabold tracking-tight">{fmt(card.value as number | undefined)}</strong>
-                      <span className="mt-2 block truncate text-[10px] text-muted-foreground">{card.hint}</span>
-                    </div>
-                    <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#efeeff] text-[#675de8] dark:bg-[#24224c]">
-                      <Icon size={18} aria-hidden />
-                    </div>
-                  </div>
-                  <span className="mt-4 block text-[10px] font-bold text-[#675de8]">إدارة المحتوى ←</span>
-                </button>
-              );
-            })}
-          </div>
-
-          <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
-            <section className="rounded-[20px] border border-border bg-card p-5">
-              <h2 className="text-sm font-extrabold">توزيع المحتوى</h2>
-              <p className="mt-1 text-[11px] text-muted-foreground">مقارنة سريعة للكيانات الرئيسية في المنصة</p>
-              <div className="mt-5 grid gap-3">
-                {chartItems.map((item) => (
-                  <div key={item.label} className="grid grid-cols-[72px_1fr_48px] items-center gap-2 text-xs">
-                    <span className="truncate text-muted-foreground">{item.label}</span>
-                    <div className="h-2.5 overflow-hidden rounded-full bg-muted">
-                      <div className="h-full rounded-full transition-all" style={{ width: `${Math.max(4, (item.value / maxVal) * 100)}%`, backgroundColor: item.color }} />
-                    </div>
-                    <strong className="text-left tabular-nums">{fmt(item.value)}</strong>
-                  </div>
-                ))}
-              </div>
-            </section>
-
-            <section className="rounded-[20px] border border-border bg-card p-5">
-              <h2 className="text-sm font-extrabold">إجراءات سريعة</h2>
-              <p className="mt-1 text-[11px] text-muted-foreground">اختصارات للإدارة اليومية</p>
-              <div className="mt-4 grid gap-2">
-                {actions.map((action) => {
-                  const Icon = action.icon;
-                  if ('href' in action && action.href) {
-                    return (
-                      <Link key={action.label} href={action.href} className="flex items-center gap-3 rounded-xl border border-border px-3 py-3 text-xs font-bold transition hover:border-[#8279ee] hover:bg-muted/40">
-                        <Icon size={15} className="text-[#675de8]" />
-                        {action.label}
-                      </Link>
-                    );
-                  }
-                  return (
-                    <button key={action.label} type="button" onClick={() => action.section && onSelect(action.section)} className="flex items-center gap-3 rounded-xl border border-border px-3 py-3 text-right text-xs font-bold transition hover:border-[#8279ee] hover:bg-muted/40">
-                      <Icon size={15} className="text-[#675de8]" />
-                      {action.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </section>
-          </div>
-        </>
       )}
     </div>
   );
