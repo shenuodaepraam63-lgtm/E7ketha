@@ -1,17 +1,24 @@
 #!/usr/bin/env node
-/** Restores server/app.ts from gzipped base64 parts in scripts/app-parts/ */
-import { readFileSync, writeFileSync, existsSync } from 'fs';
+/** Restores server/app.ts — prefers scripts/app-source/app.ts, else gzipped parts */
+import { readFileSync, writeFileSync, existsSync, copyFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { gunzipSync } from 'zlib';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, '..');
-const partsDir = join(root, 'scripts', 'app-parts');
 const out = join(root, 'server', 'app.ts');
+const source = join(root, 'scripts', 'app-source', 'app.ts');
+const partsDir = join(root, 'scripts', 'app-parts');
+
+if (existsSync(source)) {
+  copyFileSync(source, out);
+  console.log('[restore-app] wrote server/app.ts from app-source', readFileSync(out).length, 'bytes');
+  process.exit(0);
+}
 
 if (!existsSync(partsDir)) {
-  console.warn('[restore-app] no parts dir, skip');
+  console.warn('[restore-app] no parts dir and no app-source, skip');
   process.exit(0);
 }
 
