@@ -1,5 +1,6 @@
 import { createApp } from "../server/app.ts";
 import { tryRenderStaticSeo } from "../server/seoPublicPages.ts";
+import { tryRenderExpandedSitemap } from "../server/sitemapExpanded.ts";
 
 const app = createApp();
 
@@ -30,7 +31,7 @@ function applyCors(req: any, res: any) {
   }
 }
 
-export default function handler(req: any, res: any) {
+export default async function handler(req: any, res: any) {
   try {
     applyCors(req, res);
     if (String(req.method || "").toUpperCase() === "OPTIONS") {
@@ -38,6 +39,8 @@ export default function handler(req: any, res: any) {
       res.end();
       return;
     }
+    // Expanded sitemap index + children (static, articles, topics, …)
+    if (await tryRenderExpandedSitemap(req, res)) return;
     // Static public pages: title/description/canonical for crawlers
     if (tryRenderStaticSeo(req, res)) return;
     return app(req, res);
