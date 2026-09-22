@@ -1,5 +1,6 @@
 import { createApp } from "../server/app.ts";
-import { tryRenderStaticSeo, tryRenderArticleSeo } from "../server/seoPublicPages.ts";
+import { tryRenderStaticSeo } from "../server/seoPublicPages.ts";
+import { tryRenderArticleSeo } from "../server/seoArticlePages.ts";
 import { tryRenderExpandedSitemap } from "../server/sitemapExpanded.ts";
 
 const app = createApp();
