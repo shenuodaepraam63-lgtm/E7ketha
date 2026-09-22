@@ -4,6 +4,7 @@ import { httpBatchLink } from "@trpc/client";
 import { createRoot } from "react-dom/client";
 import superjson from "superjson";
 import App from "./App";
+import { AnalyticsRouteTracker } from "@/components/AnalyticsRouteTracker";
 import "./index.css";
 import { supabase } from "@/lib/supabase";
 
@@ -54,6 +55,7 @@ const trpcClient = trpc.createClient({
 const rootElement = document.getElementById("root")!;
 const app = <trpc.Provider client={trpcClient} queryClient={queryClient}>
   <QueryClientProvider client={queryClient}>
+    <AnalyticsRouteTracker />
     <App />
   </QueryClientProvider>
 </trpc.Provider>;
