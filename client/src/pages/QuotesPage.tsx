@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowRight, BookOpen, Quote, Loader2, ChevronsLeft, ChevronsRight, Search, SlidersHorizontal } from 'lucide-react';
+import { ArrowLeft, ArrowRight, BookOpen, Download, Quote, Loader2, ChevronsLeft, ChevronsRight, Search, SlidersHorizontal } from 'lucide-react';
 import { Link, useRoute } from 'wouter';
 import { useEffect, useMemo, useState } from 'react';
 import { PageIntro, Breadcrumbs, EmptyState } from '@/components/SiteShell';
@@ -7,6 +7,7 @@ import { trpc } from '@/lib/trpc';
 import { toast } from 'sonner';
 
 const PAGE_SIZE = 12;
+type QuoteListItem = { id: number; quote_text: string; category: string | null; author_name: string | null; speaker: string | null; book_title: string | null; book_slug: string | null; author_slug: string | null };
 
 function playQuoteOpenSound() {
   if (typeof window === 'undefined') return;
@@ -134,7 +135,7 @@ export default function QuotesPage() {
   const categories = trpc.quotes.categories.useQuery(undefined, { staleTime: 10 * 60 * 1000 });
 
   const raw = query.data as unknown;
-  const items = Array.isArray(raw) ? raw : ((raw as { items?: typeof query.data })?.items ?? []);
+  const items = (Array.isArray(raw) ? raw : ((raw as { items?: unknown[] })?.items ?? [])) as QuoteListItem[];
   const apiTotal = !Array.isArray(raw) && raw && typeof raw === 'object' && 'total' in raw
     ? Number((raw as { total: number }).total)
     : countQuery.data;
@@ -309,6 +310,18 @@ export function QuotePage() {
   const id = Number(params?.id);
   const query = trpc.quotes.byId.useQuery({ id }, { enabled: Number.isInteger(id) && id > 0 });
   const item = query.data;
+  const downloadQuote = () => {
+    if (!item) return;
+    const text = `“${item.quote_text}”\n\n${item.author_name || item.speaker || 'القائل غير محدد'}\n${item.book_title || 'مصدر غير محدد'}\n\nhttps://e7ketha.com/quotes/${item.id}`;
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `e7ketha-quote-${item.id}.txt`;
+    link.click();
+    URL.revokeObjectURL(url);
+    toast.success('تم تحميل الاقتباس');
+  };
   if (query.isLoading) return <div className="container py-20 text-center text-muted-foreground">جارٍ تحميل الاقتباس...</div>;
   if (!item) return <div className="container py-16"><EmptyState title="الاقتباس غير موجود" description="قد يكون الاقتباس غير منشور أو أُزيل من الأرشيف." action="تصفح الاقتباسات" /></div>;
   return (
@@ -321,7 +334,8 @@ export function QuotePage() {
           <p className="font-extrabold">{item.author_name || item.speaker || 'القائل غير محدد'}</p>
           <p className="mt-2 text-sm text-muted-foreground">{item.book_title || 'مصدر غير محدد'}</p>
         </div>
-        <div className="mt-8">
+        <div className="mt-8 flex flex-wrap gap-3">
+          <button type="button" onClick={downloadQuote} className="inline-flex items-center gap-2 rounded-xl bg-[#675de8] px-4 py-3 text-xs font-extrabold text-white"><Download size={15} /> تحميل الاقتباس</button>
           <Link href="/quotes" className="rounded-xl border border-border px-4 py-3 text-xs font-bold">تصفح كل الاقتباسات</Link>
         </div>
       </article>
