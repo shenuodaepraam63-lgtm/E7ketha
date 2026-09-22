@@ -79,16 +79,31 @@ function sendXml(res: any, xml: string) {
   res.end(xml);
 }
 
+/** Only real sitemap resources — never intercept SEO/API (resource=seo, trpc, …). */
+const SITEMAP_RESOURCES = new Set([
+  'index',
+  'sitemap',
+  'static',
+  'novels',
+  'authors',
+  'genres',
+  'series',
+  'quotes',
+  'articles',
+  'topics',
+]);
+
 function resolveResource(req: any): string | null {
   const q = req.query || {};
   if (typeof q.resource === 'string' && q.resource) {
     if (q.resource === 'sitemap' || q.resource === 'index') return 'index';
-    return q.resource;
+    if (SITEMAP_RESOURCES.has(q.resource)) return q.resource;
+    return null;
   }
   const url = String(req.url || '').split('?')[0];
   if (url === '/sitemap.xml' || url.endsWith('/sitemap.xml')) return 'index';
   const m = url.match(/\/sitemap\/([a-z0-9-]+)\.xml$/i);
-  if (m) return m[1];
+  if (m && SITEMAP_RESOURCES.has(m[1])) return m[1];
   return null;
 }
 
@@ -188,11 +203,8 @@ export async function tryRenderExpandedSitemap(req: any, res: any): Promise<bool
 
     return false;
   } catch (error) {
-    console.error('[sitemap] expanded render failed', error);
-    sendXml(
-      res,
-      `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>${SITE_URL}/</loc></url></urlset>`,
-    );
-    return true;
+    console.error('[sitemap] expanded render failed', resource, error);
+    // Do not claim the response with a fake urlset — let SEO/SPA handlers run
+    return false;
   }
 }
