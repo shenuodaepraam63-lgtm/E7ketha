@@ -27,18 +27,20 @@
     <meta name="twitter:card" content="summary_large_image" />
     <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" onload="this.onload=null;this.rel='stylesheet'" />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" /></noscript>
-    <!-- Google tag (gtag.js) — GA4 G-HJM7WK3Y6L; deferred with other third-party scripts -->
+    <!-- Google tag (gtag.js) GA4 G-HJM7WK3Y6L — load immediately so Analytics receives hits -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-HJM7WK3Y6L"></script>
     <script>
       window.dataLayer = window.dataLayer || [];
       function gtag(){dataLayer.push(arguments);}
       gtag('js', new Date());
-      gtag('config', 'G-HJM7WK3Y6L');
+      gtag('config', 'G-HJM7WK3Y6L', { send_page_view: true });
+    </script>
+    <script>
       (() => {
         const loadThirdParty = () => {
           if (window.__riwayaThirdPartyLoaded) return;
           window.__riwayaThirdPartyLoaded = true;
           const scripts = [
-            ['https://www.googletagmanager.com/gtag/js?id=G-HJM7WK3Y6L', 'ga4'],
             ['https://www.googletagmanager.com/gtm.js?id=GTM-WHXK2GT3', 'tag-manager'],
             ['https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-1874360923595437', 'adsense']
           ];
