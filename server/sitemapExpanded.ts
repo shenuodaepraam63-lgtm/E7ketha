@@ -35,13 +35,27 @@ function xmlEscape(value: unknown) {
     .replace(/'/g, '&apos;');
 }
 
+function pathToLoc(urlPath: string) {
+  if (!urlPath || urlPath === '/') return `${SITE_URL}/`;
+  const segments = urlPath.split('/').map((seg, index) => {
+    if (index === 0 && seg === '') return '';
+    try {
+      // decode first so we never double-encode
+      return encodeURIComponent(decodeURIComponent(seg));
+    } catch {
+      return encodeURIComponent(seg);
+    }
+  });
+  return `${SITE_URL}${segments.join('/')}`;
+}
+
 function renderUrlset(paths: string[]) {
   const unique = Array.from(new Set(paths));
   const body = unique
     .map((urlPath) => {
       const priority = urlPath === '/' ? '1.0' : urlPath.startsWith('/quotes/') ? '0.8' : '0.7';
       const changefreq = urlPath === '/' ? 'daily' : 'weekly';
-      return `<url><loc>${xmlEscape(`${SITE_URL}${urlPath}`)}</loc><changefreq>${changefreq}</changefreq><priority>${priority}</priority></url>`;
+      return `<url><loc>${xmlEscape(pathToLoc(urlPath))}</loc><changefreq>${changefreq}</changefreq><priority>${priority}</priority></url>`;
     })
     .join('');
   return `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${body}</urlset>`;
