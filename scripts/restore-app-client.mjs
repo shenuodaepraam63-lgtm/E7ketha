@@ -5,6 +5,7 @@ import { fileURLToPath } from "url";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const out = join(root, "client/src/App.tsx");
 const dir = join(root, "scripts", "app-client-parts");
+const fullPath = join(root, "scripts", "app-client-full.b64");
 
 function isValid(text) {
   return (
@@ -16,7 +17,6 @@ function isValid(text) {
   );
 }
 
-// Prefer already-committed valid App.tsx
 if (existsSync(out)) {
   try {
     const existing = readFileSync(out, "utf8");
@@ -27,22 +27,40 @@ if (existsSync(out)) {
   } catch {}
 }
 
-if (!existsSync(dir)) {
-  console.error("[restore-app-client] missing scripts/app-client-parts and no valid App.tsx");
-  process.exit(1);
+let text = null;
+if (existsSync(fullPath)) {
+  try {
+    text = Buffer.from(readFileSync(fullPath, "utf8").trim(), "base64").toString("utf8");
+    console.log("[restore-app-client] from app-client-full.b64", text.length);
+  } catch (e) {
+    console.warn("[restore-app-client] full.b64 failed", e.message);
+  }
 }
-const files = readdirSync(dir)
-  .filter((f) => /^p\d+\.b64$/.test(f))
-  .sort((a, b) => Number(a.match(/\d+/)[0]) - Number(b.match(/\d+/)[0]));
-if (files.length < 20) {
-  console.error("[restore-app-client] incomplete parts", files.length);
-  process.exit(1);
-}
-const b64 = files.map((f) => readFileSync(join(dir, f), "utf8").trim()).join("");
-const text = Buffer.from(b64, "base64").toString("utf8");
 if (!isValid(text)) {
-  console.error("[restore-app-client] decoded App.tsx invalid", text?.length);
+  const shards = [0, 1, 2].map((i) => join(root, "scripts", `app-client-full-${i}.b64`));
+  if (shards.every((p) => existsSync(p))) {
+    try {
+      const b64 = shards.map((p) => readFileSync(p, "utf8").trim()).join("");
+      text = Buffer.from(b64, "base64").toString("utf8");
+      console.log("[restore-app-client] from app-client-full shards", text.length);
+    } catch (e) {
+      console.warn("[restore-app-client] shards failed", e.message);
+    }
+  }
+}
+
+if (!isValid(text) && existsSync(dir)) {
+  const files = readdirSync(dir)
+    .filter((f) => /^p\d+\.b64$/.test(f))
+    .sort((a, b) => Number(a.match(/\d+/)[0]) - Number(b.match(/\d+/)[0]));
+  const b64 = files.map((f) => readFileSync(join(dir, f), "utf8").trim()).join("");
+  text = Buffer.from(b64, "base64").toString("utf8");
+  console.log("[restore-app-client] from parts", files.length, text.length);
+}
+
+if (!isValid(text)) {
+  console.error("[restore-app-client] decoded App.tsx invalid", text && text.length);
   process.exit(1);
 }
 writeFileSync(out, text);
-console.log("[restore-app-client] restored App.tsx from", files.length, "parts");
+console.log("[restore-app-client] wrote App.tsx", text.length);
