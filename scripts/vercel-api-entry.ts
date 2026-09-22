@@ -1,4 +1,5 @@
 import { createApp } from "../server/app.ts";
+import { tryRenderStaticSeo } from "../server/seoPublicPages.ts";
 
 const app = createApp();
 
@@ -37,6 +38,8 @@ export default function handler(req: any, res: any) {
       res.end();
       return;
     }
+    // Static public pages: title/description/canonical for crawlers
+    if (tryRenderStaticSeo(req, res)) return;
     return app(req, res);
   } catch (error) {
     console.error("[Vercel API] handler failed", error);
