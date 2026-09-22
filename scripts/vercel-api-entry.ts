@@ -1,5 +1,5 @@
 import { createApp } from "../server/app.ts";
-import { tryRenderStaticSeo } from "../server/seoPublicPages.ts";
+import { tryRenderStaticSeo, tryRenderArticleSeo } from "../server/seoPublicPages.ts";
 import { tryRenderExpandedSitemap } from "../server/sitemapExpanded.ts";
 
 const app = createApp();
@@ -62,6 +62,7 @@ export default async function handler(req: any, res: any) {
     }
 
     if (await tryRenderExpandedSitemap(req, res)) return;
+    if (await tryRenderArticleSeo(req, res)) return;
     if (tryRenderStaticSeo(req, res)) return;
     return app(req, res);
   } catch (error) {
