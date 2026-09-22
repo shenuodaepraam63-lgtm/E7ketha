@@ -39,9 +39,29 @@ export default async function handler(req: any, res: any) {
       res.end();
       return;
     }
-    // Expanded sitemap index + children (static, articles, topics, …)
+
+    // API host: never serve indexable HTML at /
+    const host = String(req.headers?.host || req.headers?.Host || "")
+      .split(":")[0]
+      .toLowerCase();
+    if (host === "api.e7ketha.com") {
+      const path = String(req.url || "/").split("?")[0];
+      if (path === "/" || path === "") {
+        res.statusCode = 200;
+        res.setHeader("Content-Type", "application/json; charset=utf-8");
+        res.setHeader("X-Robots-Tag", "noindex, nofollow");
+        res.end(
+          JSON.stringify({
+            name: "E7ketha API",
+            description: "واجهة البيانات الرسمية — الطلبات عبر tRPC/JSON فقط",
+            site: "https://e7ketha.com",
+          }),
+        );
+        return;
+      }
+    }
+
     if (await tryRenderExpandedSitemap(req, res)) return;
-    // Static public pages: title/description/canonical for crawlers
     if (tryRenderStaticSeo(req, res)) return;
     return app(req, res);
   } catch (error) {

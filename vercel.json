@@ -11,6 +11,12 @@
   "redirects": [
     {
       "source": "/:path*",
+      "has": [{ "type": "host", "value": "e7ketha.vercel.app" }],
+      "destination": "https://e7ketha.com/:path*",
+      "permanent": true
+    },
+    {
+      "source": "/:path*",
       "has": [{ "type": "host", "value": "www.e7ketha.com" }],
       "destination": "https://e7ketha.com/:path*",
       "permanent": true
