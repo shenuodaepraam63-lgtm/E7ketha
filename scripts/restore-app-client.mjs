@@ -18,8 +18,13 @@ if (files.length < 20) {
 const b64 = files.map((f) => readFileSync(join(dir, f), "utf8").trim()).join("");
 const out = join(root, "client/src/App.tsx");
 const text = Buffer.from(b64, "base64").toString("utf8");
-if (!text.includes("isEntityPage") || text.includes("PLACEHOLDER")) {
-  console.error("[restore-app-client] decoded App.tsx invalid");
+if (
+  text.length < 12000 ||
+  !text.includes("isEntityPage") ||
+  !text.includes("Do not overwrite SSR") ||
+  text.includes("PLACEHOLDER")
+) {
+  console.error("[restore-app-client] decoded App.tsx invalid", text.length);
   process.exit(1);
 }
 writeFileSync(out, text);
