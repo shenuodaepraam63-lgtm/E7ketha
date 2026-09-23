@@ -17,15 +17,19 @@ export default function Home() {
   const seriesQuery = trpc.series.list.useQuery(undefined, { staleTime: 300_000, refetchOnMount: false });
   const novels = (novelsQuery.data ?? []).map(toNovel);
   const authors = (authorsQuery.data ?? []).slice(0, 5).map(toAuthor);
-  const genres = (genresQuery.data ?? []).slice(0, 8).map(toGenre);
+  const genres = (genresQuery.data ?? [])
+    .map(toGenre)
+    .filter((g) => (g.count ?? 0) > 0)
+    .slice(0, 8);
+  const seriesItems = seriesQuery.data ?? [];
   const novelsLoading = novelsQuery.isLoading && novels.length === 0;
   return (
     <div>
       <section className="relative z-20 overflow-visible bg-[#091027] text-white">
         <div className="absolute inset-0 overflow-hidden bg-[radial-gradient(circle_at_18%_30%,rgba(110,100,235,.28),transparent_42%),linear-gradient(110deg,#141d49_0%,#091027_70%)]" />
         <div className="absolute inset-0 overflow-hidden bg-[linear-gradient(90deg,rgba(9,16,39,.08)_0%,rgba(9,16,39,.55)_47%,#091027_77%)]" />
-        <div className="container relative z-30 grid min-h-[570px] items-center py-20 md:min-h-[620px] md:grid-cols-[1fr_1.15fr] md:py-24">
-          <div className="order-1 max-w-[590px] md:order-2">
+        <div className="container relative z-30 py-14 md:py-20">
+          <div className="max-w-[640px]">
             <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/[.07] px-3 py-1.5 text-[11px] font-semibold text-[#d8d5ff]">
               <Sparkles size={13} className="text-[#9f96ff]" /> محرك بحث للروايات العربية
             </div>
@@ -45,12 +49,6 @@ export default function Home() {
                   {label}
                 </Link>
               ))}
-            </div>
-          </div>
-          <div className="order-2 mt-12 flex justify-center md:order-1 md:mt-0 md:justify-start">
-            <div className="relative h-[340px] w-[280px]">
-              <div className="absolute inset-0 rounded-[28px] bg-gradient-to-br from-[#6b63e8]/40 to-transparent blur-2xl" />
-              <div className="absolute inset-4 rounded-[24px] border border-white/10 bg-white/5 backdrop-blur" />
             </div>
           </div>
         </div>
@@ -74,6 +72,7 @@ export default function Home() {
               : novels.map((novel) => <NovelCard key={novel.id} novel={novel} />)}
           </div>
         </section>
+        {genres.length > 0 && (
         <section className="mt-20">
           <SectionHeading eyebrow="حسب المزاج" title="استكشف حسب مزاجك" subtitle="تصنيفات تساعدك تختار بسرعة." href="/explore" />
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -82,6 +81,8 @@ export default function Home() {
             ))}
           </div>
         </section>
+        )}
+        {authors.length > 0 && (
         <section className="mt-20">
           <SectionHeading eyebrow="أصوات مؤثرة" title="مؤلفون يستحقون المتابعة" subtitle="تعرّف على أسماء صنعت ذائقة جيل كامل." href="/explore" />
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
@@ -90,6 +91,7 @@ export default function Home() {
             ))}
           </div>
         </section>
+        )}
         <section className="relative mt-20 overflow-hidden rounded-[28px] border border-white/10 bg-[#0c1430] p-8 text-white md:p-12">
           <div className="pointer-events-none absolute -left-20 top-0 h-64 w-64 rounded-full bg-[#675de8]/25 blur-3xl" />
           <div className="relative grid items-center gap-10 md:grid-cols-[1fr_auto]">
@@ -110,10 +112,11 @@ export default function Home() {
             ))}
           </div>
         </section>
+        {seriesItems.length > 0 && (
         <section className="mt-20">
           <SectionHeading eyebrow="رحلات من أكثر من جزء" title="السلاسل الأكثر متابعة" subtitle="رتّب قراءتك، جزءًا بعد جزء." />
           <div className="grid gap-4 md:grid-cols-3">
-            {(seriesQuery.data ?? []).map((item) => (
+            {seriesItems.map((item) => (
               <Link key={item.slug} href={`/series/${item.slug}`} className="interactive group flex items-center gap-4 rounded-[20px] border border-border bg-card p-4">
                 <img src={item.coverUrl || coverFallback} alt={item.title} className="h-28 w-20 rounded-xl object-cover" />
                 <div className="min-w-0">
@@ -130,6 +133,7 @@ export default function Home() {
             ))}
           </div>
         </section>
+        )}
       </main>
     </div>
   );
