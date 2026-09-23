@@ -56,8 +56,8 @@
     "pg": "^8.23.0",
     "postgres": "^3.4.7",
     "react": "^19.2.1",
-    "react-day-picker": "^9.11.1",
     "react-dom": "^19.2.1",
+    "react-day-picker": "^9.11.1",
     "react-hook-form": "^7.64.0",
     "react-resizable-panels": "^3.0.6",
     "recharts": "^2.15.2",
@@ -108,7 +108,7 @@
     }
   },
   "scripts": {
-    "build": "node scripts/restore-db.mjs && node scripts/patch-genre-counts.mjs && node scripts/restore-app.mjs && node scripts/restore-app-client.mjs && node scripts/patch-quotes-route.mjs && node scripts/patch-quotes-pagination.mjs && node scripts/patch-routers-cache.mjs && node scripts/patch-search-filters.mjs && node scripts/patch-quotes-enrich.mjs && node scripts/patch-quote-categories.mjs && node scripts/patch-seo-cache.mjs && node scripts/patch-css-slim.mjs && node scripts/patch-novel-perf.mjs && node scripts/patch-ssr-lcp.mjs && node scripts/patch-security-hardening.mjs && node scripts/patch-ssr-paint-client.mjs && node scripts/patch-account-supabase.mjs && tsx scripts/generate-sitemap.ts && vite build && pnpm exec esbuild server/_core/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist && pnpm exec esbuild scripts/vercel-api-entry.ts --platform=node --packages=external --bundle --format=esm --outfile=api/index.js",
+    "build": "node scripts/restore-db.mjs && node scripts/patch-genre-counts.mjs && node scripts/restore-app.mjs && node scripts/restore-app-client.mjs && node scripts/patch-quotes-route.mjs && node scripts/patch-quotes-pagination.mjs && node scripts/patch-routers-cache.mjs && node scripts/patch-search-filters.mjs && node scripts/patch-quotes-enrich.mjs && node scripts/patch-quote-categories.mjs && node scripts/patch-seo-cache.mjs && node scripts/patch-css-slim.mjs && node scripts/patch-novel-perf.mjs && node scripts/patch-ssr-lcp.mjs && node scripts/patch-security-hardening.mjs && node scripts/patch-spa-fallback.mjs && node scripts/patch-ssr-paint-client.mjs && node scripts/patch-account-supabase.mjs && tsx scripts/generate-sitemap.ts && vite build && pnpm exec esbuild server/_core/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist && pnpm exec esbuild scripts/vercel-api-entry.ts --platform=node --packages=external --bundle --format=esm --outfile=api/index.js",
     "check": "tsc --noEmit",
     "db:push": "drizzle-kit generate && drizzle-kit migrate",
     "db:seed": "tsx server/seed.ts",
