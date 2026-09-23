@@ -10,7 +10,6 @@
     <link rel="preconnect" href="https://res.cloudinary.com" />
     <link rel="dns-prefetch" href="https://pagead2.googlesyndication.com" />
     <link rel="dns-prefetch" href="https://www.googletagmanager.com" />
-    <link rel="preload" as="image" href="https://images.unsplash.com/photo-1543002588-bfa74002ed7e?auto=format&fit=crop&w=700&q=88" fetchpriority="high" />
     <meta name="description" content="هنا تبدأ حكايتك مع عالم الروايات… 📚✨ اكتشف روايات تستحق القراءة، أشهر الكُتّاب وأعمالهم، واستكشف عوالم الغموض والرعب والرومانسية والدراما والخيال… بدون حرق 🔥 | ترشيحات · كتّاب · نبذات · اقتباسات" />
     <link rel="canonical" href="https://e7ketha.com/" />
     <meta property="og:type" content="website" />
@@ -25,21 +24,26 @@
     <meta property="og:image:alt" content="𝐄𝟳𝐤𝐞𝐭𝐡𝐚 — كل رواية لها حكاية" />
     <meta name="twitter:image" content="https://e7ketha.com/e7ketha-cover-wide.png" />
     <meta name="twitter:card" content="summary_large_image" />
-    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" onload="this.onload=null;this.rel='stylesheet'" />
-    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" /></noscript>
-    <!-- Google tag (gtag.js) GA4 G-HJM7WK3Y6L — load immediately so Analytics receives hits -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-HJM7WK3Y6L"></script>
-    <script>
-      window.dataLayer = window.dataLayer || [];
-      function gtag(){dataLayer.push(arguments);}
-      gtag('js', new Date());
-      gtag('config', 'G-HJM7WK3Y6L', { send_page_view: true });
-    </script>
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700&display=swap" onload="this.onload=null;this.rel='stylesheet'" />
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700&display=swap" /></noscript>
     <script>
       (() => {
         const loadThirdParty = () => {
           if (window.__riwayaThirdPartyLoaded) return;
           window.__riwayaThirdPartyLoaded = true;
+          // GA4 first (page_view), then GTM + AdSense — all after idle so they never block FCP/LCP
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          window.gtag = gtag;
+          const ga = document.createElement('script');
+          ga.async = true;
+          ga.src = 'https://www.googletagmanager.com/gtag/js?id=G-HJM7WK3Y6L';
+          ga.onload = function () {
+            gtag('js', new Date());
+            gtag('config', 'G-HJM7WK3Y6L', { send_page_view: true });
+          };
+          document.head.appendChild(ga);
+
           const scripts = [
             ['https://www.googletagmanager.com/gtm.js?id=GTM-WHXK2GT3', 'tag-manager'],
             ['https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-1874360923595437', 'adsense']
