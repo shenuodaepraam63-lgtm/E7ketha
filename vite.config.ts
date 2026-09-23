@@ -181,6 +181,46 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+    target: "es2020",
+    cssCodeSplit: true,
+    cssMinify: true,
+    modulePreload: { polyfill: false },
+    // Keep the entry slim; route pages stay lazy() in App.tsx.
+    // Vendor splits let the browser cache React/tRPC separately and download in parallel.
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return;
+          // React core — shared by every route
+          if (
+            id.includes("node_modules/react-dom") ||
+            id.includes("node_modules/react/") ||
+            id.includes("node_modules/scheduler")
+          ) {
+            return "react-vendor";
+          }
+          // Data layer
+          if (
+            id.includes("@tanstack") ||
+            id.includes("@trpc") ||
+            id.includes("superjson") ||
+            id.includes("node_modules/zod")
+          ) {
+            return "data-vendor";
+          }
+          // Heavy optional libs — only pulled when a route needs them
+          if (id.includes("framer-motion")) return "motion";
+          if (id.includes("recharts") || id.includes("/d3-")) return "charts";
+          if (id.includes("@radix-ui")) return "radix";
+          if (id.includes("lucide-react")) return "icons";
+          if (id.includes("date-fns")) return "date";
+          if (id.includes("@supabase")) return "supabase";
+          // Remaining node_modules
+          return "vendor";
+        },
+      },
+    },
+    chunkSizeWarningLimit: 700,
   },
   server: {
     host: true,
