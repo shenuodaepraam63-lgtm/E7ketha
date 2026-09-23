@@ -26,18 +26,7 @@ export async function authenticateSupabaseToken(token: string): Promise<User | n
     console.warn('[Auth] Local user lookup skipped:', dbError instanceof Error ? dbError.message : dbError);
   }
   if (localUser) return role === 'admin' && localUser.role !== 'admin' ? { ...localUser, role: 'admin' } : localUser;
-  // Keep Supabase authentication usable even when the optional local PostgreSQL
-  // connection has not been configured yet. Database-backed features will still
-  // require the database connection, but the user remains signed in.
-  return {
-    id: 0,
-    openId,
-    name: authUser.user_metadata?.full_name ?? authUser.user_metadata?.name ?? email?.split('@')[0] ?? null,
-    email,
-    loginMethod: 'supabase',
-    role: role ?? 'user',
-    createdAt: new Date(authUser.created_at ?? Date.now()),
-    updatedAt: new Date(),
-    lastSignedIn: new Date(),
-  } as User;
+  /* AUTH_NO_ZERO_ID — never use id:0 (breaks saved_quotes FK) */
+  console.warn('[Auth] Local user row missing after upsert for', openId);
+  return null;
 }
