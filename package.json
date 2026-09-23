@@ -106,7 +106,7 @@
     }
   },
   "scripts": {
-    "build": "node scripts/restore-db.mjs && node scripts/restore-app.mjs && node scripts/restore-app-client.mjs && node scripts/patch-routers-cache.mjs && node scripts/patch-search-filters.mjs && tsx scripts/generate-sitemap.ts && vite build && pnpm exec esbuild server/_core/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist && pnpm exec esbuild scripts/vercel-api-entry.ts --platform=node --packages=external --bundle --format=esm --outfile=api/index.js",
+    "build": "node scripts/restore-db.mjs && node scripts/restore-app.mjs && node scripts/restore-app-client.mjs && node scripts/patch-routers-cache.mjs && node scripts/patch-search-filters.mjs && node scripts/patch-quotes-enrich.mjs && tsx scripts/generate-sitemap.ts && vite build && pnpm exec esbuild server/_core/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist && pnpm exec esbuild scripts/vercel-api-entry.ts --platform=node --packages=external --bundle --format=esm --outfile=api/index.js",
     "check": "tsc --noEmit",
     "db:push": "drizzle-kit generate && drizzle-kit migrate",
     "db:seed": "tsx server/seed.ts",
