@@ -104,6 +104,10 @@
         {
           "key": "Vary",
           "value": "Origin"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
         }
       ]
     },
@@ -126,88 +130,54 @@
         },
         {
           "key": "X-Frame-Options",
-          "value": "SAMEORIGIN"
+          "value": "DENY"
+        },
+        {
+          "key": "Permissions-Policy",
+          "value": "camera=(), microphone=(), geolocation=(), payment=()"
+        },
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://www.google-analytics.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://api.e7ketha.com https://*.supabase.co https://www.google-analytics.com https://www.googletagmanager.com https://wsrv.nl; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
+        },
+        {
+          "key": "X-DNS-Prefetch-Control",
+          "value": "on"
+        }
+      ]
+    },
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
         }
       ]
     }
   ],
-  "routes": [
+  "rewrites": [
     {
-      "src": "^/$",
-      "dest": "/api?resource=seo&path=%2F"
+      "source": "/api/(.*)",
+      "destination": "/api"
     },
     {
-      "src": "^/sitemap\\.xml$",
-      "dest": "/api?resource=sitemap"
-    },
-    {
-      "src": "^/sitemap/(.*)\\.xml$",
-      "dest": "/api?resource=$1"
-    },
-    {
-      "src": "^/(books|novel|novels)/([^/]+)$",
-      "dest": "/api?resource=seo&path=/$1/$2"
-    },
-    {
-      "src": "^/authors/([^/]+)$",
-      "dest": "/api?resource=seo&path=/authors/$1"
-    },
-    {
-      "src": "^/genres/([^/]+)$",
-      "dest": "/api?resource=seo&path=/genres/$1"
-    },
-    {
-      "src": "^/series/([^/]+)$",
-      "dest": "/api?resource=seo&path=/series/$1"
-    },
-    {
-      "src": "^/quotes/categories$",
-      "dest": "/api?resource=seo&path=%2Fquotes%2Fcategories"
-    },
-    {
-      "src": "/quotes",
-      "dest": "/api?resource=seo&path=/quotes"
-    },
-    {
-      "src": "^/quotes/([0-9]+)$",
-      "dest": "/api?resource=seo&path=/quotes/$1"
-    },
-    {
-      "src": "^/quotes/category/(.*)",
-      "dest": "/api?resource=seo&path=/quotes/category/$1"
-    },
-    {
-      "src": "^/(explore|discover|articles|about|how-it-works|faq|contact|privacy|terms|report)/?$",
-      "dest": "/api?resource=seo&path=/$1"
-    },
-    {
-      "src": "^/articles/([^/]+)$",
-      "dest": "/api?resource=seo&path=/articles/$1"
-    },
-    {
-      "src": "^/topics/?$",
-      "dest": "/api?resource=seo&path=%2Ftopics"
-    },
-    {
-      "src": "^/topics/([^/]+)$",
-      "dest": "/api?resource=seo&path=/topics/$1"
-    },
-    {
-      "handle": "filesystem"
-    },
-    {
-      "src": "^/api/(.*)$",
-      "dest": "/api"
-    },
-    {
-      "src": "^/(.*)$",
-      "dest": "/index.html"
+      "source": "/((?!assets/).*)",
+      "destination": "/api"
     }
   ],
   "crons": [
     {
       "path": "/api/warm",
-      "schedule": "0 4 * * *"
+      "schedule": "0 12 * * *"
     }
   ]
 }
