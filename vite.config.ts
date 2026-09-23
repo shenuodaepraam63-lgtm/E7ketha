@@ -72,6 +72,7 @@ function writeToLogFile(source: LogSource, entries: unknown[]) {
  * Vite plugin to collect browser debug logs
  * - POST /__manus__/logs: Browser sends logs, written directly to files
  * - Files: browserConsole.log, networkRequests.log, sessionReplay.log
+ * - Auto-trimmed when exceeding 1MB (keeps newest 60%)
  */
 function vitePluginManusDebugCollector(): Plugin {
   return {
@@ -84,9 +85,31 @@ function vitePluginManusDebugCollector(): Plugin {
 
         const handlePayload = (payload: unknown) => {
           try {
-            const body = payload as { source?: LogSource; entries?: unknown[] };
-            if (body.source && Array.isArray(body.entries)) {
-              writeToLogFile(body.source, body.entries);
+            // Support both shapes:
+            // 1. Array of typed entries: [{ type: 'browserConsole', ... }, ...]
+            // 2. Object with arrays: { browserConsole: [...], networkRequests: [...], sessionReplay: [...] }
+            if (Array.isArray(payload)) {
+              const byType: Record<LogSource, unknown[]> = {
+                browserConsole: [],
+                networkRequests: [],
+                sessionReplay: [],
+              };
+              for (const entry of payload) {
+                const e = entry as { type?: string };
+                if (e && typeof e === "object" && e.type && e.type in byType) {
+                  byType[e.type as LogSource].push(entry);
+                }
+              }
+              for (const [source, entries] of Object.entries(byType)) {
+                writeToLogFile(source as LogSource, entries);
+              }
+            } else if (payload && typeof payload === "object") {
+              const data = payload as Record<string, unknown>;
+              for (const key of ["browserConsole", "networkRequests", "sessionReplay"] as LogSource[]) {
+                if (Array.isArray(data[key])) {
+                  writeToLogFile(key, data[key] as unknown[]);
+                }
+              }
             }
             res.writeHead(200, { "Content-Type": "application/json" });
             res.end(JSON.stringify({ success: true }));
@@ -127,13 +150,16 @@ function vitePluginManusDebugCollector(): Plugin {
 }
 
 // jsxLocPlugin injects data-loc attributes that break SSR hydration (React #418).
-// Keep it only in development for debugging.
+// Manus runtime injects ~367KB debug script — never ship to production/Vercel.
+// Enable local Manus tooling only with MANUS_DEV=1.
+const isProdBuild =
+  process.env.NODE_ENV === "production" ||
+  process.env.VERCEL === "1" ||
+  process.env.MANUS_DEV !== "1";
 const plugins = [
   react(),
   tailwindcss(),
-  ...(process.env.NODE_ENV === "production" ? [] : [jsxLocPlugin()]),
-  vitePluginManusRuntime(),
-  vitePluginManusDebugCollector(),
+  ...(isProdBuild ? [] : [jsxLocPlugin(), vitePluginManusRuntime(), vitePluginManusDebugCollector()]),
 ];
 
 export default defineConfig({
