@@ -2,6 +2,7 @@ import { createApp } from "../server/app.ts";
 import { tryRenderStaticSeo } from "../server/seoPublicPages.ts";
 import { tryRenderArticleSeo } from "../server/seoArticlePages.ts";
 import { tryRenderExpandedSitemap } from "../server/sitemapExpanded.ts";
+import { listGenres } from "../server/db.ts";
 
 const app = createApp();
 
@@ -38,6 +39,27 @@ export default async function handler(req: any, res: any) {
     if (String(req.method || "").toUpperCase() === "OPTIONS") {
       res.statusCode = 204;
       res.end();
+      return;
+    }
+
+    // Keep-warm + CDN-friendly cache on public tRPC GETs (no Authorization)
+    const pathOnly = String(req.url || "/").split("?")[0];
+    const method = String(req.method || "GET").toUpperCase();
+    const auth = String(req.headers?.authorization || req.headers?.Authorization || "");
+    if (method === "GET" && pathOnly.includes("/api/trpc") && !auth) {
+      res.setHeader("Cache-Control", "public, s-maxage=30, stale-while-revalidate=120");
+      res.setHeader("CDN-Cache-Control", "public, s-maxage=30, stale-while-revalidate=120");
+    }
+    if (pathOnly === "/api/warm" || pathOnly === "/warm") {
+      try {
+        await listGenres();
+      } catch (e) {
+        console.warn("[warm]", e);
+      }
+      res.statusCode = 200;
+      res.setHeader("Content-Type", "application/json; charset=utf-8");
+      res.setHeader("Cache-Control", "no-store");
+      res.end(JSON.stringify({ ok: true, at: new Date().toISOString() }));
       return;
     }
 
