@@ -1,9 +1,30 @@
-import { createClient, type SupportedStorage } from '@supabase/supabase-js';
+/**
+ * Lazy Supabase client — @supabase/supabase-js (~200KB) is NOT on the homepage critical path.
+ * Loaded only when auth is needed (login, admin, session cookie present).
+ */
+import type { SupabaseClient, SupportedStorage } from '@supabase/supabase-js';
 
 const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
 const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined;
 
-/** Share session across e7ketha.com subdomains via cookies */
+export const supabaseConfigured = Boolean(url && publishableKey);
+
+/** True if browser likely has an auth session (no SDK load). */
+export function hasAuthHint(): boolean {
+  if (typeof document === 'undefined') return false;
+  const c = document.cookie || '';
+  if (c.includes('sb-') || c.includes('auth-token')) return true;
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && (k.startsWith('sb-') || k.includes('auth-token'))) return true;
+    }
+  } catch {
+    /* private mode */
+  }
+  return false;
+}
+
 function cookieDomain(): string {
   if (typeof window === 'undefined') return '';
   const host = window.location.hostname.toLowerCase();
@@ -12,7 +33,7 @@ function cookieDomain(): string {
   return '';
 }
 
-const CHUNK_SIZE = 3180; // stay under typical 4KB cookie limit with encoding overhead
+const CHUNK_SIZE = 3180;
 
 function writeCookie(name: string, value: string, maxAgeSec: number) {
   if (typeof document === 'undefined') return;
@@ -52,7 +73,6 @@ function eraseCookie(name: string) {
   writeCookie(name, '', 0);
 }
 
-/** Cookie storage shared on *.e7ketha.com (chunked for large JWT payloads) */
 function createSharedCookieStorage(): SupportedStorage {
   return {
     getItem(key: string) {
@@ -73,31 +93,26 @@ function createSharedCookieStorage(): SupportedStorage {
       const prevChunks = Number(readCookies()[`${key}.chunks`] || 0);
       for (let i = 0; i < Math.max(prevChunks, 20); i++) eraseCookie(`${key}.${i}`);
       eraseCookie(`${key}.chunks`);
-
-      const maxAge = 60 * 60 * 24 * 400;
       if (value.length <= CHUNK_SIZE) {
-        writeCookie(key, value, maxAge);
+        writeCookie(key, value, 60 * 60 * 24 * 400);
         return;
       }
       const chunks = Math.ceil(value.length / CHUNK_SIZE);
-      writeCookie(`${key}.chunks`, String(chunks), maxAge);
+      writeCookie(`${key}.chunks`, String(chunks), 60 * 60 * 24 * 400);
       for (let i = 0; i < chunks; i++) {
-        writeCookie(`${key}.${i}`, value.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE), maxAge);
+        writeCookie(`${key}.${i}`, value.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE), 60 * 60 * 24 * 400);
       }
     },
     removeItem(key: string) {
       eraseCookie(key);
-      const all = readCookies();
-      const count = Number(all[`${key}.chunks`] || 0);
-      eraseCookie(`${key}.chunks`);
+      const count = Number(readCookies()[`${key}.chunks`] || 0);
       for (let i = 0; i < Math.max(count, 20); i++) eraseCookie(`${key}.${i}`);
+      eraseCookie(`${key}.chunks`);
     },
   };
 }
 
-/** One-time migrate localStorage session → shared cookies */
 function migrateLocalStorageToCookies(storage: SupportedStorage) {
-  if (typeof window === 'undefined' || typeof localStorage === 'undefined') return;
   try {
     const keys: string[] = [];
     for (let i = 0; i < localStorage.length; i++) {
@@ -110,19 +125,14 @@ function migrateLocalStorageToCookies(storage: SupportedStorage) {
       if (!storage.getItem(key)) storage.setItem(key, value);
     }
   } catch {
-    // ignore quota / private mode
+    /* ignore */
   }
 }
 
-const cookieStorage = typeof window !== 'undefined' ? createSharedCookieStorage() : undefined;
-if (cookieStorage) migrateLocalStorageToCookies(cookieStorage);
-
-/**
- * Hybrid storage: session cookies shared across *.e7ketha.com,
- * but PKCE code-verifier always in localStorage (cookies can drop it → recovery fails).
- */
 function createAuthStorage(): SupportedStorage | undefined {
-  if (typeof window === 'undefined' || !cookieStorage) return undefined;
+  if (typeof window === 'undefined') return undefined;
+  const cookieStorage = createSharedCookieStorage();
+  migrateLocalStorageToCookies(cookieStorage);
   return {
     getItem(key: string) {
       if (key.includes('code-verifier')) {
@@ -158,24 +168,35 @@ function createAuthStorage(): SupportedStorage | undefined {
   };
 }
 
-const authStorage = createAuthStorage();
+let client: SupabaseClient | null = null;
+let loading: Promise<SupabaseClient | null> | null = null;
 
-export const supabase =
-  url && publishableKey
-    ? createClient(url, publishableKey, {
-        auth: {
-          persistSession: true,
-          autoRefreshToken: true,
-          detectSessionInUrl: true,
-          flowType: 'pkce',
-          storage: authStorage,
-        },
-      })
-    : null;
-
-export const supabaseConfigured = Boolean(supabase);
-
-export function requireSupabase() {
-  if (!supabase) throw new Error('Supabase Auth is not configured');
-  return supabase;
+/** Load Supabase SDK once — call only on auth routes or when hasAuthHint(). */
+export async function getSupabase(): Promise<SupabaseClient | null> {
+  if (!supabaseConfigured) return null;
+  if (client) return client;
+  if (loading) return loading;
+  loading = (async () => {
+    const { createClient } = await import('@supabase/supabase-js');
+    client = createClient(url!, publishableKey!, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true,
+        flowType: 'pkce',
+        storage: createAuthStorage(),
+      },
+    });
+    return client;
+  })();
+  return loading;
 }
+
+export async function requireSupabase(): Promise<SupabaseClient> {
+  const sb = await getSupabase();
+  if (!sb) throw new Error('Supabase Auth is not configured');
+  return sb;
+}
+
+/** Sync export always null — use getSupabase(). Prevents accidental static SDK pull. */
+export const supabase: SupabaseClient | null = null;
