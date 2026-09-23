@@ -1,8 +1,32 @@
 import { useCallback, useEffect, useState } from 'react';
 import { getSupabase, hasAuthHint, supabaseConfigured } from '@/lib/supabase';
 
-type AuthUser = { id: string; email?: string | null };
+export type AuthUser = {
+  id: string;
+  email?: string | null;
+  /** Display name from signup metadata or email local-part */
+  name?: string | null;
+};
+
 type AuthSession = { user: AuthUser; access_token?: string } | null;
+
+function mapAuthUser(raw: any): AuthUser | null {
+  if (!raw?.id) return null;
+  const meta = (raw.user_metadata ?? {}) as Record<string, unknown>;
+  const fromMeta =
+    (typeof meta.full_name === 'string' && meta.full_name.trim()) ||
+    (typeof meta.name === 'string' && meta.name.trim()) ||
+    (typeof meta.display_name === 'string' && meta.display_name.trim()) ||
+    '';
+  const fromEmail = typeof raw.email === 'string' && raw.email.includes('@')
+    ? raw.email.split('@')[0]
+    : '';
+  return {
+    id: String(raw.id),
+    email: raw.email ?? null,
+    name: fromMeta || fromEmail || null,
+  };
+}
 
 export function useAuth() {
   const [session, setSession] = useState<AuthSession>(null);
@@ -31,13 +55,15 @@ export function useAuth() {
         return;
       }
       const { data } = await sb.auth.getSession();
-      setSession(data.session as AuthSession);
-      setUser((data.session?.user as AuthUser) ?? null);
+      const mapped = mapAuthUser(data.session?.user);
+      setSession(data.session ? { user: mapped!, access_token: data.session.access_token } : null);
+      setUser(mapped);
       setSessionReady(true);
       setLoading(false);
       const { data: sub } = sb.auth.onAuthStateChange((_event, next) => {
-        setSession(next as AuthSession);
-        setUser((next?.user as AuthUser) ?? null);
+        const u = mapAuthUser(next?.user);
+        setSession(next ? { user: u!, access_token: next.access_token } : null);
+        setUser(u);
       });
       unsub = () => sub.subscription.unsubscribe();
     })();
