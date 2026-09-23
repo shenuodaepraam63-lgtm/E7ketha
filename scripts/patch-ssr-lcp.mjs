@@ -13,7 +13,10 @@ if (!fs.existsSync(f)) {
   process.exit(0);
 }
 let s = fs.readFileSync(f, "utf8");
-if (s.includes("/* SSR_PAINT_ISLAND */")) {
+// Sanitize bad nested comments from older patch versions
+s = s.replace(/\/\*\* \/\* SSR_PAINT_ISLAND \*\/ LCP-safe cover URLs for SSR \*\//g, "/* SSR_PAINT_ISLAND — LCP-safe cover URLs for SSR */");
+s = s.replace(/\/\*\* \/\* SSR_PAINT_ISLAND \*\//g, "/* SSR_PAINT_ISLAND */");
+if (s.includes("/* SSR_PAINT_ISLAND */") && s.includes("buildHomePaintIsland") && s.includes("paintHtml")) {
   console.log("[patch-ssr-lcp] already applied (paint island)");
   process.exit(0);
 }
@@ -21,7 +24,7 @@ if (s.includes("/* SSR_PAINT_ISLAND */")) {
 // --- optimizeCoverUrl helper ---
 if (!s.includes("function optimizeCoverUrl(")) {
   const helper = `
-/** /* SSR_PAINT_ISLAND */ LCP-safe cover URLs for SSR */
+/* SSR_PAINT_ISLAND — LCP-safe cover URLs for SSR */
 function optimizeCoverUrl(src: string | null | undefined, width = 400): string {
   if (!src) return \`\${SITE_URL}/e7ketha-cover-wide.png\`;
   try {
@@ -54,7 +57,7 @@ function buildHomePaintIsland(novels: Array<{ slug: string; title: string; cover
   s = s.replace("function renderHomepageShell(", helper + "function renderHomepageShell(");
 } else if (!s.includes("buildHomePaintIsland")) {
   const helper = `
-/** /* SSR_PAINT_ISLAND */
+/* SSR_PAINT_ISLAND */
 function buildHomePaintIsland(novels: Array<{ slug: string; title: string; coverUrl?: string | null }>) {
   const top = novels.slice(0, 4);
   const covers = top.map((novel, i) => {
