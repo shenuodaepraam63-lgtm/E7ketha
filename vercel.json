@@ -1,25 +1,63 @@
 {
-  "version": 2,
-  "installCommand": "pnpm install --no-frozen-lockfile",
+  "installCommand": "corepack enable && pnpm install --no-frozen-lockfile",
   "buildCommand": "pnpm build",
   "outputDirectory": "dist/public",
-  "rewrites": [
-    {
-      "source": "/(.*)",
-      "has": [{ "type": "host", "value": "api.e7ketha.com" }],
-      "destination": "/api"
+  "framework": "vite",
+  "functions": {
+    "api/index.js": {
+      "includeFiles": "dist/public/**"
     }
-  ],
-  "crons": [
+  },
+  "redirects": [
     {
-      "path": "/api/warm",
-      "schedule": "*/5 * * * *"
+      "source": "/:path*",
+      "has": [
+        {
+          "type": "host",
+          "value": "e7ketha.vercel.app"
+        }
+      ],
+      "destination": "https://e7ketha.com/:path*",
+      "permanent": true
+    },
+    {
+      "source": "/:path*",
+      "has": [
+        {
+          "type": "host",
+          "value": "www.e7ketha.com"
+        }
+      ],
+      "destination": "https://e7ketha.com/:path*",
+      "permanent": true
     }
   ],
   "headers": [
     {
       "source": "/(.*)",
+      "has": [
+        {
+          "type": "host",
+          "value": "admin.e7ketha.com"
+        }
+      ],
       "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "no-referrer"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
         {
           "key": "Permissions-Policy",
           "value": "camera=(), microphone=(), geolocation=()"
@@ -28,46 +66,148 @@
     },
     {
       "source": "/(.*)",
-      "has": [{ "type": "host", "value": "api.e7ketha.com" }],
+      "has": [
+        {
+          "type": "host",
+          "value": "api.e7ketha.com"
+        }
+      ],
       "headers": [
-        { "key": "X-Robots-Tag", "value": "noindex, nofollow" },
-        { "key": "X-Content-Type-Options", "value": "nosniff" },
-        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
-        { "key": "Access-Control-Allow-Origin", "value": "https://e7ketha.com" },
-        { "key": "Access-Control-Allow-Methods", "value": "GET,POST,OPTIONS" },
-        { "key": "Access-Control-Allow-Headers", "value": "Content-Type, Authorization" },
-        { "key": "Access-Control-Allow-Credentials", "value": "true" },
-        { "key": "Vary", "value": "Origin" }
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        },
+        {
+          "key": "Access-Control-Allow-Origin",
+          "value": "https://e7ketha.com"
+        },
+        {
+          "key": "Access-Control-Allow-Methods",
+          "value": "GET,POST,OPTIONS"
+        },
+        {
+          "key": "Access-Control-Allow-Headers",
+          "value": "Content-Type, Authorization"
+        },
+        {
+          "key": "Access-Control-Allow-Credentials",
+          "value": "true"
+        },
+        {
+          "key": "Vary",
+          "value": "Origin"
+        }
       ]
     },
     {
       "source": "/(.*)",
-      "has": [{ "type": "host", "value": "e7ketha.com" }],
+      "has": [
+        {
+          "type": "host",
+          "value": "e7ketha.com"
+        }
+      ],
       "headers": [
-        { "key": "X-Content-Type-Options", "value": "nosniff" },
-        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
-        { "key": "X-Frame-Options", "value": "SAMEORIGIN" }
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "SAMEORIGIN"
+        }
       ]
     }
   ],
   "routes": [
-    { "src": "^/$", "dest": "/api?resource=seo&path=%2F" },
-    { "src": "^/sitemap\\.xml$", "dest": "/api?resource=sitemap" },
-    { "src": "^/sitemap/(.*)\\.xml$", "dest": "/api?resource=$1" },
-    { "src": "^/(books|novel|novels)/([^/]+)$", "dest": "/api?resource=seo&path=/$1/$2" },
-    { "src": "^/authors/([^/]+)$", "dest": "/api?resource=seo&path=/authors/$1" },
-    { "src": "^/genres/([^/]+)$", "dest": "/api?resource=seo&path=/genres/$1" },
-    { "src": "^/series/([^/]+)$", "dest": "/api?resource=seo&path=/series/$1" },
-    { "src": "^/quotes/categories$", "dest": "/api?resource=seo&path=%2Fquotes%2Fcategories" },
-    { "src": "/quotes", "dest": "/api?resource=seo&path=/quotes" },
-    { "src": "^/quotes/([0-9]+)$", "dest": "/api?resource=seo&path=/quotes/$1" },
-    { "src": "^/quotes/category/(.*)", "dest": "/api?resource=seo&path=/quotes/category/$1" },
-    { "src": "^/(explore|discover|articles|about|how-it-works|faq|contact|privacy|terms|report)/?$", "dest": "/api?resource=seo&path=/$1" },
-    { "src": "^/articles/([^/]+)$", "dest": "/api?resource=seo&path=/articles/$1" },
-    { "src": "^/topics/?$", "dest": "/api?resource=seo&path=%2Ftopics" },
-    { "src": "^/topics/([^/]+)$", "dest": "/api?resource=seo&path=/topics/$1" },
-    { "handle": "filesystem" },
-    { "src": "^/api/(.*)$", "dest": "/api" },
-    { "src": "^/(.*)$", "dest": "/index.html" }
+    {
+      "src": "^/$",
+      "dest": "/api?resource=seo&path=%2F"
+    },
+    {
+      "src": "^/sitemap\\.xml$",
+      "dest": "/api?resource=sitemap"
+    },
+    {
+      "src": "^/sitemap/(.*)\\.xml$",
+      "dest": "/api?resource=$1"
+    },
+    {
+      "src": "^/(books|novel|novels)/([^/]+)$",
+      "dest": "/api?resource=seo&path=/$1/$2"
+    },
+    {
+      "src": "^/authors/([^/]+)$",
+      "dest": "/api?resource=seo&path=/authors/$1"
+    },
+    {
+      "src": "^/genres/([^/]+)$",
+      "dest": "/api?resource=seo&path=/genres/$1"
+    },
+    {
+      "src": "^/series/([^/]+)$",
+      "dest": "/api?resource=seo&path=/series/$1"
+    },
+    {
+      "src": "^/quotes/categories$",
+      "dest": "/api?resource=seo&path=%2Fquotes%2Fcategories"
+    },
+    {
+      "src": "/quotes",
+      "dest": "/api?resource=seo&path=/quotes"
+    },
+    {
+      "src": "^/quotes/([0-9]+)$",
+      "dest": "/api?resource=seo&path=/quotes/$1"
+    },
+    {
+      "src": "^/quotes/category/(.*)",
+      "dest": "/api?resource=seo&path=/quotes/category/$1"
+    },
+    {
+      "src": "^/(explore|discover|articles|about|how-it-works|faq|contact|privacy|terms|report)/?$",
+      "dest": "/api?resource=seo&path=/$1"
+    },
+    {
+      "src": "^/articles/([^/]+)$",
+      "dest": "/api?resource=seo&path=/articles/$1"
+    },
+    {
+      "src": "^/topics/?$",
+      "dest": "/api?resource=seo&path=%2Ftopics"
+    },
+    {
+      "src": "^/topics/([^/]+)$",
+      "dest": "/api?resource=seo&path=/topics/$1"
+    },
+    {
+      "handle": "filesystem"
+    },
+    {
+      "src": "^/api/(.*)$",
+      "dest": "/api"
+    },
+    {
+      "src": "^/(.*)$",
+      "dest": "/index.html"
+    }
+  ],
+  "crons": [
+    {
+      "path": "/api/warm",
+      "schedule": "*/5 * * * *"
+    }
   ]
 }
