@@ -42,8 +42,22 @@ export async function isQuoteSaved(userId: number, quoteId: number) {
   return Boolean(rows[0]);
 }
 export async function saveQuote(userId: number, quoteId: number) {
-  await request('saved_quotes', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=representation' }, body: JSON.stringify({ user_id: userId, quote_id: quoteId }) });
-  return { success: true } as const;
+  // Idempotent: already saved is success (avoid 409 on unique user_id+quote_id)
+  if (await isQuoteSaved(userId, quoteId)) return { saved: true as const };
+  try {
+    await request('saved_quotes?on_conflict=user_id,quote_id', {
+      method: 'POST',
+      headers: { Prefer: 'resolution=ignore-duplicates,return=minimal' },
+      body: JSON.stringify({ user_id: userId, quote_id: quoteId }),
+    });
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    if (msg.includes('23505') || msg.includes('already exists') || msg.includes('duplicate key')) {
+      return { saved: true as const };
+    }
+    throw error;
+  }
+  return { saved: true as const };
 }
 export async function unsaveQuote(userId: number, quoteId: number) {
   await request(`saved_quotes?user_id=eq.${userId}&quote_id=eq.${quoteId}`, { method: 'DELETE' });
