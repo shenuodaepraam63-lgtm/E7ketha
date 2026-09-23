@@ -6,7 +6,6 @@ import superjson from "superjson";
 import App from "./App";
 import { AnalyticsRouteTracker } from "@/components/AnalyticsRouteTracker";
 import "./index.css";
-import { supabase } from "@/lib/supabase";
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: 5 * 60 * 1000, gcTime: 30 * 60 * 1000, refetchOnWindowFocus: false, refetchOnReconnect: false, retry: 1 } } });
 
@@ -39,7 +38,12 @@ const trpcClient = trpc.createClient({
       url: resolveTrpcUrl(),
       transformer: superjson,
       async headers() {
-        const { data } = await supabase?.auth.getSession() ?? { data: { session: null } };
+        // Avoid loading ~200KB Supabase on anonymous homepage traffic.
+        const { hasAuthHint, getSupabase } = await import("@/lib/supabase");
+        if (!hasAuthHint()) return {};
+        const sb = await getSupabase();
+        if (!sb) return {};
+        const { data } = await sb.auth.getSession();
         return data.session?.access_token ? { Authorization: `Bearer ${data.session.access_token}` } : {};
       },
       fetch(input, init) {

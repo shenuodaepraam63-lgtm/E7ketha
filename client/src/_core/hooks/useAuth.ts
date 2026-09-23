@@ -1,36 +1,64 @@
-import { useEffect, useState } from 'react';
-import { supabase, supabaseConfigured } from '@/lib/supabase';
-import { trpc } from '@/lib/trpc';
+import { useCallback, useEffect, useState } from 'react';
+import { getSupabase, hasAuthHint, supabaseConfigured } from '@/lib/supabase';
+
+type AuthUser = { id: string; email?: string | null };
+type AuthSession = { user: AuthUser; access_token?: string } | null;
 
 export function useAuth() {
-  const [sessionReady, setSessionReady] = useState(!supabaseConfigured);
-  const me = trpc.auth.me.useQuery(undefined, { enabled: sessionReady, retry: false });
-  const utils = trpc.useUtils();
-  const logoutMutation = trpc.auth.logout.useMutation();
-  const loginEvent = trpc.auth.loginEvent.useMutation();
+  const [session, setSession] = useState<AuthSession>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [sessionReady, setSessionReady] = useState(true);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!supabase) {
+    if (!supabaseConfigured) {
       setSessionReady(true);
+      setLoading(false);
       return;
     }
-    void supabase.auth.getSession().finally(() => setSessionReady(true));
-    const { data } = supabase.auth.onAuthStateChange(() => {
+    if (!hasAuthHint()) {
       setSessionReady(true);
-      void utils.auth.me.invalidate();
-    });
-    return () => data.subscription.unsubscribe();
-  }, [utils.auth.me]);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    let unsub: (() => void) | undefined;
+    void (async () => {
+      const sb = await getSupabase();
+      if (!sb) {
+        setSessionReady(true);
+        setLoading(false);
+        return;
+      }
+      const { data } = await sb.auth.getSession();
+      setSession(data.session as AuthSession);
+      setUser((data.session?.user as AuthUser) ?? null);
+      setSessionReady(true);
+      setLoading(false);
+      const { data: sub } = sb.auth.onAuthStateChange((_event, next) => {
+        setSession(next as AuthSession);
+        setUser((next?.user as AuthUser) ?? null);
+      });
+      unsub = () => sub.subscription.unsubscribe();
+    })();
+    return () => {
+      unsub?.();
+    };
+  }, []);
 
-  useEffect(() => {
-    if (me.data?.openId && !loginEvent.isPending) void loginEvent.mutateAsync().catch(() => undefined);
-  }, [me.data?.openId]);
+  const logout = useCallback(async () => {
+    const sb = await getSupabase();
+    if (sb) await sb.auth.signOut();
+    setSession(null);
+    setUser(null);
+  }, []);
 
-  const logout = async () => {
-    if (supabase) await supabase.auth.signOut();
-    await logoutMutation.mutateAsync();
-    await utils.auth.me.invalidate();
+  return {
+    user,
+    session,
+    loading,
+    sessionReady,
+    isAuthenticated: Boolean(session),
+    logout,
   };
-
-  return { user: me.data ?? null, loading: !sessionReady || me.isLoading, logout };
 }
