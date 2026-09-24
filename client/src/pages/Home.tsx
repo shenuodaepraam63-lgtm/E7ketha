@@ -5,6 +5,7 @@ import { NovelCard } from '@/components/NovelCard';
 import { AuthorCard, GenreCard, SectionHeading } from '@/components/ExploreCards';
 import { toAuthor, toGenre, toNovel, coverFallback } from '@/lib/data';
 import { trpc } from '@/lib/trpc';
+import { BrowseRecommendations } from '@/components/BrowseRecommendations';
 
 export default function Home() {
   // Fire all public lists immediately so httpBatchLink packs them in one round-trip.
@@ -92,24 +93,18 @@ export default function Home() {
           </div>
         </section>
         )}
+        <BrowseRecommendations />
         <section className="relative mt-20 overflow-hidden rounded-[28px] border border-white/10 bg-[#0c1430] p-8 text-white md:p-12">
           <div className="pointer-events-none absolute -left-20 top-0 h-64 w-64 rounded-full bg-[#675de8]/25 blur-3xl" />
           <div className="relative grid items-center gap-10 md:grid-cols-[1fr_auto]">
             <div>
-              <div className="section-label mb-3 text-[#9d95ff]">مقترحات على مقاسك</div>
-              <h2 className="max-w-xl text-3xl font-extrabold md:text-4xl">ربما تعجبك هذه الروايات</h2>
-              <p className="mt-3 text-sm leading-7 text-white/55">اختيارات مشابهة لما تبحث عنه.</p>
+              <div className="section-label mb-3 text-[#9d95ff]">اكتشف أكثر</div>
+              <h2 className="max-w-xl text-3xl font-extrabold md:text-4xl">لم تجد ما يناسبك بعد؟</h2>
+              <p className="mt-3 text-sm leading-7 text-white/55">تصفّح التصنيفات أو ابحث بالاسم — وكل ما تفتحه يطوّر اقتراحاتك المحلية.</p>
             </div>
             <Link href="/discover" className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-[#eeeefe] px-5 text-xs font-extrabold text-[#171e42] transition hover:bg-white">
               ابدأ الاكتشاف <ArrowUpLeft size={16} />
             </Link>
-          </div>
-          <div className="relative mt-10 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {novels.slice(5, 9).map((novel) => (
-              <Link key={novel.id} href={`/books/${novel.slug}`} className="group overflow-hidden rounded-2xl border border-white/10">
-                <img src={novel.cover || coverFallback} alt={`غلاف ${novel.title}`} className="aspect-[3/4] w-full object-cover transition duration-500 group-hover:scale-105" />
-              </Link>
-            ))}
           </div>
         </section>
         {seriesItems.length > 0 && (
