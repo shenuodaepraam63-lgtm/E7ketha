@@ -19,10 +19,19 @@ function patchRouters() {
         pageType: z.string().max(40).optional(),
         entitySlug: z.string().max(200).optional().nullable(),
         userId: z.number().int().positive().optional().nullable(),
+        referrer: z.string().max(400).optional().nullable(),
+        siteHost: z.string().max(120).optional().nullable(),
       }))
       .mutation(({ input }) => trackPageView(input)),
   }),
   novels: router({`,
+    );
+  } else if (!s.includes('referrer: z.string()')) {
+    s = s.replace(
+      'userId: z.number().int().positive().optional().nullable(),',
+      `userId: z.number().int().positive().optional().nullable(),
+        referrer: z.string().max(400).optional().nullable(),
+        siteHost: z.string().max(120).optional().nullable(),`,
     );
   }
   if (!s.includes('visitors: adminProcedure')) {
