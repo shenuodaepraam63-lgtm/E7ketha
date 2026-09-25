@@ -12,7 +12,7 @@ declare global {
 
 const MEASUREMENT_ID = 'G-HJM7WK3Y6L';
 
-/** GA4 + first-party page_view (anonymous visitor). Does not track scroll/mouse. */
+/** GA4 + first-party page_view. Referrer sent only for server-side category (never stored raw). */
 export function AnalyticsRouteTracker() {
   const [location] = useLocation();
   const firstGa = useRef(true);
@@ -37,7 +37,12 @@ export function AnalyticsRouteTracker() {
     try {
       const visitorId = getVisitorId();
       if (visitorId.length >= 8) {
-        track.mutate({ visitorId, pagePath: path });
+        track.mutate({
+          visitorId,
+          pagePath: path,
+          referrer: typeof document !== 'undefined' ? document.referrer.slice(0, 400) : '',
+          siteHost: typeof window !== 'undefined' ? window.location.hostname : '',
+        });
       }
     } catch {
       /* never break navigation */
