@@ -15,7 +15,7 @@ export type PageViewInput = {
 
 export type AnalyticsRange = 'today' | 'week' | 'month';
 
-type AggRow = { page_path?: string; page_type?: string; entity_slug?: string; visitor_id?: string };
+type AggRow = { page_path?: string; page_type?: string; entity_slug?: string; visitor_id?: string; created_at?: string };
 
 function restKey() {
   return ENV.supabaseSecretKey || ENV.supabasePublishableKey;
@@ -143,7 +143,7 @@ function previousRange(range: AnalyticsRange): { start: string; end: string } {
 }
 
 async function fetchViewsSince(iso: string, until?: string): Promise<AggRow[]> {
-  let q = `page_views?select=page_path,page_type,entity_slug,visitor_id&created_at=gte.${iso}`;
+  let q = `page_views?select=page_path,page_type,entity_slug,visitor_id,created_at&created_at=gte.${iso}`;
   if (until) q += `&created_at=lt.${until}`;
   q += '&limit=10000';
   const result = await rest<AggRow[]>(q, { method: 'GET' });
@@ -194,10 +194,61 @@ export async function getVisitorAnalytics(range: AnalyticsRange = 'today') {
   const start = rangeStart(range);
   const rows = await fetchViewsSince(start);
   const current = aggregate(rows);
+
   const prev = previousRange(range);
   const prevRows = await fetchViewsSince(prev.start, prev.end);
   const previous = aggregate(prevRows);
+
   const probe = await rest('page_views?select=id&limit=1', { method: 'GET' });
+
+  const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+  let activeRows = rows.filter((r) => r.created_at && r.created_at >= tenMinAgo);
+  if (range !== 'today' || activeRows.length === 0) {
+    activeRows = await fetchViewsSince(tenMinAgo);
+  }
+  const activeNow = new Set(activeRows.map((r) => r.visitor_id).filter(Boolean)).size;
+
+  const dayMap = new Map<string, { views: number; visitors: Set<string> }>();
+  for (const r of rows) {
+    const day = (r.created_at || '').slice(0, 10);
+    if (!day) continue;
+    if (!dayMap.has(day)) dayMap.set(day, { views: 0, visitors: new Set() });
+    const bucket = dayMap.get(day)!;
+    bucket.views += 1;
+    if (r.visitor_id) bucket.visitors.add(r.visitor_id);
+  }
+  const series: Array<{ day: string; views: number; unique: number }> = [];
+  const cursor = new Date(start);
+  const end = new Date();
+  end.setHours(23, 59, 59, 999);
+  while (cursor <= end) {
+    const key = cursor.toISOString().slice(0, 10);
+    const b = dayMap.get(key);
+    series.push({ day: key, views: b?.views ?? 0, unique: b?.visitors.size ?? 0 });
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  let busiestDay: { day: string; views: number } | null = null;
+  for (const s of series) {
+    if (!busiestDay || s.views > busiestDay.views) busiestDay = { day: s.day, views: s.views };
+  }
+  if (busiestDay && busiestDay.views === 0) busiestDay = null;
+
+  const otherFromRows = new Map<string, number>();
+  for (const r of rows) {
+    if ((r.page_type || 'other') === 'other') {
+      const path = r.page_path || '/';
+      otherFromRows.set(path, (otherFromRows.get(path) || 0) + 1);
+    }
+  }
+  const otherPathsList = [...otherFromRows.entries()]
+    .map(([path, views]) => ({ path, views }))
+    .sort((a, b) => b.views - a.views)
+    .slice(0, 12);
+
+  const compareLabel =
+    range === 'today' ? 'مقارنة بالأمس' : range === 'week' ? 'مقارنة بالـ7 أيام السابقة' : 'مقارنة بالـ30 يومًا السابقة';
+
   return {
     range,
     tableOk: probe.ok,
@@ -205,6 +256,11 @@ export async function getVisitorAnalytics(range: AnalyticsRange = 'today') {
     uniqueVisitors: current.uniqueVisitors,
     previousPageViews: previous.pageViews,
     previousUniqueVisitors: previous.uniqueVisitors,
+    compareLabel,
+    activeNow,
+    series,
+    busiestDay,
+    otherPaths: otherPathsList,
     topPages: current.topPages,
     byPageType: current.byPageType,
     topNovels: current.topNovels,
