@@ -105,6 +105,7 @@ export default function NovelPage() {
 
 function NovelDetails({ novel }: { novel: ReturnType<typeof toNovel> }) {
   const utils = trpc.useUtils();
+  const detailsQuery = trpc.novelDetails.byNovelId.useQuery({ novelId: novel.id });
   const listQuery = trpc.readingList.list.useQuery(undefined, { enabled: Boolean(novel) });
   const add = trpc.readingList.add.useMutation({ onSuccess: () => { toast.success('أُضيفت إلى قائمة قراءتك'); void utils.readingList.list.invalidate(); }, onError: () => toast.error('سجّل الدخول أولًا لحفظ الروايات') });
   const remove = trpc.readingList.remove.useMutation({ onSuccess: () => { toast.success('أُزيلت من قائمتك'); void utils.readingList.list.invalidate(); } });
@@ -114,7 +115,7 @@ function NovelDetails({ novel }: { novel: ReturnType<typeof toNovel> }) {
     if (navigator.share) void navigator.share({ title: novel.title, url: shareUrl });
     else { void navigator.clipboard.writeText(shareUrl); toast.success('تم نسخ الرابط'); }
   };
-  return <div className="container py-10 md:py-14"><Breadcrumbs items={['الروايات', novel.title]} /><AutoRelaxedAd className="mx-auto max-w-4xl" /><div className="mb-10 grid gap-10 lg:grid-cols-[285px_1fr] lg:gap-16"><div className="mx-auto w-full max-w-[260px] lg:mx-0"><a href={novel.cover || undefined} target="_blank" rel="noreferrer" aria-label={`فتح رابط صورة ${novel.title}`} className="group block"><img src={novel.cover || coverFallback} alt={`غلاف ${novel.title}`} onError={(event) => { event.currentTarget.src = coverFallback; }} className="aspect-[3/4.2] w-full rounded-[22px] object-cover shadow-xl transition duration-300 group-hover:scale-[1.015]" /><span className="mt-2 block text-center text-[10px] text-muted-foreground">اضغط لفتح رابط الصورة</span></a><div className="mt-5 flex gap-2"><button onClick={() => saved ? remove.mutate({ slug: novel.slug }) : add.mutate({ slug: novel.slug })} className="flex flex-1 items-center justify-center gap-2 rounded-xl border py-3 text-xs font-bold"><Heart size={15} fill={saved ? 'currentColor' : 'none'} />{saved ? 'في قائمتك' : 'أضف لقائمتي'}</button><button onClick={share} className="grid size-11 place-items-center rounded-xl border" aria-label="مشاركة"><Share2 size={15} /></button></div></div><div><div className="mb-3 flex flex-wrap gap-2"><InfoChip>{novel.status}</InfoChip></div><h1 className="text-4xl font-extrabold tracking-[-.08em] md:text-5xl">{novel.title}</h1><p className="mt-3 text-sm text-muted-foreground"><Link href={`/authors/${novel.authorSlug}`} className="inline-flex items-center gap-1 font-bold text-foreground hover:text-[#675de8]"><UserRound size={14} />{novel.author}</Link></p><div className="mt-6 flex items-center gap-3"><span className="flex items-center gap-2 rounded-xl bg-[#fff7ea] px-3 py-2 text-sm font-extrabold text-[#b9761e]"><Star size={17} fill="currentColor" />{novel.rating.toFixed(1)}</span><span className="text-xs text-muted-foreground">تقييم القراء من البيانات المحفوظة</span></div><div className="my-8 grid grid-cols-2 gap-3 sm:grid-cols-4"><Stat label="الأجزاء" value={String(novel.parts)} /><Stat label="اللغة" value={novel.language === 'ar' ? 'العربية' : novel.language ?? '—'} /><Stat label="السنة" value={novel.publicationYear ? String(novel.publicationYear) : '—'} /><Stat label="الحالة" value={novel.status} /></div><div className="rounded-[20px] border border-border bg-card p-5"><h2 className="mb-3 text-base font-extrabold">نبذة عن الرواية</h2><p className="text-sm leading-8 text-muted-foreground">{novel.description || 'لا يوجد وصف منشور لهذه الرواية بعد.'}</p></div>{novel.rightsNote ? (() => {
+  return <div className="container py-10 md:py-14"><Breadcrumbs items={['الروايات', novel.title]} /><AutoRelaxedAd className="mx-auto max-w-4xl" /><div className="mb-10 grid gap-10 lg:grid-cols-[285px_1fr] lg:gap-16"><div className="mx-auto w-full max-w-[260px] lg:mx-0"><a href={novel.cover || undefined} target="_blank" rel="noreferrer" aria-label={`فتح رابط صورة ${novel.title}`} className="group block"><img src={novel.cover || coverFallback} alt={`غلاف ${novel.title}`} onError={(event) => { event.currentTarget.src = coverFallback; }} className="aspect-[3/4.2] w-full rounded-[22px] object-cover shadow-xl transition duration-300 group-hover:scale-[1.015]" /><span className="mt-2 block text-center text-[10px] text-muted-foreground">اضغط لفتح رابط الصورة</span></a><div className="mt-5 flex gap-2"><button onClick={() => saved ? remove.mutate({ slug: novel.slug }) : add.mutate({ slug: novel.slug })} className="flex flex-1 items-center justify-center gap-2 rounded-xl border py-3 text-xs font-bold"><Heart size={15} fill={saved ? 'currentColor' : 'none'} />{saved ? 'في قائمتك' : 'أضف لقائمتي'}</button><button onClick={share} className="grid size-11 place-items-center rounded-xl border" aria-label="مشاركة"><Share2 size={15} /></button></div></div><div><div className="mb-3 flex flex-wrap gap-2"><InfoChip>{novel.status}</InfoChip></div><h1 className="text-4xl font-extrabold tracking-[-.08em] md:text-5xl">{novel.title}</h1><p className="mt-3 text-sm text-muted-foreground"><Link href={`/authors/${novel.authorSlug}`} className="inline-flex items-center gap-1 font-bold text-foreground hover:text-[#675de8]"><UserRound size={14} />{novel.author}</Link></p><div className="mt-6 flex items-center gap-3"><span className="flex items-center gap-2 rounded-xl bg-[#fff7ea] px-3 py-2 text-sm font-extrabold text-[#b9761e]"><Star size={17} fill="currentColor" />{novel.rating.toFixed(1)}</span><span className="text-xs text-muted-foreground">تقييم القراء من البيانات المحفوظة</span></div><div className="my-8 grid grid-cols-2 gap-3 sm:grid-cols-4"><Stat label="الأجزاء" value={String(novel.parts)} /><Stat label="اللغة" value={novel.language === 'ar' ? 'العربية' : novel.language ?? '—'} /><Stat label="السنة" value={novel.publicationYear ? String(novel.publicationYear) : '—'} /><Stat label="الحالة" value={novel.status} /></div><div className="rounded-[20px] border border-border bg-card p-5"><h2 className="mb-3 text-base font-extrabold">نبذة عن الرواية</h2><p className="text-sm leading-8 text-muted-foreground">{novel.description || 'لا يوجد وصف منشور لهذه الرواية بعد.'}</p></div>{detailsQuery.data && detailsQuery.data.wordCount > 0 ? <NovelRichDetails details={detailsQuery.data} /> : null}{novel.rightsNote ? (() => {
     let type = 'rights';
     let body = novel.rightsNote;
     try {
@@ -132,6 +133,38 @@ function NovelDetails({ novel }: { novel: ReturnType<typeof toNovel> }) {
     const Icon = style.icon;
     return <div className={`mt-4 rounded-[20px] border p-4 text-sm ${style.box}`}><div className="mb-1 flex items-center gap-2 font-extrabold"><Icon size={16} />{style.label}</div><p className="leading-7">{body}</p></div>;
   })() : null}{novel.links?.length ? <><div className="mt-4 rounded-[20px] border border-[#8279ee]/25 bg-gradient-to-br from-[#f8f7ff] to-[#fff8ee] p-5 dark:from-[#151936] dark:to-[#211b25]"><div className="mb-3 flex items-center justify-between"><h2 className="text-base font-extrabold">روابط الرواية</h2><span className="text-[10px] text-muted-foreground">قراءة وتحميل</span></div><div className="grid gap-3 sm:grid-cols-2">{novel.links.map((link, index) => <a key={`${link.url}-${index}`} href={link.url} target="_blank" rel="noreferrer" className={`novel-link-button group flex items-center justify-between rounded-2xl border px-4 py-3 text-sm font-extrabold ${link.type === 'download' ? 'border-[#c28228]/30 bg-[#fff7ea] text-[#9b6417]' : 'border-[#675de8]/30 bg-[#f0eeff] text-[#5548d1] dark:bg-[#24224c] dark:text-[#c8c4ff]'}`}><span>{link.label}</span>{link.type === 'download' ? <Download size={17} /> : <ExternalLink size={17} />}</a>)}</div></div><ExternalLinksNotice /></> : null}</div></div><NovelReviews slug={novel.slug} avgRating={Number(novel.rating) || 0} ratingCount={0} /><section><SectionHeading title="المزيد من الروايات" subtitle="اكتشف بقية مكتبة رِواية من قاعدة البيانات." href="/explore" /><NovelRecommendations currentSlug={novel.slug} /></section></div>;
+}
+
+function NovelRichDetails({ details }: { details: NonNullable<Awaited<ReturnType<typeof import('@/lib/trpc')['trpc']['novelDetails']['byNovelId']>>['data']> }) {
+  const sections = [
+    ['detailedSummary', 'نظرة تفصيلية'],
+    ['spoilerFreeSummary', 'ملخص بدون حرق'],
+    ['themes', 'الأفكار والموضوعات'],
+    ['characters', 'الشخصيات'],
+    ['setting', 'المكان والزمان'],
+    ['writingStyle', 'الأسلوب الأدبي'],
+    ['literaryAnalysis', 'قراءة أدبية'],
+    ['whatMakesItDistinct', 'ما يميز الرواية'],
+    ['recommendedFor', 'مناسبة لمن؟'],
+    ['notableDetails', 'تفاصيل بارزة'],
+  ] as const;
+  return (
+    <section className="mt-4 rounded-[20px] border border-[#675de8]/20 bg-gradient-to-br from-[#f8f7ff] to-[#fff8ee] p-5 dark:from-[#151936] dark:to-[#211b25]">
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-base font-extrabold">دليل الرواية</h2>
+        <span className="rounded-full border border-border bg-card px-3 py-1 text-[10px] font-bold">{details.wordCount.toLocaleString('ar-EG')} كلمة</span>
+      </div>
+      <div className="grid gap-5">
+        {sections.map(([key, label]) => details[key] ? (
+          <div key={key}>
+            <h3 className="mb-2 text-sm font-extrabold">{label}</h3>
+            <p className="whitespace-pre-wrap text-sm leading-8 text-muted-foreground">{details[key]}</p>
+          </div>
+        ) : null)}
+      </div>
+      {details.keywords ? <div className="mt-5 border-t border-border pt-4"><h3 className="mb-2 text-sm font-extrabold">كلمات مفتاحية</h3><p className="text-xs leading-7 text-muted-foreground">{details.keywords}</p></div> : null}
+    </section>
+  );
 }
 
 function Stat({ label, value }: { label: string; value: string }) {
