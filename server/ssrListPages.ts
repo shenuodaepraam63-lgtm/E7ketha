@@ -3,10 +3,10 @@ import { listGenres, listNovels } from "./db";
 
 function esc(v: unknown) {
   return String(v ?? "")
-    .replace(/&/g, "&")
-    .replace(/</g, "<")
-    .replace(/>/g, ">")
-    .replace(/"/g, """);
+    .replace(/&/g, "&" + "amp;")
+    .replace(/</g, "&" + "lt;")
+    .replace(/>/g, "&" + "gt;")
+    .replace(/"/g, "&" + "quot;");
 }
 
 export async function tryRichListSeo(normalized: string, origin: string) {
@@ -16,12 +16,12 @@ export async function tryRichListSeo(normalized: string, origin: string) {
     const novelItems = novels
       .map((n: any) => {
         const a = n.author ? " — " + esc(n.author) : "";
-        return "<li><a href=\"" + origin + "/books/" + esc(n.slug) + "\">" + esc(n.title) + "</a>" + a + "</li>";
+        return "<li><a href=" + JSON.stringify(origin + "/books/" + String(n.slug ?? "")) + ">" + esc(n.title) + "</a>" + a + "</li>";
       })
       .join("");
     const genreItems = (genres || [])
       .slice(0, 20)
-      .map((g: any) => "<li><a href=\"" + origin + "/genres/" + esc(g.slug) + "\">" + esc(g.name) + "</a></li>")
+      .map((g: any) => "<li><a href=" + JSON.stringify(origin + "/genres/" + String(g.slug ?? "")) + ">" + esc(g.name) + "</a></li>")
       .join("");
     const d = "استكشف مكتبة الروايات العربية على E7ketha مع روابط مباشرة للعناوين والتصنيفات.";
     return {
@@ -55,7 +55,7 @@ export async function tryRichListSeo(normalized: string, origin: string) {
       (articles || [])
         .map(
           (a: any) =>
-            "<li><a href=\"" + origin + "/articles/" + esc(a.slug) + "\">" + esc(a.title) + "</a></li>",
+            "<li><a href=" + JSON.stringify(origin + "/articles/" + String(a.slug ?? "")) + ">" + esc(a.title) + "</a></li>",
         )
         .join("") || "<li>لا مقالات منشورة حاليًا.</li>";
     const d = "مقالات وترشيحات أدبية على E7ketha تساعدك تختار روايتك التالية.";
@@ -87,7 +87,7 @@ export async function tryRichListSeo(normalized: string, origin: string) {
     const items = (novels || [])
       .map((n: any) => {
         const a = n.author ? " — " + esc(n.author) : "";
-        return "<li><a href=\"" + origin + "/books/" + esc(n.slug) + "\">" + esc(n.title) + "</a>" + a + "</li>";
+        return "<li><a href=" + JSON.stringify(origin + "/books/" + String(n.slug ?? "")) + ">" + esc(n.title) + "</a>" + a + "</li>";
       })
       .join("");
     const d = "ابحث في روايات ومؤلفين وتصنيفات E7ketha، أو تصفح العناوين أدناه.";
@@ -129,7 +129,7 @@ export function renderRichHomepageShell(
     .slice(0, 24)
     .map((n) => {
       const a = n.author ? " — " + esc(n.author) : "";
-      return "<li><a href=\"" + siteUrl + "/books/" + esc(n.slug) + "\">" + esc(n.title) + "</a>" + a + "</li>";
+      return "<li><a href=" + JSON.stringify(siteUrl + "/books/" + String(n.slug ?? "")) + ">" + esc(n.title) + "</a>" + a + "</li>";
     })
     .join("");
   return (
