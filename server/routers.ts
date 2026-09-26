@@ -13,6 +13,7 @@ import { createQuote, createQuoteImport, deleteDuplicateQuotes, deleteQuote, exi
 import { countQuotes } from './quoteCount';
 import { getMyReview, listNovelReviews, listPendingReviews, moderateReview, upsertReview } from './reviews';
 import { createArticle, deleteArticle, getAdminArticle, getPublishedArticleBySlug, listAdminArticles, listPublishedArticles, publishArticle, unpublishArticle, updateArticle } from './articles';
+import { getNovelDetails, upsertNovelDetails } from './novelDetails';
 
 const novelSlugInput = z.object({ slug: z.string().min(1).max(160) });
 const ratingInput = z.object({ slug: z.string().min(1).max(160), rating: z.number().int().min(1).max(5) });
@@ -47,6 +48,9 @@ export const appRouter = router({
     })).query(({ input }) => searchNovels(input)),
     facets: publicProcedure.query(() => getSearchFacets()),
     bySlug: publicProcedure.input(novelSlugInput).query(({ input }) => getNovelBySlug(input.slug)),
+  }),
+  novelDetails: router({
+    byNovelId: publicProcedure.input(z.object({ novelId: z.number().int().positive() })).query(({ input }) => getNovelDetails(input.novelId)),
   }),
   authors: router({ list: publicProcedure.query(() => listAuthors()), bySlug: publicProcedure.input(novelSlugInput).query(({ input }) => getAuthorBySlug(input.slug)) }),
   genres: router({ list: publicProcedure.query(() => listGenres()), bySlug: publicProcedure.input(novelSlugInput).query(({ input }) => getGenreBySlug(input.slug)) }),
@@ -147,6 +151,20 @@ export const appRouter = router({
       delete: adminProcedure.input(z.object({ id: z.number().int().positive() })).mutation(({ input }) => deleteNovel(input.id)),
       uploadCover: adminProcedure.input(coverUploadInput).mutation(({ input }) => uploadNovelCover(input.dataUrl, input.filename)),
       resolveCover: adminProcedure.input(z.object({ url: z.string().url() })).mutation(({ input }) => resolveCoverUrl(input.url)),
+      details: adminProcedure.input(z.object({ novelId: z.number().int().positive() })).query(({ input }) => getNovelDetails(input.novelId)),
+      updateDetails: adminProcedure.input(z.object({ novelId: z.number().int().positive(), data: z.object({
+  detailedSummary: z.string().max(30000).nullable().optional(),
+  spoilerFreeSummary: z.string().max(15000).nullable().optional(),
+  themes: z.string().max(12000).nullable().optional(),
+  characters: z.string().max(15000).nullable().optional(),
+  setting: z.string().max(10000).nullable().optional(),
+  writingStyle: z.string().max(10000).nullable().optional(),
+  literaryAnalysis: z.string().max(15000).nullable().optional(),
+  whatMakesItDistinct: z.string().max(10000).nullable().optional(),
+  recommendedFor: z.string().max(8000).nullable().optional(),
+  notableDetails: z.string().max(12000).nullable().optional(),
+  keywords: z.string().max(2000).nullable().optional(),
+}) })).mutation(({ input }) => upsertNovelDetails(input.novelId, input.data)),
     }),
     authors: router({
       list: adminProcedure.query(() => listAdminAuthors()),
