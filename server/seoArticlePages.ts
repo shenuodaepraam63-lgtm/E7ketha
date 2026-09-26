@@ -32,6 +32,27 @@ function readTemplate(): string {
   return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>${SITE_NAME}</title></head><body><div id="root"></div></body></html>`;
 }
 
+
+function renderArticleContent(content: string) {
+  const text = String(content ?? '')
+    .replace(/<br\s*\/?\s*>/gi, '\n')
+    .replace(/<\/(?:p|div|section|article|h[1-6]|li|blockquote|pre)>/gi, '\n')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/\r\n?/g, '\n')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+
+  const paragraphs = text
+    .split(/\n+/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean)
+    .map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`)
+    .join('');
+
+  return paragraphs || `<p>${escapeHtml(content)}</p>`;
+}
+
 function normalizePath(raw: string): string {
   try {
     const u = raw.startsWith('http') ? new URL(raw) : new URL(raw, SITE_URL);
@@ -126,8 +147,9 @@ export async function tryRenderArticleSeo(req: any, res: any): Promise<boolean> 
       .filter(Boolean)
       .join('');
 
-    const excerptHtml = escapeHtml((article.excerpt || description).slice(0, 400));
-    const body = `<main lang="ar" dir="rtl"><nav aria-label="مسار التنقل"><a href="${SITE_URL}/">الرئيسية</a> · <a href="${SITE_URL}/articles">المقالات</a></nav><article><h1>${escapeHtml(article.title)}</h1><p>${excerptHtml}</p><p><a href="${SITE_URL}/articles">كل المقالات</a></p></article></main>`;
+    const articleContent = renderArticleContent(article.content);
+    const excerptHtml = article.excerpt ? `<p class="article-excerpt">${escapeHtml(article.excerpt)}</p>` : '';
+    const body = `<main lang="ar" dir="rtl"><nav aria-label="مسار التنقل"><a href="${SITE_URL}/">الرئيسية</a> · <a href="${SITE_URL}/articles">المقالات</a></nav><article><h1>${escapeHtml(article.title)}</h1>${excerptHtml}<div class="article-content">${articleContent}</div><p><a href="${SITE_URL}/articles">كل المقالات</a></p></article></main>`;
 
     const html = readTemplate()
       .replace(/<title>[\s\S]*?<\/title>/gi, '')
