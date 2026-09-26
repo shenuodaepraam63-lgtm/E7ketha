@@ -135,7 +135,22 @@ function NovelDetails({ novel }: { novel: ReturnType<typeof toNovel> }) {
   })() : null}{novel.links?.length ? <><div className="mt-4 rounded-[20px] border border-[#8279ee]/25 bg-gradient-to-br from-[#f8f7ff] to-[#fff8ee] p-5 dark:from-[#151936] dark:to-[#211b25]"><div className="mb-3 flex items-center justify-between"><h2 className="text-base font-extrabold">روابط الرواية</h2><span className="text-[10px] text-muted-foreground">قراءة وتحميل</span></div><div className="grid gap-3 sm:grid-cols-2">{novel.links.map((link, index) => <a key={`${link.url}-${index}`} href={link.url} target="_blank" rel="noreferrer" className={`novel-link-button group flex items-center justify-between rounded-2xl border px-4 py-3 text-sm font-extrabold ${link.type === 'download' ? 'border-[#c28228]/30 bg-[#fff7ea] text-[#9b6417]' : 'border-[#675de8]/30 bg-[#f0eeff] text-[#5548d1] dark:bg-[#24224c] dark:text-[#c8c4ff]'}`}><span>{link.label}</span>{link.type === 'download' ? <Download size={17} /> : <ExternalLink size={17} />}</a>)}</div></div><ExternalLinksNotice /></> : null}</div></div><NovelReviews slug={novel.slug} avgRating={Number(novel.rating) || 0} ratingCount={0} /><section><SectionHeading title="المزيد من الروايات" subtitle="اكتشف بقية مكتبة رِواية من قاعدة البيانات." href="/explore" /><NovelRecommendations currentSlug={novel.slug} /></section></div>;
 }
 
-function NovelRichDetails({ details }: { details: NonNullable<Awaited<ReturnType<typeof import('@/lib/trpc')['trpc']['novelDetails']['byNovelId']>>['data']> }) {
+type NovelRichDetailsData = {
+  detailedSummary: string | null;
+  spoilerFreeSummary: string | null;
+  themes: string | null;
+  characters: string | null;
+  setting: string | null;
+  writingStyle: string | null;
+  literaryAnalysis: string | null;
+  whatMakesItDistinct: string | null;
+  recommendedFor: string | null;
+  notableDetails: string | null;
+  keywords: string | null;
+  wordCount: number;
+};
+
+function NovelRichDetails({ details }: { details: NovelRichDetailsData }) {
   const sections = [
     ['detailedSummary', 'نظرة تفصيلية'],
     ['spoilerFreeSummary', 'ملخص بدون حرق'],
