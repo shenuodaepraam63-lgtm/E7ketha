@@ -77,6 +77,24 @@ export const novels = pgTable('novels', {
   updatedAt: timestamp('updatedAt', { withTimezone: true }).defaultNow().notNull(),
 });
 
+export const novelDetails = pgTable('novelDetails', {
+  novelId: integer('novelId').primaryKey(),
+  detailedSummary: text('detailedSummary'),
+  spoilerFreeSummary: text('spoilerFreeSummary'),
+  themes: text('themes'),
+  characters: text('characters'),
+  setting: text('setting'),
+  writingStyle: text('writingStyle'),
+  literaryAnalysis: text('literaryAnalysis'),
+  whatMakesItDistinct: text('whatMakesItDistinct'),
+  recommendedFor: text('recommendedFor'),
+  notableDetails: text('notableDetails'),
+  keywords: text('keywords'),
+  wordCount: integer('wordCount').default(0).notNull(),
+  createdAt: timestamp('createdAt', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updatedAt', { withTimezone: true }).defaultNow().notNull(),
+});
+
 export const novelGenres = pgTable(
   'novelGenres',
   {
