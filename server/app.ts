@@ -8,6 +8,8 @@ import { appRouter } from "./routers";
 import { createContext } from "./_core/context";
 import { getAuthorBySlug, getGenreBySlug, getNovelBySlug, getSeriesBySlug, listAuthors, listGenres, listNovels, listSeries, searchNovels } from "./db";
 import { getQuote, listQuotes, listQuotesByCategory } from "./quotes";
+import { listPublishedArticles } from "./articles";
+import { getNovelDetails } from "./novelDetails";
 
 const SITE_URL = "https://e7ketha.com";
 function xmlEscape(value: unknown) {
@@ -19,7 +21,7 @@ function renderUrlset(paths: string[]) {
   return `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${body}</urlset>`;
 }
 function renderSitemapIndex() {
-  const files = ["novels", "authors", "genres", "series", "quotes"];
+  const files = ["static", "novels", "authors", "genres", "series", "quotes", "articles", "topics"];
   return `<?xml version="1.0" encoding="UTF-8"?><sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${files.map((file) => `<sitemap><loc>${SITE_URL}/sitemap/${file}.xml</loc></sitemap>`).join("")}</sitemapindex>`;
 }
 function quoteCategorySlug(value: string) { return encodeURIComponent(value.trim().toLowerCase()).replace(/%20/g, "-"); }
@@ -30,6 +32,34 @@ function htmlEscape(value: unknown) {
 
 function stripHtml(value: unknown, max = 180) {
   return String(value ?? '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
+}
+
+function renderNovelDetailsHtml(details: Awaited<ReturnType<typeof getNovelDetails>>) {
+  if (!details || Number(details.wordCount || 0) <= 0) return '';
+  const fields: Array<[string, keyof typeof details]> = [
+    ['ملخص تفصيلي', 'detailedSummary'],
+    ['ملخص بدون حرق', 'spoilerFreeSummary'],
+    ['الموضوعات والثيمات', 'themes'],
+    ['الشخصيات', 'characters'],
+    ['المكان والزمان', 'setting'],
+    ['أسلوب الكتابة', 'writingStyle'],
+    ['التحليل الأدبي', 'literaryAnalysis'],
+    ['ما يميز الرواية', 'whatMakesItDistinct'],
+    ['لمن تناسب', 'recommendedFor'],
+    ['تفاصيل جديرة بالملاحظة', 'notableDetails'],
+  ];
+  const sections = fields
+    .map(([label, key]) => {
+      const value = details[key];
+      if (typeof value !== 'string' || !value.trim()) return '';
+      return `<section><h2>${htmlEscape(label)}</h2><p>${htmlEscape(value)}</p></section>`;
+    })
+    .filter(Boolean)
+    .join('');
+  const keywords = typeof details.keywords === 'string' && details.keywords.trim()
+    ? `<p><strong>كلمات مفتاحية:</strong> ${htmlEscape(details.keywords)}</p>`
+    : '';
+  return `<section aria-label="دليل الرواية"><h2>دليل الرواية</h2><p>بيانات موسعة للرواية (${Number(details.wordCount).toLocaleString('ar-EG')} كلمة).</p>${sections}${keywords}</section>`;
 }
 
 function breadcrumbSchema(origin: string, items: Array<{ name: string; url: string }>) {
@@ -106,13 +136,20 @@ async function renderPublicSeo(pathname: string) {
     const slug = decodeURIComponent(normalized.split('/').pop() ?? '');
     const novel = await getNovelBySlug(slug);
     if (!novel) return { html: '<!doctype html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="robots" content="noindex"><title>الرواية غير موجودة | 𝐄𝟳𝐤𝐞𝐭𝐡𝐚</title></head><body><h1>الرواية غير موجودة</h1></body></html>', status: 404 };
+    let novelDetails = null;
+    try {
+      novelDetails = await getNovelDetails(Number(novel.id));
+    } catch (error) {
+      console.warn('[SEO] novel details unavailable', novel.slug, error);
+    }
     const description = `${novel.title} للكاتب ${novel.author}. ${stripHtml(novel.description || 'اكتشف تفاصيل الرواية وتقييم القراء على منصة 𝐄𝟳𝐤𝐞𝐭𝐡𝐚.')}`;
     const canonical = `${origin}/books/${encodeURIComponent(String(novel.slug))}`;
+    const richDetailsHtml = renderNovelDetailsHtml(novelDetails);
     const authorUrl = `${origin}/authors/${encodeURIComponent(String(novel.authorSlug))}`;
     return renderSeoDocument(readClientTemplate(), {
       title: `${novel.title} — ${novel.author} | 𝐄𝟳𝐤𝐞𝐭𝐡𝐚`, description, canonical, type: 'book', image: novel.coverUrl ?? undefined,
       jsonLd: { '@context': 'https://schema.org', '@graph': [{ '@type': 'Book', '@id': `${canonical}#book`, name: novel.title, description, image: novel.coverUrl || undefined, inLanguage: novel.language || 'ar', author: { '@type': 'Person', '@id': `${authorUrl}#person`, name: novel.author, url: authorUrl }, mainEntityOfPage: { '@id': canonical }, url: canonical, potentialAction: { '@type': 'ReadAction', target: canonical } }, breadcrumbSchema(origin, [{ name: 'الرئيسية', url: `${origin}/` }, { name: 'الروايات', url: `${origin}/explore` }, { name: novel.title, url: canonical }]) ] },
-      content: `<main lang="ar" dir="rtl"><nav><a href="${origin}/">الرئيسية</a> / <a href="${origin}/authors/${htmlEscape(novel.authorSlug)}">${htmlEscape(novel.author)}</a></nav><article><h1>${htmlEscape(novel.title)}</h1><p><a href="${authorUrl}">${htmlEscape(novel.author)}</a></p><p>${htmlEscape(novel.description || '')}</p><p>اللغة: ${htmlEscape(novel.language === 'ar' ? 'العربية' : novel.language || '')} · الأجزاء: ${htmlEscape(novel.parts)}</p><a href="${origin}/books/${htmlEscape(novel.slug)}/quotes">اقتباسات الكتاب</a>${novel.links?.length ? `<aside><h2>تنبيه بشأن الروابط الخارجية</h2><p>قد تحتوي بعض صفحات المنصة على روابط تؤدي إلى مواقع إلكترونية خارجية لا نديرها ولا نتحكم في محتواها أو سياساتها.</p><p>نحن لا نستضيف الملفات الموجودة على المواقع الخارجية، ولا نتحمل مسؤولية محتوى أو توفر أو سياسات تلك المواقع.</p><p>إذا كنت صاحب حقوق نشر لأي محتوى مرتبط من خلال المنصة وترى أن الرابط ينتهك حقوقك، يُرجى التواصل معنا عبر صفحة التواصل وحقوق الملكية الفكرية لمراجعة الرابط واتخاذ الإجراء المناسب.</p><p><strong>ملاحظة:</strong> إدراج رابط خارجي لا يعني بالضرورة أن المنصة تملك أو تدّعي ملكية المحتوى الموجود في الموقع الخارجي.</p></aside>` : ''}</article></main>`,
+      content: `<main lang="ar" dir="rtl"><nav><a href="${origin}/">الرئيسية</a> / <a href="${origin}/authors/${htmlEscape(novel.authorSlug)}">${htmlEscape(novel.author)}</a></nav><article><h1>${htmlEscape(novel.title)}</h1><p><a href="${authorUrl}">${htmlEscape(novel.author)}</a></p><p>${htmlEscape(novel.description || '')}</p>${richDetailsHtml}<p>اللغة: ${htmlEscape(novel.language === 'ar' ? 'العربية' : novel.language || '')} · الأجزاء: ${htmlEscape(novel.parts)}</p><a href="${origin}/books/${htmlEscape(novel.slug)}/quotes">اقتباسات الكتاب</a>${novel.links?.length ? `<aside><h2>تنبيه بشأن الروابط الخارجية</h2><p>قد تحتوي بعض صفحات المنصة على روابط تؤدي إلى مواقع إلكترونية خارجية لا نديرها ولا نتحكم في محتواها أو سياساتها.</p><p>نحن لا نستضيف الملفات الموجودة على المواقع الخارجية، ولا نتحمل مسؤولية محتوى أو توفر أو سياسات تلك المواقع.</p><p>إذا كنت صاحب حقوق نشر لأي محتوى مرتبط من خلال المنصة وترى أن الرابط ينتهك حقوقك، يُرجى التواصل معنا عبر صفحة التواصل وحقوق الملكية الفكرية لمراجعة الرابط واتخاذ الإجراء المناسب.</p><p><strong>ملاحظة:</strong> إدراج رابط خارجي لا يعني بالضرورة أن المنصة تملك أو تدّعي ملكية المحتوى الموجود في الموقع الخارجي.</p></aside>` : ''}</article></main>`,
     });
   }
 
@@ -195,16 +232,16 @@ export function createApp() {
   registerOAuthRoutes(app);
   const sitemapHandler = async (_req: express.Request, res: express.Response) => {
     try {
-      const [novels, authors, genres, seriesList, quotes] = await Promise.all([listNovels(10000), listAuthors(), listGenres(), listSeries(), listQuotes(true)]);
+      const [novels, authors, genres, seriesList, quotes, articles] = await Promise.all([listNovels(10000), listAuthors(), listGenres(), listSeries(), listQuotes(true), listPublishedArticles(5000, 0)]);
       const quoteCategories = Array.from(new Set(quotes.map((item) => item.category).filter((category): category is string => Boolean(category?.trim()))));
       const authorQuotePaths = authors.map((item) => `/authors/${item.slug}/quotes`);
       const bookQuotePaths = novels.map((item) => `/books/${item.slug}/quotes`);
       const categoryQuotePaths = quoteCategories.map((category) => `/quotes/category/${quoteCategorySlug(category)}`);
       const topicPaths = ['/topics', ...topicalPages.map((item) => `/topics/${item.slug}`)];
       const staticPaths = ["/", "/explore", "/quotes", "/quotes/categories", "/discover", "/about", "/how-it-works", "/faq", "/contact", "/privacy", "/terms", ...topicPaths];
-      const urls = [...staticPaths, ...novels.map((item) => `/books/${item.slug}`), ...bookQuotePaths, ...authors.map((item) => `/authors/${item.slug}`), ...authorQuotePaths, ...genres.map((item) => `/genres/${item.slug}`), ...seriesList.map((item) => `/series/${item.slug}`), ...categoryQuotePaths, ...quotes.map((item) => `/quotes/${item.id}`)];
+      const urls = [...staticPaths, ...novels.map((item) => `/books/${item.slug}`), ...bookQuotePaths, ...authors.map((item) => `/authors/${item.slug}`), ...authorQuotePaths, ...genres.map((item) => `/genres/${item.slug}`), ...seriesList.map((item) => `/series/${item.slug}`), ...categoryQuotePaths, ...quotes.map((item) => `/quotes/${item.id}`), ...articles.map((item) => `/articles/${item.slug}`)];
       const resource = String(_req.query.resource ?? "");
-      const sitemap = resource === "index" || resource === "sitemap" ? renderSitemapIndex() : resource === "novels" ? renderUrlset([...novels.map((item) => `/books/${item.slug}`), ...bookQuotePaths]) : resource === "authors" ? renderUrlset([...authors.map((item) => `/authors/${item.slug}`), ...authorQuotePaths]) : resource === "genres" ? renderUrlset(genres.map((item) => `/genres/${item.slug}`)) : resource === "series" ? renderUrlset(seriesList.map((item) => `/series/${item.slug}`)) : resource === "quotes" ? renderUrlset(["/quotes", "/quotes/categories", ...categoryQuotePaths, ...quotes.map((item) => `/quotes/${item.id}`)]) : renderUrlset(urls);
+      const sitemap = resource === "index" || resource === "sitemap" ? renderSitemapIndex() : resource === "novels" ? renderUrlset([...novels.map((item) => `/books/${item.slug}`), ...bookQuotePaths]) : resource === "authors" ? renderUrlset([...authors.map((item) => `/authors/${item.slug}`), ...authorQuotePaths]) : resource === "genres" ? renderUrlset(genres.map((item) => `/genres/${item.slug}`)) : resource === "series" ? renderUrlset(seriesList.map((item) => `/series/${item.slug}`)) : resource === "quotes" ? renderUrlset(["/quotes", "/quotes/categories", ...categoryQuotePaths, ...quotes.map((item) => `/quotes/${item.id}`)]) : resource === "articles" ? renderUrlset(["/articles", ...articles.map((item) => `/articles/${item.slug}`)]) : renderUrlset(urls);
       res.type("application/xml").set("Cache-Control", "public, max-age=0, s-maxage=0, must-revalidate").send(sitemap);
     } catch (error) {
       console.error("[SEO] sitemap generation failed", error);
