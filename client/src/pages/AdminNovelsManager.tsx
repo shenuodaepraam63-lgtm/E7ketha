@@ -30,6 +30,25 @@ const emptyForm = {
   publicationYear: '',
 };
 
+
+const emptyDetails = {
+  detailedSummary: '',
+  spoilerFreeSummary: '',
+  themes: '',
+  characters: '',
+  setting: '',
+  writingStyle: '',
+  literaryAnalysis: '',
+  whatMakesItDistinct: '',
+  recommendedFor: '',
+  notableDetails: '',
+  keywords: '',
+};
+
+function countWords(value: string) {
+  return value.trim().split(/\s+/).filter(Boolean).length;
+}
+
 function novelsListHref() {
   return '/admin?s=novels';
 }
@@ -52,6 +71,23 @@ export function NovelsManager() {
   const novels = trpc.admin.novels.list.useQuery();
   const authors = trpc.admin.authors.list.useQuery();
   const genres = trpc.admin.genres.list.useQuery();
+  const detailsQuery = trpc.admin.novels.details.useQuery(
+    { novelId: editingId ?? 0 },
+    { enabled: Boolean(editingId) },
+  );
+
+  const [form, setForm] = useState(emptyForm);
+  const [detailsForm, setDetailsForm] = useState(emptyDetails);
+  const [prefilledId, setPrefilledId] = useState<number | null>(null);
+  const [prefilledDetailsId, setPrefilledDetailsId] = useState<number | null>(null);
+
+  const updateDetails = trpc.admin.novels.updateDetails.useMutation({
+    onSuccess: (result) => {
+      void utils.admin.novels.details.invalidate({ novelId: editingId ?? 0 });
+      toast.success(`تم حفظ البيانات الموسعة (${result?.wordCount ?? 0} كلمة)`);
+    },
+    onError: (error) => toast.error(`تعذر حفظ البيانات الموسعة: ${error.message}`),
+  });
 
   const create = trpc.admin.novels.create.useMutation({
     onSuccess: (novel) => {
@@ -73,7 +109,8 @@ export function NovelsManager() {
   });
 
   const update = trpc.admin.novels.update.useMutation({
-    onSuccess: () => {
+    onSuccess: async () => {
+      if (editingId) await updateDetails.mutateAsync({ novelId: editingId, data: detailsForm });
       toast.success('تم تحديث الرواية');
       void utils.admin.novels.list.invalidate();
       navigate(novelsListHref());
@@ -105,9 +142,6 @@ export function NovelsManager() {
     onError: (error) => toast.error(error.message),
   });
 
-  const [form, setForm] = useState(emptyForm);
-  const [prefilledId, setPrefilledId] = useState<number | null>(null);
-
   useEffect(() => {
     if (!editingId || !novels.data) return;
     if (prefilledId === editingId) return;
@@ -130,10 +164,31 @@ export function NovelsManager() {
     setPrefilledId(editingId);
   }, [editingId, novels.data, prefilledId]);
 
+
+  useEffect(() => {
+    if (!editingId || !detailsQuery.data || prefilledDetailsId === editingId) return;
+    setDetailsForm({
+      detailedSummary: detailsQuery.data.detailedSummary ?? '',
+      spoilerFreeSummary: detailsQuery.data.spoilerFreeSummary ?? '',
+      themes: detailsQuery.data.themes ?? '',
+      characters: detailsQuery.data.characters ?? '',
+      setting: detailsQuery.data.setting ?? '',
+      writingStyle: detailsQuery.data.writingStyle ?? '',
+      literaryAnalysis: detailsQuery.data.literaryAnalysis ?? '',
+      whatMakesItDistinct: detailsQuery.data.whatMakesItDistinct ?? '',
+      recommendedFor: detailsQuery.data.recommendedFor ?? '',
+      notableDetails: detailsQuery.data.notableDetails ?? '',
+      keywords: detailsQuery.data.keywords ?? '',
+    });
+    setPrefilledDetailsId(editingId);
+  }, [editingId, detailsQuery.data, prefilledDetailsId]);
+
   useEffect(() => {
     if (isNew && !editingId) {
       setForm(emptyForm);
+      setDetailsForm(emptyDetails);
       setPrefilledId(null);
+      setPrefilledDetailsId(null);
     }
   }, [isNew, editingId]);
 
@@ -164,7 +219,8 @@ export function NovelsManager() {
     else create.mutate(data);
   };
 
-  const busy = create.isPending || update.isPending;
+  const detailsWordCount = Object.values(detailsForm).reduce((total, value) => total + countWords(value), 0);
+  const busy = create.isPending || update.isPending || updateDetails.isPending;
 
   return (
     <ManagerShell
@@ -261,6 +317,39 @@ export function NovelsManager() {
             <span>النبذة</span>
             <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className="min-h-28 rounded-xl border border-border bg-background p-3 text-sm" />
           </label>
+
+          {editingId && (
+            <details open className="mt-2 rounded-[20px] border border-[#675de8]/20 bg-[#f8f7ff]/70 p-4 md:col-span-2 dark:bg-[#151936]/50">
+              <summary className="cursor-pointer list-none font-extrabold text-sm">البيانات الموسعة للرواية</summary>
+              <p className="mt-2 text-xs text-muted-foreground">الهدف 1000 كلمة فأكثر إجمالًا. البيانات تُحفظ في جدول مستقل ولا تغيّر النبذة الحالية.</p>
+              <div className="mt-4 rounded-xl border border-border bg-card px-3 py-2 text-xs font-bold">
+                عدد الكلمات الحالي: <span className={detailsWordCount >= 1000 ? 'text-emerald-600' : 'text-amber-600'}>{detailsWordCount}</span> / 1000
+              </div>
+              <div className="mt-4 grid gap-3 md:grid-cols-2">
+                {([
+                  ['detailedSummary', 'نبذة تفصيلية'],
+                  ['spoilerFreeSummary', 'ملخص بدون حرق'],
+                  ['themes', 'الأفكار والموضوعات'],
+                  ['characters', 'الشخصيات'],
+                  ['setting', 'المكان والزمان'],
+                  ['writingStyle', 'الأسلوب الأدبي'],
+                  ['literaryAnalysis', 'تحليل أدبي مختصر'],
+                  ['whatMakesItDistinct', 'ما يميز الرواية'],
+                  ['recommendedFor', 'مناسبة لمن؟'],
+                  ['notableDetails', 'تفاصيل ومعلومات بارزة'],
+                ] as const).map(([key, label]) => (
+                  <label key={key} className="grid gap-2 text-xs font-bold md:col-span-1">
+                    <span>{label}</span>
+                    <textarea value={detailsForm[key]} onChange={(e) => setDetailsForm({ ...detailsForm, [key]: e.target.value })} className="min-h-32 rounded-xl border border-border bg-background p-3 text-sm leading-7" />
+                  </label>
+                ))}
+                <label className="grid gap-2 text-xs font-bold md:col-span-2">
+                  <span>الكلمات المفتاحية</span>
+                  <input value={detailsForm.keywords} onChange={(e) => setDetailsForm({ ...detailsForm, keywords: e.target.value })} className="h-11 rounded-xl border border-border bg-background px-3 text-sm" placeholder="مثال: غموض، صداقة، القاهرة، تحقيق" />
+                </label>
+              </div>
+            </details>
+          )}
           <div className="flex flex-wrap gap-2 md:col-span-2">
             <button type="submit" disabled={busy} className="inline-flex items-center gap-2 rounded-xl bg-[#171e42] px-4 py-3 text-xs font-bold text-white disabled:opacity-60">
               {busy ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
