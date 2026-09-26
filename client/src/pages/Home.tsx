@@ -3,11 +3,25 @@ import { Link } from 'wouter';
 import { GlobalSearch } from '@/components/GlobalSearch';
 import { NovelCard } from '@/components/NovelCard';
 import { AuthorCard, GenreCard, SectionHeading } from '@/components/ExploreCards';
-import { toAuthor, toGenre, toNovel, coverFallback } from '@/lib/data';
+import { toAuthor, toGenre, toNovel, coverFallback, optimizeCoverUrl } from '@/lib/data';
 import { trpc } from '@/lib/trpc';
 import { BrowseRecommendations } from '@/components/BrowseRecommendations';
 
+/* HOME_BOOT */
+function readHomeBoot(): unknown[] | undefined {
+  if (typeof document === "undefined") return undefined;
+  const el = document.getElementById("__E7K_HOME_BOOT__");
+  if (!el?.textContent) return undefined;
+  try {
+    const data = JSON.parse(el.textContent);
+    return Array.isArray(data) ? data : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export default function Home() {
+  const homeBoot = readHomeBoot() as any[] | undefined;
   // Fire all public lists immediately so httpBatchLink packs them in one round-trip.
   const novelsQuery = trpc.novels.search.useQuery(
     { sort: 'popular', limit: 12 },
@@ -34,11 +48,11 @@ export default function Home() {
             <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/[.07] px-3 py-1.5 text-[11px] font-semibold text-[#d8d5ff]">
               <Sparkles size={13} className="text-[#9f96ff]" /> محرك بحث للروايات العربية
             </div>
-            <h1 className="max-w-[650px] text-[43px] font-extrabold leading-[1.18] sm:text-[58px]">
+            <h1 className="max-w-[650px] text-[32px] font-extrabold leading-[1.18] sm:text-[43px] md:text-[58px]">
               اكتشف روايتك<br />
               <span className="bg-gradient-to-l from-[#c3bdff] via-[#8f86ff] to-[#ffcf9b] bg-clip-text text-transparent">القادمة.</span>
             </h1>
-            <p className="mt-6 max-w-[490px] text-[15px] leading-8 text-white/62">
+            <p className="mt-6 max-w-[490px] text-[13px] sm:text-[15px] leading-7 sm:leading-8 text-white/62">
               رِواية تساعدك تفهم عالم الروايات العربية، وتلاقي ما يستحق وقتك — من الكلاسيكيات إلى الأعمال الحديثة.
             </p>
             <div className="relative z-40 mt-8">
@@ -70,7 +84,7 @@ export default function Home() {
                     <div className="mt-1.5 h-2.5 w-1/2 rounded bg-muted/80" />
                   </div>
                 ))
-              : novels.map((novel) => <NovelCard key={novel.id} novel={novel} />)}
+              : novels.map((novel, i) => <NovelCard key={novel.id} novel={novel} priority={i < 2} />)}
           </div>
         </section>
         {genres.length > 0 && (
@@ -113,7 +127,7 @@ export default function Home() {
           <div className="grid gap-4 md:grid-cols-3">
             {seriesItems.map((item) => (
               <Link key={item.slug} href={`/series/${item.slug}`} className="interactive group flex items-center gap-4 rounded-[20px] border border-border bg-card p-4">
-                <img src={item.coverUrl || coverFallback} alt={item.title} className="h-28 w-20 rounded-xl object-cover" />
+                <img src={optimizeCoverUrl(item.coverUrl || coverFallback, 160)} alt={item.title} className="h-28 w-20 rounded-xl object-cover" />
                 <div className="min-w-0">
                   <span className="text-[10px] font-bold text-[#7168e8]">سلسلة</span>
                   <h3 className="mt-1 text-sm font-extrabold">{item.title}</h3>

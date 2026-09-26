@@ -6,7 +6,7 @@ export function AuthorCard({ author }: { author: Author }) {
   return (
     <Link
       href={`/authors/${author.slug}`}
-      className="interactive group flex min-w-[245px] items-center gap-4 rounded-[20px] border border-border/80 bg-card p-4 shadow-[0_12px_30px_-28px_rgba(20,28,60,.6)]"
+      className="interactive group flex min-w-[200px] sm:min-w-[245px] items-center gap-4 rounded-[20px] border border-border/80 bg-card p-4 shadow-[0_12px_30px_-28px_rgba(20,28,60,.6)]"
     >
       <img
         src={author.avatar}

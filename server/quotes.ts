@@ -13,16 +13,41 @@ async function request<T>(path: string, init: RequestInit = {}) {
 let authorsCache: { expires: number; data: Array<{ id: number; name: string; slug: string }> } | null = null;
 let booksCache: { expires: number; data: Array<{ id: number; title: string; slug: string; authorId: number }> } | null = null;
 
-export async function listQuotes(publicOnly = false, limit = 200, offset = 0) {
+export async function listQuotes(publicOnly = false, limit = 200, offset = 0, q?: string) {
   const requested = Math.min(10000, Math.max(1, limit));
   const pageSize = Math.min(1000, requested);
   const rows: QuoteRecord[] = [];
   for (let cursor = Math.max(0, offset); rows.length < requested; cursor += pageSize) {
-    const page = await request<QuoteRecord[]>(`quotes?select=*&${publicOnly ? 'status=eq.published&' : ''}order=created_at.desc&limit=${Math.min(pageSize, requested - rows.length)}&offset=${cursor}`);
+    const statusPart = publicOnly ? 'status=eq.published&' : '';
+    const needle = (q ?? '').trim().replace(/[%*,()]/g, ' ').slice(0, 80);
+    const searchPart = needle
+      ? `or=(quote_text.ilike.*${needle}*,speaker.ilike.*${needle}*,book_title.ilike.*${needle}*)&`
+      : '';
+    const page = await request<QuoteRecord[]>(`quotes?select=*&${statusPart}${searchPart}order=created_at.desc&limit=${Math.min(pageSize, requested - rows.length)}&offset=${cursor}`);
     rows.push(...page);
     if (page.length < pageSize) break;
   }
   return enrichQuotes(rows);
+}
+
+
+export async function countQuotes(publicOnly = false, q?: string) {
+  if (!ENV.supabaseUrl || !ENV.supabaseSecretKey) return 0;
+  const statusPart = publicOnly ? 'status=eq.published&' : '';
+  const needle = (q ?? '').trim().replace(/[%*,()]/g, ' ').slice(0, 80);
+  const searchPart = needle
+    ? `or=(quote_text.ilike.*${needle}*,speaker.ilike.*${needle}*,book_title.ilike.*${needle}*)&`
+    : '';
+  const response = await fetch(
+    `${ENV.supabaseUrl}/rest/v1/quotes?${statusPart}${searchPart}select=id`,
+    { method: 'HEAD', headers: { apikey: ENV.supabaseSecretKey, Authorization: `Bearer ${ENV.supabaseSecretKey}`, Prefer: 'count=exact' } },
+  );
+  const range = response.headers.get('content-range');
+  if (range && range.includes('/')) {
+    const total = Number(range.split('/')[1]);
+    if (Number.isFinite(total)) return total;
+  }
+  return (await listQuotes(publicOnly, 2000, 0, q)).length;
 }
 
 export async function getQuote(id: number) {
@@ -67,8 +92,60 @@ export async function getQuoteNeighbors(id: number) { const current = await requ
 export async function listQuotesByAuthor(slug: string) { return (await listQuotes(true, 10000)).filter((quote) => quote.author_slug === slug); }
 export async function listQuotesByBook(slug: string) { return (await listQuotes(true, 10000)).filter((quote) => quote.book_slug === slug); }
 export async function listQuotesByCategory(category: string) { const wanted = comparable(decodeURIComponent(category).replace(/-/g, ' ')); return (await listQuotes(true, 10000)).filter((quote) => quote.category && comparable(quote.category) === wanted); }
-export async function listQuoteCategories() { return Array.from(new Set((await listQuotes(true, 10000)).map((quote) => quote.category).filter((category): category is string => Boolean(category?.trim())))).sort((a, b) => a.localeCompare(b, 'ar')); }
-async function enrichQuotes(rows: QuoteRecord[]) { const authorIds = Array.from(new Set(rows.map((row) => row.author_id).filter((id): id is number => Number.isInteger(id)))); const bookIds = Array.from(new Set(rows.map((row) => row.novel_id).filter((id): id is number => Number.isInteger(id)))); const [authors, books] = await Promise.all([authorIds.length === rows.length ? request<Array<{ id: number; name: string; slug: string }>>(`authors?select=id,name,slug&id=in.(${authorIds.join(',')})`) : listQuoteAuthors(), bookIds.length === rows.length ? request<Array<{ id: number; title: string; slug: string; authorId: number }>>(`novels?select=id,title,slug,authorId&id=in.(${bookIds.join(',')})`) : listQuoteBooks()]); return rows.map((row) => { const author = authors.find((item) => item.id === row.author_id) ?? matchEntity(row.speaker, authors); const book = books.find((item) => item.id === row.novel_id) ?? matchEntity(row.book_title, books); return { ...row, quote_text: cleanImportedQuote(row.quote_text), author_id: author?.id ?? row.author_id ?? null, author_name: author?.name ?? row.speaker, author_slug: author?.slug ?? null, book_id: book?.id ?? row.novel_id ?? null, book_title: book?.title ?? row.book_title, book_slug: book?.slug ?? null }; }); }
+let categoriesCache: { expires: number; data: string[] } | null = null;
+export async function listQuoteCategories() {
+  /* PATCH_QUOTE_CATEGORIES */
+  if (categoriesCache && categoriesCache.expires > Date.now()) return categoriesCache.data;
+  const unique = new Set<string>();
+  let stagnant = 0;
+  // Select ONLY category — no full rows, no enrichQuotes (was ~5s on production).
+  for (let offset = 0; offset < 30000 && unique.size < 500; offset += 1000) {
+    const page = await request<Array<{ category: string | null }>>(
+      `quotes?status=eq.published&select=category&category=not.is.null&order=id.asc&limit=1000&offset=${offset}`,
+    );
+    const before = unique.size;
+    for (const row of page) {
+      const c = (row.category || "").trim();
+      if (c) unique.add(c);
+    }
+    if (unique.size === before) stagnant += 1;
+    else stagnant = 0;
+    if (stagnant >= 2 && unique.size > 0) break;
+    if (page.length < 1000) break;
+  }
+  const data = Array.from(unique).sort((a, b) => a.localeCompare(b, "ar"));
+  categoriesCache = { data, expires: Date.now() + 10 * 60 * 1000 };
+  return data;
+}
+async function enrichQuotes(rows: QuoteRecord[]) {
+  if (!rows.length) return [];
+  const authorIds = Array.from(new Set(rows.map((row) => row.author_id).filter((id): id is number => Number.isInteger(id) && id > 0)));
+  const bookIds = Array.from(new Set(rows.map((row) => row.novel_id).filter((id): id is number => Number.isInteger(id) && id > 0)));
+  // Only fetch what we need — avoid loading all novels/authors on every page
+  let authors: Array<{ id: number; name: string; slug: string }> = [];
+  let books: Array<{ id: number; title: string; slug: string; authorId: number }> = [];
+  try {
+    if (authorIds.length) authors = await request(`authors?select=id,name,slug&id=in.(${authorIds.join(',')})`);
+    if (bookIds.length) books = await request(`novels?select=id,title,slug,authorId&id=in.(${bookIds.join(',')})`);
+  } catch (e) { console.warn('[enrichQuotes] id lookup failed', e); }
+  const needSpeakerMatch = rows.some((row) => !(row.author_id) && (row.speaker || '').trim());
+  const needBookMatch = rows.some((row) => !(row.novel_id) && (row.book_title || '').trim());
+  if (needSpeakerMatch || needBookMatch) {
+    try {
+      const [allAuthors, allBooks] = await Promise.all([
+        needSpeakerMatch ? listQuoteAuthors() : Promise.resolve(authors),
+        needBookMatch ? listQuoteBooks() : Promise.resolve(books),
+      ]);
+      if (needSpeakerMatch) authors = allAuthors;
+      if (needBookMatch) books = allBooks;
+    } catch (e) { console.warn('[enrichQuotes] match catalogs failed', e); }
+  }
+  return rows.map((row) => {
+    const author = authors.find((item) => item.id === row.author_id) ?? matchEntity(row.speaker, authors);
+    const book = books.find((item) => item.id === row.novel_id) ?? matchEntity(row.book_title, books);
+    return { ...row, quote_text: cleanImportedQuote(row.quote_text), author_id: author?.id ?? row.author_id ?? null, author_name: author?.name ?? row.speaker, author_slug: author?.slug ?? null, book_id: book?.id ?? row.novel_id ?? null, book_title: book?.title ?? row.book_title, book_slug: book?.slug ?? null };
+  });
+}
 export async function createQuote(input: Omit<QuoteRecord, 'id' | 'created_at' | 'updated_at'>) { return (await request<QuoteRecord[]>('quotes', { method: 'POST', body: JSON.stringify(input) }))[0]; }
 export async function updateQuote(id: number, input: Partial<Omit<QuoteRecord, 'id' | 'created_at' | 'updated_at'>>) { return (await request<QuoteRecord[]>(`quotes?id=eq.${id}`, { method: 'PATCH', body: JSON.stringify({ ...input, updated_at: new Date().toISOString() }) }))[0]; }
 export async function deleteQuote(id: number) { await request(`quotes?id=eq.${id}`, { method: 'DELETE' }); return { success: true } as const; }

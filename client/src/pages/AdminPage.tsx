@@ -1,4 +1,4 @@
-import { BarChart3, Bell, BookOpen, CheckCircle2, Edit3, FileClock, FileText, LayoutDashboard, Menu, Megaphone, Save, Send, ShieldCheck, Trash2, Users, UserCog, X, Tags, Loader2, Upload, WandSparkles } from 'lucide-react';
+import { Activity, BarChart3, Bell, BookOpen, CheckCircle2, Edit3, FileClock, FileText, LayoutDashboard, Menu, Megaphone, Save, Send, ShieldCheck, Trash2, Users, UserCog, X, Tags, Loader2, Upload, WandSparkles } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'wouter';
 import { toast } from 'sonner';
@@ -9,24 +9,32 @@ import AdminReports from './AdminReports';
 import AdminQuotesManager from './AdminQuotesManager';
 import { NovelsManager } from './AdminNovelsManager';
 import { AdminOverview } from './AdminOverview';
+import { AdminVisitors } from './AdminVisitors';
 import { AdminArticlesManager } from './AdminArticlesManager';
 
-const nav = [
-  { key: 'overview', label: 'نظرة عامة', icon: LayoutDashboard },
-  { key: 'novels', label: 'الروايات', icon: BookOpen },
-  { key: 'quotes', label: 'الاقتباسات', icon: WandSparkles },
-  { key: 'articles', label: 'المقالات', icon: FileText },
-  { key: 'authors', label: 'المؤلفون', icon: Users },
-  { key: 'genres', label: 'التصنيفات', icon: Tags },
-  { key: 'users', label: 'المستخدمون والأدوار', icon: UserCog },
-  { key: 'reports', label: 'التقارير والإحصائيات', icon: BarChart3 },
-  { key: 'audit', label: 'سجل النشاط', icon: FileClock },
-  { key: 'trash', label: 'سلة المهملات', icon: Trash2 },
-  { key: 'notifications', label: 'الإشعارات', icon: Bell },
-  { key: 'messages', label: 'الرسائل', icon: Send },
-  { key: 'ads', label: 'إدارة الإعلانات', icon: Megaphone },
-] as const;
-type Section = typeof nav[number]['key'];
+const navGroups: Array<{ title: string; items: Array<{ key: string; label: string; icon: typeof LayoutDashboard }> }> = [
+  { title: 'لوحة التحكم', items: [{ key: 'overview', label: 'نظرة عامة', icon: LayoutDashboard }] },
+  { title: 'المحتوى', items: [
+    { key: 'novels', label: 'الروايات', icon: BookOpen },
+    { key: 'authors', label: 'المؤلفون', icon: Users },
+    { key: 'genres', label: 'التصنيفات', icon: Tags },
+    { key: 'quotes', label: 'الاقتباسات', icon: WandSparkles },
+    { key: 'articles', label: 'المقالات', icon: FileText },
+  ]},
+  { title: 'المستخدمون والتفاعل', items: [
+    { key: 'users', label: 'المستخدمون', icon: UserCog },
+    { key: 'reports', label: 'التقارير', icon: BarChart3 },
+      { key: 'visitors', label: 'الزوار والتحليلات', icon: Activity },
+  ]},
+  { title: 'التشغيل', items: [
+    { key: 'ads', label: 'الإعلانات', icon: Megaphone },
+    { key: 'notifications', label: 'الإشعارات', icon: Bell },
+    { key: 'messages', label: 'الرسائل', icon: Send },
+    { key: 'audit', label: 'سجل النشاط', icon: FileClock },
+    { key: 'trash', label: 'سلة المهملات', icon: Trash2 },
+  ]},
+];
+const nav = navGroups.flatMap((g) => g.items);
 
 function AdminSidebar({ section, setSection, open, onClose }: { section: Section; setSection: (value: Section) => void; open: boolean; onClose: () => void }) {
   const [, navigate] = useLocation();
@@ -37,24 +45,30 @@ function AdminSidebar({ section, setSection, open, onClose }: { section: Section
         <button onClick={onClose} className="md:hidden" aria-label="إغلاق القائمة"><X size={18} /></button>
       </div>
       <nav className="flex-1 overflow-y-auto p-4" aria-label="قائمة الإدارة">
-        {nav.map((item) => {
-          const Icon = item.icon;
-          return (
-            <button
-              key={item.key}
-              onClick={() => {
-                setSection(item.key);
-                onClose();
-                if (item.key === 'novels') navigate('/novels');
-                if (item.key === 'overview') navigate('/');
-              }}
-              className={`mb-1 flex w-full items-center gap-3 rounded-xl px-3 py-3 text-right text-xs font-semibold transition ${section === item.key ? 'bg-[#6259dd] text-white' : 'text-white/55 hover:bg-white/5 hover:text-white'}`}
-            >
-              <Icon size={16} aria-hidden />
-              {item.label}
-            </button>
-          );
-        })}
+        {navGroups.map((group) => (
+          <div key={group.title} className="mb-4">
+            <div className="mb-1.5 px-3 text-[10px] font-bold tracking-wide text-white/35">{group.title}</div>
+            {group.items.map((item) => {
+              const Icon = item.icon;
+              return (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => {
+                    setSection(item.key as Section);
+                    onClose();
+                    if (item.key === 'overview') navigate('/admin');
+                    else navigate(`/admin?s=${item.key}`);
+                  }}
+                  className={`mb-1 flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-right text-xs font-semibold transition ${section === item.key ? 'bg-[#6259dd] text-white shadow-sm' : 'text-white/55 hover:bg-white/5 hover:text-white'}`}
+                >
+                  <Icon size={16} aria-hidden />
+                  {item.label}
+                </button>
+              );
+            })}
+          </div>
+        ))}
       </nav>
       <div className="m-4 rounded-[16px] border border-white/10 bg-white/5 p-4 text-[10px] text-white/55">كل التغييرات تُحفظ مباشرة في Supabase.</div>
     </aside>
@@ -235,7 +249,16 @@ export default function AdminPage() {
   });
   const [location, navigate] = useLocation();
   const [open, setOpen] = useState(false);
-  const [section, setSection] = useState<Section>(location.startsWith('/novels') ? 'novels' : 'overview');
+  const sectionFromUrl = (() => {
+    try {
+      const q = new URLSearchParams(window.location.search).get('s');
+      if (q && (nav as readonly { key: string }[]).some((n) => n.key === q)) return q as Section;
+    } catch { /* ignore */ }
+    if (location.startsWith('/novels')) return 'novels' as Section;
+    return 'overview' as Section;
+  })();
+  const [section, setSection] = useState<Section>(sectionFromUrl);
+  useEffect(() => { setSection(sectionFromUrl); }, [location, sectionFromUrl]);
   if (loading || (user && me.isLoading)) {
     return <div className="grid min-h-screen place-items-center text-sm text-muted-foreground">جارٍ التحقق من الصلاحيات...</div>;
   }
@@ -261,7 +284,7 @@ export default function AdminPage() {
             <a href="https://e7ketha.com/" className="text-xs font-bold text-[#675de8]">عرض الموقع</a>
           </header>
           <main className="p-4 sm:p-5 md:p-8">
-            {section === 'overview' && <AdminOverview onSelect={(value) => { setSection(value); if (value === 'novels') navigate('/novels'); }} />}
+            {section === 'overview' && <AdminOverview onSelect={(value) => { setSection(value); navigate(value === 'overview' ? '/admin' : `/admin?s=${value}`); }} />}
             {section === 'novels' && <NovelsManager />}
             {section === 'quotes' && <AdminQuotesManager />}
             {section === 'articles' && <AdminArticlesManager />}
@@ -269,6 +292,7 @@ export default function AdminPage() {
             {section === 'genres' && <GenresManager />}
             {section === 'users' && <UsersManager />}
             {section === 'reports' && <AdminReports />}
+            {section === 'visitors' && <AdminVisitors />}
             {['audit', 'trash', 'notifications', 'messages', 'ads'].includes(section) && <AdminOperations section={section as 'audit' | 'trash' | 'notifications' | 'messages' | 'ads'} />}
           </main>
         </div>

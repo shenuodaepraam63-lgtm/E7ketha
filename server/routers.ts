@@ -1,9 +1,11 @@
+import { getVisitorAnalytics, trackPageView, trackAnalyticsEvent } from './analytics';
+import { getRelatedForNovel } from './related';
 import { z } from 'zod';
 import { COOKIE_NAME } from '@shared/const';
 import { getSessionCookieOptions } from './_core/cookies';
 import { systemRouter } from './_core/systemRouter';
 import { adminProcedure, protectedProcedure, publicProcedure, router } from './_core/trpc';
-import { addToReadingList, createAuthor, createGenre, createNovel, deleteAuthor, deleteGenre, deleteNovel, getAdminSummary, getAuthorBySlug, getGenreBySlug, getMyRating, getNovelBySlug, getReadingList, getSearchFacets, getSeriesBySlug, listAdminAuthors, listAdminGenres, listAdminNovels, listAuthors, listGenres, listNovels, listSeries, listUsers, removeFromReadingList, searchNovels, setRating, updateAuthor, updateGenre, updateNovel, updateReadingStatus, updateUserRole, resolveCoverUrl } from './db';
+import { addToReadingList, createAuthor, createGenre, createNovel, deleteAuthor, deleteGenre, deleteNovel, getAdminSummary, getContentStats, getAuthorBySlug, getGenreBySlug, getMyRating, getNovelBySlug, getReadingList, getSearchFacets, getSeriesBySlug, listAdminAuthors, listAdminGenres, listAdminNovels, listAuthors, listGenres, listNovels, listSeries, listUsers, removeFromReadingList, searchNovels, setRating, updateAuthor, updateGenre, updateNovel, updateReadingStatus, updateUserRole, resolveCoverUrl } from './db';
 import { getEnhancedAdminSummary } from './adminSummary';
 import { commerceRouter } from './routers/commerce';
 import { confirmSupabaseUserEmail, listSupabaseUsers, toManagedUser, updateSupabaseUserRole } from './_core/supabaseAdmin';
@@ -34,6 +36,29 @@ export const appRouter = router({
       return { success: true } as const;
     }),
   }),
+  analytics: router({
+    trackPageView: publicProcedure
+      .input(z.object({
+        visitorId: z.string().min(8).max(64),
+        pagePath: z.string().min(1).max(300),
+        pageType: z.string().max(40).optional(),
+        entitySlug: z.string().max(200).optional().nullable(),
+        userId: z.number().int().positive().optional().nullable(),
+        referrer: z.string().max(400).optional().nullable(),
+        siteHost: z.string().max(120).optional().nullable(),
+        deviceType: z.string().max(20).optional().nullable(),
+      }))
+      .mutation(({ input }) => trackPageView(input)),
+    trackEvent: publicProcedure
+      .input(z.object({
+        visitorId: z.string().min(8).max(64),
+        eventType: z.string().min(2).max(40),
+        pagePath: z.string().max(300).optional().nullable(),
+        meta: z.string().max(300).optional().nullable(),
+        userId: z.number().int().positive().optional().nullable(),
+      }))
+      .mutation(({ input }) => trackAnalyticsEvent(input)),
+  }),
   novels: router({
     list: publicProcedure.input(z.object({ limit: z.number().int().min(1).max(100).default(50) }).optional()).query(({ input }) => listNovels(input?.limit ?? 50)),
     search: publicProcedure.input(z.object({
@@ -47,6 +72,7 @@ export const appRouter = router({
     })).query(({ input }) => searchNovels(input)),
     facets: publicProcedure.query(() => getSearchFacets()),
     bySlug: publicProcedure.input(novelSlugInput).query(({ input }) => getNovelBySlug(input.slug)),
+    related: publicProcedure.input(novelSlugInput).query(({ input }) => getRelatedForNovel(input.slug)),
   }),
   authors: router({ list: publicProcedure.query(() => listAuthors()), bySlug: publicProcedure.input(novelSlugInput).query(({ input }) => getAuthorBySlug(input.slug)) }),
   genres: router({ list: publicProcedure.query(() => listGenres()), bySlug: publicProcedure.input(novelSlugInput).query(({ input }) => getGenreBySlug(input.slug)) }),
@@ -139,7 +165,16 @@ export const appRouter = router({
       delete: adminProcedure.input(z.object({ id: z.number().int().positive() })).mutation(({ input }) => deleteArticle(input.id)),
     }),
     summary: adminProcedure.query(() => getEnhancedAdminSummary()),
-    reports: adminProcedure.query(() => getAdminReports()),
+    visitors: adminProcedure
+      .input(z.object({ range: z.enum(['today', 'week', 'month', 'quarter']).default('today') }).optional())
+      .query(({ input }) => getVisitorAnalytics(input?.range ?? 'today')),
+    reports: adminProcedure.query(async () => {
+      const [reports, content] = await Promise.all([
+        getAdminReports().catch(() => ({ summary: { impressions: 0, clicks: 0, campaigns: 0, published: 0 }, activity: [], daily: [], topActors: [] })),
+        getContentStats().catch(() => null),
+      ]);
+      return { ...reports, content };
+    }),
     novels: router({
       list: adminProcedure.query(() => listAdminNovels()),
       create: adminProcedure.input(novelFields).mutation(({ input }) => createNovel(input)),
@@ -217,7 +252,13 @@ export const appRouter = router({
     unsave: protectedProcedure.input(z.object({ id: z.number().int().positive() })).mutation(({ ctx, input }) => unsaveQuote(ctx.user.id, input.id)),
   }),
   adminQuotes: router({
-    list: adminProcedure.query(() => listQuotes(false)),
+    list: adminProcedure.input(z.object({ limit: z.number().int().min(1).max(100).default(30), offset: z.number().int().min(0).default(0), q: z.string().max(200).optional() }).optional()).query(async ({ input }) => {
+      const limit = input?.limit ?? 30;
+      const offset = input?.offset ?? 0;
+      const q = input?.q?.trim() || undefined;
+      const [items, total] = await Promise.all([listQuotes(false, limit, offset, q), countQuotes(false, q)]);
+      return { items, total, limit, offset };
+    }),
     create: adminProcedure.input(z.object({ quote_text: z.string().min(3).max(2000), speaker: z.string().max(255).nullable().optional(), book_title: z.string().max(255).nullable().optional(), novel_id: z.number().int().positive().nullable().optional(), category: z.string().max(80).nullable().optional() })).mutation(({ input }) => createQuote({ ...input, speaker: input.speaker ?? null, book_title: input.book_title ?? null, novel_id: input.novel_id ?? null, category: input.category ?? null, status: 'published' })),
     update: adminProcedure.input(z.object({ id: z.number().int().positive(), data: z.object({ quote_text: z.string().min(3).max(2000).optional(), speaker: z.string().max(255).nullable().optional(), book_title: z.string().max(255).nullable().optional(), novel_id: z.number().int().positive().nullable().optional(), category: z.string().max(80).nullable().optional() }) })).mutation(({ input }) => updateQuote(input.id, { ...input.data, status: 'published' })),
     delete: adminProcedure.input(z.object({ id: z.number().int().positive() })).mutation(({ input }) => deleteQuote(input.id)),

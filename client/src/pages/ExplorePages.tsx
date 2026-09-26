@@ -1,5 +1,6 @@
+import { trackSearch, trackGenreView } from '@/lib/browseRecs';
 import { Filter, Loader2, Search, SlidersHorizontal, Star, X, BookOpen, User, Hash } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation } from 'wouter';
 import { GlobalSearch } from '@/components/GlobalSearch';
 import { NovelCard, NovelListRow } from '@/components/NovelCard';
@@ -64,7 +65,7 @@ export function ExplorePage() {
         description="تصفح مكتبة اكتشاف متجددة، مع بحث وفلاتر تساعدك تختار بثقة."
       />
       <div className="mb-8 flex flex-col justify-between gap-4 rounded-[20px] border border-border bg-card p-4 md:flex-row md:items-center">
-        <div className="w-full md:max-w-md">
+        <div className="w-full md:max-w-md lg:max-w-lg">
           <GlobalSearch />
         </div>
         <div className="flex items-center gap-2 overflow-x-auto text-xs">
@@ -104,6 +105,7 @@ export function SearchPage() {
   const query = params.get('q') ?? '';
   const [activeTab, setActiveTab] = useState<'novels' | 'authors' | 'genres'>('novels');
   const [genreFilter, setGenreFilter] = useState('all');
+  useEffect(() => { if (genreFilter !== 'all') trackGenreView(genreFilter); }, [genreFilter]);
   const [authorFilter, setAuthorFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [minRating, setMinRating] = useState('0');
@@ -169,7 +171,7 @@ export function SearchPage() {
           {query ? `نتائج البحث عن «${query}»` : 'ابحث عن روايتك القادمة'}
         </h1>
         <p className="mx-auto mt-3 max-w-xl text-center text-sm leading-7 text-muted-foreground">
-          ابحث بالعنوان أو اسم المؤلف أو التصنيف — نتائج حية من مكتبة رِواية.
+          ابحث بالعنوان أو بجملة طبيعية مثل «رواية رعب نفسي قصيرة» — نفهم التصنيف والطول تلقائيًا.
         </p>
         <div className="mx-auto mt-7 max-w-2xl">
           <GlobalSearch hero={false} />
@@ -203,8 +205,8 @@ export function SearchPage() {
       </div>
 
       {activeTab === 'novels' && (
-        <div className="grid gap-8 lg:grid-cols-[240px_1fr]">
-          <aside className={`${mobileFilters ? 'block' : 'hidden'} rounded-[20px] border border-border bg-card p-5 lg:block`}>
+        <div className="grid gap-8 lg:grid-cols-[220px_1fr] xl:grid-cols-[240px_1fr]">
+          <aside className={`${mobileFilters ? 'block' : 'hidden'} rounded-[20px] border border-border bg-card p-4 lg:p-5 lg:block`}>
             <div className="mb-5 flex items-center justify-between">
               <h2 className="text-sm font-extrabold">
                 تصفية النتائج{' '}
@@ -295,7 +297,7 @@ export function SearchPage() {
               </div>
             ) : novels.length > 0 ? (
               view === 'grid' ? (
-                <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4">
+                <div className="grid grid-cols-2 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4">
                   {novels.map((novel) => (
                     <NovelCard key={novel.id} novel={novel} />
                   ))}

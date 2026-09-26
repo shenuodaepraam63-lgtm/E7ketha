@@ -6,7 +6,8 @@ import { Breadcrumbs, EmptyState } from '@/components/SiteShell';
 import { toast } from 'sonner';
 import { useAuth } from '@/_core/hooks/useAuth';
 import { trpc } from '@/lib/trpc';
-import { requireSupabase, supabase, supabaseConfigured } from '@/lib/supabase';
+import { getSupabase, requireSupabase, supabaseConfigured } from '@/lib/supabase';
+/* PATCH_ACCOUNT_SUPABASE */
 import { toNovel } from '@/lib/data';
 
 const publicOrigin = () => {
@@ -139,7 +140,7 @@ export function AuthPage({ register = false }: { register?: boolean }) {
       return;
     }
     setLoading(true);
-    const client = requireSupabase();
+    const client = await requireSupabase();
     const result = isRegister
       ? await client.auth.signUp({
           email,
@@ -163,7 +164,7 @@ export function AuthPage({ register = false }: { register?: boolean }) {
 
   const requestReset = async (event: FormEvent) => {
     event.preventDefault();
-    if (!supabaseConfigured || !supabase) {
+    if (!supabaseConfigured) {
       toast.error('لم يتم إعداد المصادقة بعد');
       return;
     }
@@ -173,7 +174,7 @@ export function AuthPage({ register = false }: { register?: boolean }) {
       return;
     }
     setLoading(true);
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    const { error } = await (await getSupabase())!.auth.resetPasswordForEmail(email, {
       redirectTo: redirectUrl('/reset-password'),
     });
     setLoading(false);
@@ -355,7 +356,7 @@ export function AuthPage({ register = false }: { register?: boolean }) {
 export function AuthCallbackPage() {
   const [message, setMessage] = useState('جارٍ تأكيد بريدك الإلكتروني...');
   useEffect(() => {
-    if (!supabase) { setMessage('لم يتم إعداد المصادقة بعد.'); return; }
+    if (!supabaseConfigured) { setMessage('لم يتم إعداد المصادقة بعد.'); return; }
     let redirected = false;
     const go = () => { if (!redirected) { redirected = true; window.location.replace(window.location.hostname.toLowerCase().startsWith('admin.') ? '/' : '/profile'); } };
     void supabase.auth.getSession().then(({ data }) => { if (data.session) go(); else setMessage('تم تأكيد البريد. يمكنك تسجيل الدخول الآن.'); });
@@ -384,7 +385,7 @@ export function PasswordResetPage() {
   const [focused, setFocused] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!supabase) {
+    if (!supabaseConfigured) {
       setChecking(false);
       setErrorMsg('لم يتم إعداد المصادقة بعد.');
       return;
@@ -425,7 +426,7 @@ export function PasswordResetPage() {
 
         const code = params.get('code');
         if (code) {
-          const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+          const { data, error } = await (await getSupabase())!.auth.exchangeCodeForSession(code);
           if (error) {
             markFail(
               error.message.includes('verifier') || error.message.includes('code challenge')
@@ -444,7 +445,7 @@ export function PasswordResetPage() {
         const tokenHash = params.get('token_hash') || params.get('token');
         const type = params.get('type');
         if (tokenHash && (type === 'recovery' || type === 'email' || type === 'magiclink')) {
-          const { data, error } = await supabase.auth.verifyOtp({
+          const { data, error } = await (await getSupabase())!.auth.verifyOtp({
             token_hash: tokenHash,
             type: (type === 'email' ? 'email' : type === 'magiclink' ? 'magiclink' : 'recovery') as 'recovery' | 'email' | 'magiclink',
           });
@@ -465,7 +466,7 @@ export function PasswordResetPage() {
           const access_token = hp.get('access_token');
           const refresh_token = hp.get('refresh_token');
           if (access_token && refresh_token) {
-            const { data, error } = await supabase.auth.setSession({ access_token, refresh_token });
+            const { data, error } = await (await getSupabase())!.auth.setSession({ access_token, refresh_token });
             if (error) {
               markFail(error.message || 'تعذر تفعيل جلسة الاستعادة.');
               return;
@@ -479,7 +480,7 @@ export function PasswordResetPage() {
         }
 
         for (let i = 0; i < 8 && !cancelled && !settled; i++) {
-          const { data } = await supabase.auth.getSession();
+          const { data } = await (await getSupabase())!.auth.getSession();
           if (data.session) {
             markReady();
             return;
@@ -516,19 +517,19 @@ export function PasswordResetPage() {
       toast.error('كلمتا المرور غير متطابقتين.');
       return;
     }
-    if (!supabase) {
+    if (!supabaseConfigured) {
       toast.error('لم يتم إعداد المصادقة بعد');
       return;
     }
     setSaving(true);
-    const { error } = await supabase.auth.updateUser({ password });
+    const { error } = await (await getSupabase())!.auth.updateUser({ password });
     setSaving(false);
     if (error) {
       toast.error(error.message);
       return;
     }
     toast.success('تم تحديث كلمة المرور بنجاح.');
-    await supabase.auth.signOut();
+    await (await getSupabase())!.auth.signOut();
     window.location.replace('/login');
   };
 
@@ -636,9 +637,9 @@ export function ProfilePage() {
     event.preventDefault();
     if (newPassword.length < 6) { toast.error('كلمة المرور يجب ألا تقل عن 6 أحرف.'); return; }
     if (newPassword !== confirmPassword) { toast.error('كلمتا المرور غير متطابقتين.'); return; }
-    if (!supabase) { toast.error('لم يتم إعداد المصادقة بعد'); return; }
+    if (!supabaseConfigured) { toast.error('لم يتم إعداد المصادقة بعد'); return; }
     setSavingPw(true);
-    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    const { error } = await (await getSupabase())!.auth.updateUser({ password: newPassword });
     setSavingPw(false);
     if (error) { toast.error(error.message); return; }
     toast.success('تم تغيير كلمة المرور بنجاح.');

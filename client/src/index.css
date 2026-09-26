@@ -315,6 +315,23 @@
   .scroll-rail { gap: 0.9rem; }
 }
 
+@media (max-width: 480px) {
+  .container { padding-inline: 14px; }
+  .scroll-rail { gap: 0.75rem; }
+}
+
+@media (min-width: 641px) and (max-width: 768px) {
+  .container { padding-inline: 24px; }
+}
+
+@media (min-width: 1281px) and (max-width: 1536px) {
+  .container { max-width: 1400px; }
+}
+
+@media (min-width: 1537px) {
+  .container { max-width: 1440px; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;

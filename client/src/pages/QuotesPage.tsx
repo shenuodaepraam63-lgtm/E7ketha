@@ -127,13 +127,23 @@ export default function QuotesPage() {
 
   const query = trpc.quotes.list.useQuery(
     { limit: PAGE_SIZE, offset },
-    { placeholderData: (previous) => previous },
+    {
+      /* PATCH_QUOTES_PAGINATION */
+      // Only the active page — no previous-page bleed into the grid.
+      placeholderData: undefined,
+      refetchOnMount: false,
+      staleTime: 60_000,
+    },
   );
   const countQuery = trpc.quotes.count.useQuery(undefined, {
     staleTime: 5 * 60 * 1000,
     retry: false,
   });
   const categories = trpc.quotes.categories.useQuery(undefined, { staleTime: 10 * 60 * 1000 });
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, category]);
 
   const raw = query.data as unknown;
   const items = (Array.isArray(raw) ? raw : ((raw as { items?: unknown[] })?.items ?? [])) as QuoteListItem[];
@@ -238,7 +248,7 @@ export default function QuotesPage() {
       <AdSlot slot="4836372120" format="horizontal" className="mx-auto max-w-4xl" />
       <FeedAdSlot className="mx-auto max-w-4xl" />
 
-      {query.isLoading ? (
+      {query.isLoading || (query.isFetching && !(Array.isArray(query.data) ? query.data : (query.data as { items?: unknown[] })?.items)?.length) ? (
         <div className="flex min-h-56 items-center justify-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="animate-spin" size={18} /> جارٍ تحميل الاقتباسات...
         </div>

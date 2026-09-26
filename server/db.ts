@@ -15,7 +15,7 @@ import {
   users,
 } from '../drizzle/schema';
 import { ENV } from './_core/env';
-import { expandArabicQueryVariants, rankSearchRows } from './arabicSearch';
+import { expandArabicQueryVariants, rankSearchRows, parseSearchIntent } from './arabicSearch';
 
 let _pool: Pool | null = null;
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -121,9 +121,23 @@ async function listNovelsFromRest(limit = 50) {
 }
 
 export async function upsertUser(user: InsertUser): Promise<void> {
+  /* USER_REST_SYNC */
   if (!user.openId) throw new Error('User openId is required for upsert');
   const db = await getDb();
-  if (!db) return;
+  if (!db) {
+    const payload: Record<string, unknown> = {
+      openId: user.openId,
+      lastSignedIn: (user.lastSignedIn ?? new Date()).toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    if (user.name !== undefined) payload.name = user.name ?? null;
+    if (user.email !== undefined) payload.email = user.email ?? null;
+    if (user.loginMethod !== undefined) payload.loginMethod = user.loginMethod ?? null;
+    if (user.role !== undefined) payload.role = user.role;
+    else if (user.openId === ENV.ownerOpenId) payload.role = 'admin';
+    await supabaseWrite('users', 'POST', payload, 'on_conflict=openId');
+    return;
+  }
   const values: InsertUser = { openId: user.openId };
   const updateSet: Record<string, unknown> = {};
   const textFields = ['name', 'email', 'loginMethod'] as const;
@@ -150,8 +164,24 @@ export async function upsertUser(user: InsertUser): Promise<void> {
 }
 
 export async function getUserByOpenId(openId: string) {
+  /* USER_REST_SYNC */
   const db = await getDb();
-  if (!db) return undefined;
+  if (!db) {
+    const rows = await supabaseRest<any[]>('users', `select=*&openId=eq.${encodeURIComponent(openId)}&limit=1`);
+    const r = rows[0];
+    if (!r) return undefined;
+    return {
+      id: Number(r.id),
+      openId: r.openId,
+      name: r.name ?? null,
+      email: r.email ?? null,
+      loginMethod: r.loginMethod ?? null,
+      role: r.role === 'admin' ? 'admin' as const : 'user' as const,
+      createdAt: r.createdAt ? new Date(r.createdAt) : new Date(),
+      updatedAt: r.updatedAt ? new Date(r.updatedAt) : new Date(),
+      lastSignedIn: r.lastSignedIn ? new Date(r.lastSignedIn) : new Date(),
+    };
+  }
   const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
   return result[0];
 }
@@ -205,12 +235,15 @@ export type NovelSearchFilters = {
 };
 
 export async function searchNovels(filters: NovelSearchFilters = {}) {
+  const intent = parseSearchIntent(filters.q ?? '');
+  const effectiveGenreSlug = filters.genreSlug || intent.genreSlugs[0];
+  const effectiveStatus = filters.status || intent.preferStatus;
   const db = await getDb();
   if (!db) {
     const limit = Math.min(Math.max(filters.limit ?? 50, 1), 100);
-    const query = filters.q?.trim();
+    const query = (intent.residualQuery || filters.q || '').trim() || undefined;
     const params = new URLSearchParams({ select: '*', limit: String(limit) });
-    if (filters.status) params.set('status', `eq.${filters.status}`);
+    if (effectiveStatus) params.set('status', `eq.${effectiveStatus}`);
     if (filters.minRating) params.set('rating', `gte.${Math.round(filters.minRating * 100)}`);
     if (query) {
       const variants = expandArabicQueryVariants(query);
@@ -269,10 +302,59 @@ export async function searchNovels(filters: NovelSearchFilters = {}) {
       }));
       return rankSearchRows(rows, query).slice(0, limit);
     }
+    if (filters.q?.trim() || effectiveGenreSlug) {
+      if (rows.length && !rows[0]?.author) {
+        const ids = Array.from(new Set(rows.map((r) => r.authorId).filter(Boolean)));
+        const authorsRows = ids.length ? await supabaseRest('authors', `select=id,name,slug&id=in.(${ids.join(',')})`) : [];
+        const amap = new Map(authorsRows.map((a) => [String(a.id), a]));
+        rows = rows.map((row) => ({
+          ...row,
+          slug: normalizeNovelSlug(row.slug, row.title),
+          author: amap.get(String(row.authorId))?.name ?? row.author ?? '',
+          authorSlug: amap.get(String(row.authorId))?.slug ?? row.authorSlug ?? '',
+        }));
+      }
+      if (effectiveGenreSlug) {
+        try {
+          const genres = await supabaseRest('genres', `select=id,slug&slug=eq.${encodeURIComponent(effectiveGenreSlug)}&limit=1`);
+          const gid = genres[0]?.id;
+          if (gid) {
+            const links = await supabaseRest('novelGenres', `select=novelId&genreId=eq.${gid}&limit=120`);
+            const allow = new Set(links.map((l) => Number(l.novelId)));
+            if (allow.size) {
+              const filtered = rows.filter((r) => allow.has(Number(r.id)));
+              if (filtered.length) {
+                rows = filtered.map((r) => ({ ...r, genreSlugs: [effectiveGenreSlug, ...(r.genreSlugs ?? [])] }));
+              } else {
+                const ids = Array.from(allow).slice(0, limit).join(',');
+                if (ids) {
+                  rows = await supabaseRest('novels', `select=*&id=in.(${ids})&limit=${limit}`);
+                  const aids = Array.from(new Set(rows.map((r) => r.authorId).filter(Boolean)));
+                  const authorsRows = aids.length ? await supabaseRest('authors', `select=id,name,slug&id=in.(${aids.join(',')})`) : [];
+                  const amap = new Map(authorsRows.map((a) => [String(a.id), a]));
+                  rows = rows.map((row) => ({
+                    ...row,
+                    slug: normalizeNovelSlug(row.slug, row.title),
+                    author: amap.get(String(row.authorId))?.name ?? '',
+                    authorSlug: amap.get(String(row.authorId))?.slug ?? '',
+                    genreSlugs: [effectiveGenreSlug],
+                  }));
+                }
+              }
+            }
+          }
+        } catch { /* ignore */ }
+      }
+      if (intent.maxParts) {
+        const soft = rows.filter((r) => Number(r.parts ?? 1) <= intent.maxParts);
+        if (soft.length) rows = soft;
+      }
+      return rankSearchRows(rows, filters.q ?? query ?? '', intent).slice(0, limit);
+    }
     return rows.map((row) => ({ ...row, slug: normalizeNovelSlug(row.slug, row.title), author: '', authorSlug: '' }));
   }
   const conditions = [];
-  const query = filters.q?.trim();
+  const query = (intent.residualQuery || filters.q || '').trim();
   if (query) {
     const variants = expandArabicQueryVariants(query);
     const likes = variants.flatMap((v) => [
@@ -367,7 +449,25 @@ export async function getAuthorBySlug(slug: string) {
 
 export async function listGenres() {
   const db = await getDb();
-  if (!db) return supabaseRest<any[]>('genres', 'select=*&order=name.asc&limit=1000');
+  if (!db) {
+    /* PATCH_GENRE_COUNTS */
+    const [rows, links] = await Promise.all([
+      supabaseRest<any[]>('genres', 'select=*&order=name.asc&limit=1000'),
+      supabaseRest<any[]>('novelGenres', 'select=genreId,novelId&limit=20000'),
+    ]);
+    const counts = new Map();
+    for (const link of links) {
+      const gid = Number(link.genreId);
+      const nid = Number(link.novelId);
+      if (!Number.isFinite(gid) || !Number.isFinite(nid)) continue;
+      if (!counts.has(gid)) counts.set(gid, new Set());
+      counts.get(gid).add(nid);
+    }
+    return rows.map((row) => ({
+      ...row,
+      novelCount: counts.get(Number(row.id))?.size ?? 0,
+    }));
+  }
   return db.select({ id: genres.id, slug: genres.slug, name: genres.name, description: genres.description, icon: genres.icon, novelCount: sql<number>`COUNT(DISTINCT ${novelGenres.novelId})` }).from(genres).leftJoin(novelGenres, eq(novelGenres.genreId, genres.id)).groupBy(genres.id).orderBy(asc(genres.name));
 }
 
@@ -703,3 +803,23 @@ export async function deleteNovel(id: number) {
 }
 
 export { authors, genres, novels, reviews, series };
+
+export async function getContentStats() {
+  const [novelsCount, authorsCount, genresCount, seriesCount, quotesCount, articlesCount, savedQuotesCount, usersCount] = await Promise.all([
+    supabaseCount('novels'),
+    supabaseCount('authors'),
+    supabaseCount('genres'),
+    supabaseCount('series'),
+    supabaseCount('quotes'),
+    supabaseCount('articles').catch(() => 0),
+    supabaseCount('saved_quotes').catch(() => 0),
+    supabaseCount('users').catch(() => 0),
+  ]);
+  let topNovels = [];
+  try {
+    topNovels = await supabaseRest('novels', 'select=id,title,slug,rating,ratingCount&order=ratingCount.desc.nullslast,rating.desc&limit=8');
+  } catch {
+    topNovels = [];
+  }
+  return { novels: novelsCount, authors: authorsCount, genres: genresCount, series: seriesCount, quotes: quotesCount, articles: articlesCount, savedQuotes: savedQuotesCount, users: usersCount, topNovels };
+}

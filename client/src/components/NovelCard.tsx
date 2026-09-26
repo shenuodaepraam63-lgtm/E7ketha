@@ -1,12 +1,12 @@
 import { Heart, Star, ArrowUpLeft } from 'lucide-react';
 import { Link } from 'wouter';
 import type { Novel } from '@/lib/data';
-import { coverFallback, statusStyles } from '@/lib/data';
+import { coverFallback, optimizeCoverUrl, statusStyles } from '@/lib/data';
 import { useRef, useState } from 'react';
 import { trpc } from '@/lib/trpc';
 import { toast } from 'sonner';
 
-export function NovelCard({ novel, compact = false }: { novel: Novel; compact?: boolean }) {
+export function NovelCard({ novel, compact = false, priority = false }: { novel: Novel; compact?: boolean; priority?: boolean }) {
   const [saved, setSaved] = useState(false);
   const utils = trpc.useUtils();
   const addToList = trpc.readingList.add.useMutation({
@@ -45,11 +45,11 @@ export function NovelCard({ novel, compact = false }: { novel: Novel; compact?: 
     card.style.setProperty('--rotate-y', '0deg');
   };
   return (
-    <article ref={cardRef} onPointerMove={handlePointerMove} onPointerLeave={handlePointerLeave} className={`novel-card group relative ${compact ? 'min-w-[178px] max-w-[178px]' : 'min-w-[200px] max-w-[200px] sm:min-w-[220px] sm:max-w-[220px]'}`}>
+    <article ref={cardRef} onPointerMove={handlePointerMove} onPointerLeave={handlePointerLeave} className={`novel-card group relative ${compact ? 'min-w-[160px] max-w-[160px] sm:min-w-[178px] sm:max-w-[178px]' : 'min-w-[160px] max-w-[160px] sm:min-w-[200px] sm:max-w-[200px] md:min-w-[220px] md:max-w-[220px]'}`}>
       <div className="novel-card__visual relative overflow-hidden rounded-[18px] bg-slate-200 dark:bg-slate-800">
         <Link href={bookHref} className="block" aria-label={`استكشف رواية ${novel.title}`}>
           <div className={`relative overflow-hidden ${compact ? 'aspect-[3/4.3]' : 'aspect-[3/4.35]'}`}>
-            <img src={novel.cover} alt={`غلاف رواية ${novel.title}`} width="300" height="435" loading="lazy" decoding="async" className="h-full w-full object-cover transition duration-500 ease-out group-hover:scale-[1.06]" onError={(event) => { if (event.currentTarget.src !== coverFallback) event.currentTarget.src = coverFallback; }} />
+            <img src={optimizeCoverUrl(novel.cover, 400)} alt={`غلاف رواية ${novel.title}`} width="300" height="435" loading={priority ? "eager" : "lazy"} fetchPriority={priority ? "high" : "auto"} decoding="async" className="h-full w-full object-cover transition duration-500 ease-out group-hover:scale-[1.06]" onError={(event) => { if (event.currentTarget.src !== coverFallback) event.currentTarget.src = coverFallback; }} />
             <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-black/0 to-transparent opacity-80" />
             <div className="novel-card__shine pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
             <span className="absolute bottom-3 right-3 text-[10px] font-semibold text-white/85">{novel.parts === 1 ? 'رواية منفردة' : `${novel.parts} أجزاء`}</span>
@@ -73,7 +73,7 @@ export function NovelCard({ novel, compact = false }: { novel: Novel; compact?: 
 
 export function NovelListRow({ novel }: { novel: Novel }) {
   return <Link href={`/books/${novel.slug}`} className="interactive group flex items-center gap-4 rounded-[18px] border border-border/80 bg-card p-3 shadow-[0_10px_28px_-24px_rgba(20,28,60,.5)]">
-    <img src={novel.cover} alt={`غلاف ${novel.title}`} width="80" height="112" loading="lazy" decoding="async" className="h-28 w-20 rounded-xl object-cover" onError={(event) => { if (event.currentTarget.src !== coverFallback) event.currentTarget.src = coverFallback; }} />
+    <img src={optimizeCoverUrl(novel.cover, 400)} alt={`غلاف ${novel.title}`} width="80" height="112" loading="lazy" decoding="async" className="h-28 w-20 rounded-xl object-cover" onError={(event) => { if (event.currentTarget.src !== coverFallback) event.currentTarget.src = coverFallback; }} />
     <div className="min-w-0 flex-1">
       <div className="flex items-start justify-between gap-3"><h3 className="text-base font-extrabold">{novel.title}</h3><span className="flex shrink-0 items-center gap-1 text-xs font-bold text-[#bf7b22]"><Star size={13} fill="currentColor" />{novel.rating}</span></div>
       <p className="mt-1 text-xs text-muted-foreground">{novel.author} · {novel.genres.join(' · ')}</p>

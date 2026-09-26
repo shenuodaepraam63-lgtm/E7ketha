@@ -1,3 +1,4 @@
+import { getVisitorId } from '@/lib/visitorId';
 import { ArrowUpLeft, BookOpen, Search, User, X, Hash } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation } from 'wouter';
@@ -73,6 +74,7 @@ export function GlobalSearch({ hero = false }: { hero?: boolean }) {
     const t = term.trim();
     if (!t) return;
     setFocused(false);
+    try { const vid = getVisitorId(); if (vid.length >= 8) { fetch('/api/trpc/analytics.trackEvent?batch=1', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ '0': { json: { visitorId: vid, eventType: 'search', pagePath: '/search', meta: t.slice(0, 120) } } }) }).catch(() => {}); } } catch {}
     navigate(`/search?q=${encodeURIComponent(t)}`);
   };
 

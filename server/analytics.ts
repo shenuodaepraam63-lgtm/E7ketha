@@ -13,9 +13,9 @@ export type PageViewInput = {
   userId?: number | null;
 };
 
-export type AnalyticsRange = 'today' | 'week' | 'month';
+export type AnalyticsRange = 'today' | 'week' | 'month' | 'quarter'
 
-type AggRow = { page_path?: string; page_type?: string; entity_slug?: string; visitor_id?: string; created_at?: string };
+type AggRow = { page_path?: string; page_type?: string; entity_slug?: string; visitor_id?: string; created_at?: string; referrer_source?: string | null; device_type?: string | null };
 
 function restKey() {
   return ENV.supabaseSecretKey || ENV.supabasePublishableKey;
@@ -104,6 +104,27 @@ export function classifyPagePath(rawPath: string): { pageType: string; pagePath:
   return { pageType: 'other', pagePath: path.slice(0, 200), entitySlug: null };
 }
 
+export function classifyReferrer(raw: string | null | undefined, siteHost?: string | null): string {
+  const ref = (raw || '').trim();
+  if (!ref) return 'direct';
+  try {
+    const u = new URL(ref);
+    const host = u.hostname.replace(/^www\./i, '').toLowerCase();
+    const site = (siteHost || '').replace(/^www\./i, '').toLowerCase().split(':')[0];
+    if (site && (host === site || host.endsWith('.' + site))) return 'internal';
+    if (/google\.|bing\.|yahoo\.|duckduckgo\.|yandex\.|baidu\./.test(host)) return 'search';
+    if (/facebook\.|fb\.com|fb\.me|instagram\.|threads\.net/.test(host)) return 'facebook';
+    if (/whatsapp\.|wa\.me/.test(host)) return 'whatsapp';
+    if (/t\.me|telegram\./.test(host)) return 'telegram';
+    if (/twitter\.|x\.com|t\.co/.test(host)) return 'x';
+    if (/youtube\.|youtu\.be/.test(host)) return 'youtube';
+    if (/tiktok\./.test(host)) return 'tiktok';
+    return 'referral';
+  } catch {
+    return 'direct';
+  }
+}
+
 export async function trackPageView(input: PageViewInput): Promise<{ ok: boolean; skipped?: boolean; reason?: string }> {
   const visitorId = String(input.visitorId || '').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 64);
   if (visitorId.length < 8) return { ok: false, reason: 'bad-visitor' };
@@ -143,7 +164,7 @@ function previousRange(range: AnalyticsRange): { start: string; end: string } {
 }
 
 async function fetchViewsSince(iso: string, until?: string): Promise<AggRow[]> {
-  let q = `page_views?select=page_path,page_type,entity_slug,visitor_id,created_at&created_at=gte.${iso}`;
+  let q = `page_views?select=page_path,page_type,entity_slug,visitor_id,created_at,referrer_source,device_type&created_at=gte.${iso}`;
   if (until) q += `&created_at=lt.${until}`;
   q += '&limit=10000';
   const result = await rest<AggRow[]>(q, { method: 'GET' });
@@ -198,6 +219,25 @@ export async function getVisitorAnalytics(range: AnalyticsRange = 'today') {
   const prev = previousRange(range);
   const prevRows = await fetchViewsSince(prev.start, prev.end);
   const previous = aggregate(prevRows);
+
+  let topSearches = [];
+  let zeroSearches = [];
+  let eventBreakdown = [];
+  try {
+    const ev = await rest('analytics_events?select=event_type,meta,page_path,created_at&created_at=gte.' + start + '&limit=5000', { method: 'GET' });
+    const events = Array.isArray(ev.data) ? ev.data : [];
+    const searchMap = new Map();
+    const zeroMap = new Map();
+    const typeMap = new Map();
+    for (const e of events) {
+      typeMap.set(e.event_type, (typeMap.get(e.event_type) || 0) + 1);
+      if (e.event_type === 'search' && e.meta) searchMap.set(e.meta, (searchMap.get(e.meta) || 0) + 1);
+      if (e.event_type === 'search_zero' && e.meta) zeroMap.set(e.meta, (zeroMap.get(e.meta) || 0) + 1);
+    }
+    topSearches = [...searchMap.entries()].map(([q, count]) => ({ q, count })).sort((a, b) => b.count - a.count).slice(0, 15);
+    zeroSearches = [...zeroMap.entries()].map(([q, count]) => ({ q, count })).sort((a, b) => b.count - a.count).slice(0, 15);
+    eventBreakdown = [...typeMap.entries()].map(([type, count]) => ({ type, count })).sort((a, b) => b.count - a.count);
+  } catch {}
 
   const probe = await rest('page_views?select=id&limit=1', { method: 'GET' });
 
@@ -265,4 +305,61 @@ export async function getVisitorAnalytics(range: AnalyticsRange = 'today') {
     byPageType: current.byPageType,
     topNovels: current.topNovels,
   };
+}
+
+
+export type AnalyticsEventInput = {
+  visitorId: string;
+  eventType: string;
+  pagePath?: string | null;
+  meta?: string | null;
+  userId?: number | null;
+};
+
+export async function trackAnalyticsEvent(input: AnalyticsEventInput) {
+  const visitorId = String(input.visitorId || '').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 64);
+  if (visitorId.length < 8) return { ok: false, reason: 'bad-visitor' };
+  const eventType = String(input.eventType || '').slice(0, 40);
+  if (!eventType) return { ok: false, reason: 'bad-type' };
+  const row = {
+    visitor_id: visitorId,
+    user_id: input.userId && input.userId > 0 ? input.userId : null,
+    event_type: eventType,
+    page_path: (input.pagePath || '').slice(0, 200) || null,
+    meta: (input.meta || '').slice(0, 300) || null,
+  };
+  const result = await rest('analytics_events', { method: 'POST', body: JSON.stringify(row) });
+  if (!result.ok) return { ok: false, reason: result.error || 'http' };
+  return { ok: true };
+}
+
+function buildSessions(rows) {
+  const byVisitor = new Map();
+  for (const r of rows) {
+    const v = r.visitor_id || 'x';
+    if (!byVisitor.has(v)) byVisitor.set(v, []);
+    byVisitor.get(v).push(r);
+  }
+  const GAP_MS = 30 * 60 * 1000;
+  const sessions = [];
+  for (const [visitor, list] of byVisitor) {
+    const sorted = [...list].sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)));
+    let cur = [];
+    let lastTs = 0;
+    const flush = () => {
+      if (!cur.length) return;
+      const start = new Date(cur[0].created_at || 0).getTime();
+      const end = new Date(cur[cur.length - 1].created_at || 0).getTime();
+      sessions.push({ visitor, paths: cur.map((x) => x.page_path || '/'), start, end, durationMs: Math.max(0, end - start) });
+      cur = [];
+    };
+    for (const r of sorted) {
+      const ts = new Date(r.created_at || 0).getTime();
+      if (cur.length && ts - lastTs > GAP_MS) flush();
+      cur.push(r);
+      lastTs = ts;
+    }
+    flush();
+  }
+  return sessions;
 }

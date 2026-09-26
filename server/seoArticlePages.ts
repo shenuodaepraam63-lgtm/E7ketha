@@ -18,7 +18,7 @@ function escapeHtml(value: string) {
 
 function readTemplate(): string {
   const candidates = [
-    path.join(process.cwd(), 'dist/public/index.html'),
+    path.join(process.cwd(), 'dist/public/spa-shell.html'),
     path.join(process.cwd(), 'client/index.html'),
     path.join(process.cwd(), 'index.html'),
   ];

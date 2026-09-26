@@ -6,9 +6,11 @@ import { registerOAuthRoutes } from "./_core/oauth";
 import { registerStorageProxy } from "./_core/storageProxy";
 import { appRouter } from "./routers";
 import { createContext } from "./_core/context";
+import { apiRateLimit, authRateLimit } from "./_core/rateLimit";
+import { tryRichListSeo, renderRichHomepageShell } from "./ssrListPages";
+/* SSR_RICH_LISTS_B */
 import { getAuthorBySlug, getGenreBySlug, getNovelBySlug, getSeriesBySlug, listAuthors, listGenres, listNovels, listSeries, searchNovels } from "./db";
 import { getQuote, listQuotes, listQuotesByCategory } from "./quotes";
-import { listPublishedArticles } from "./articles";
 import { getNovelDetails } from "./novelDetails";
 
 const SITE_URL = "https://e7ketha.com";
@@ -21,7 +23,7 @@ function renderUrlset(paths: string[]) {
   return `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${body}</urlset>`;
 }
 function renderSitemapIndex() {
-  const files = ["static", "novels", "authors", "genres", "series", "quotes", "articles", "topics"];
+  const files = ["novels", "authors", "genres", "series", "quotes"];
   return `<?xml version="1.0" encoding="UTF-8"?><sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${files.map((file) => `<sitemap><loc>${SITE_URL}/sitemap/${file}.xml</loc></sitemap>`).join("")}</sitemapindex>`;
 }
 function quoteCategorySlug(value: string) { return encodeURIComponent(value.trim().toLowerCase()).replace(/%20/g, "-"); }
@@ -34,34 +36,22 @@ function stripHtml(value: unknown, max = 180) {
   return String(value ?? '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
 }
 
-function renderNovelDetailsHtml(details: Awaited<ReturnType<typeof getNovelDetails>>) {
+function renderNovelDetailsHtml(details) {
   if (!details || Number(details.wordCount || 0) <= 0) return '';
-  const fields: Array<[string, keyof typeof details]> = [
-    ['ملخص تفصيلي', 'detailedSummary'],
-    ['ملخص بدون حرق', 'spoilerFreeSummary'],
-    ['الموضوعات والثيمات', 'themes'],
-    ['الشخصيات', 'characters'],
-    ['المكان والزمان', 'setting'],
-    ['أسلوب الكتابة', 'writingStyle'],
-    ['التحليل الأدبي', 'literaryAnalysis'],
-    ['ما يميز الرواية', 'whatMakesItDistinct'],
-    ['لمن تناسب', 'recommendedFor'],
+  const fields = [
+    ['ملخص تفصيلي', 'detailedSummary'], ['ملخص بدون حرق', 'spoilerFreeSummary'],
+    ['الموضوعات والثيمات', 'themes'], ['الشخصيات', 'characters'], ['المكان والزمان', 'setting'],
+    ['أسلوب الكتابة', 'writingStyle'], ['التحليل الأدبي', 'literaryAnalysis'],
+    ['ما يميز الرواية', 'whatMakesItDistinct'], ['لمن تناسب', 'recommendedFor'],
     ['تفاصيل جديرة بالملاحظة', 'notableDetails'],
   ];
-  const sections = fields
-    .map(([label, key]) => {
-      const value = details[key];
-      if (typeof value !== 'string' || !value.trim()) return '';
-      return `<section><h2>${htmlEscape(label)}</h2><p>${htmlEscape(value)}</p></section>`;
-    })
-    .filter(Boolean)
-    .join('');
-  const keywords = typeof details.keywords === 'string' && details.keywords.trim()
-    ? `<p><strong>كلمات مفتاحية:</strong> ${htmlEscape(details.keywords)}</p>`
-    : '';
-  return `<section aria-label="دليل الرواية"><h2>دليل الرواية</h2><p>بيانات موسعة للرواية (${Number(details.wordCount).toLocaleString('ar-EG')} كلمة).</p>${sections}${keywords}</section>`;
+  const sections = fields.map(([label, key]) => {
+    const value = details[key];
+    return typeof value === 'string' && value.trim() ? '<section><h2>' + htmlEscape(label) + '</h2><p>' + htmlEscape(value) + '</p></section>' : '';
+  }).filter(Boolean).join('');
+  const keywords = typeof details.keywords === 'string' && details.keywords.trim() ? '<p><strong>كلمات مفتاحية:</strong> ' + htmlEscape(details.keywords) + '</p>' : '';
+  return '<section aria-label="دليل الرواية"><h2>دليل الرواية</h2><p>بيانات موسعة للرواية (' + Number(details.wordCount).toLocaleString('ar-EG') + ' كلمة).</p>' + sections + keywords + '</section>';
 }
-
 function breadcrumbSchema(origin: string, items: Array<{ name: string; url: string }>) {
   return { '@type': 'BreadcrumbList', itemListElement: items.map((item, index) => ({ '@type': 'ListItem', position: index + 1, name: item.name, item: item.url })) };
 }
@@ -84,7 +74,7 @@ const topicalPages = [
 
 function readClientTemplate() {
   const candidates = [
-    path.resolve(process.cwd(), 'dist/public/index.html'),
+    path.resolve(process.cwd(), 'dist/public/spa-shell.html'),
     path.resolve(import.meta.dirname, 'public/index.html'),
     path.resolve(import.meta.dirname, '../../client/index.html'),
   ];
@@ -94,16 +84,47 @@ function readClientTemplate() {
   return '<!doctype html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>𝐄𝟳𝐤𝐞𝐭𝐡𝐚</title></head><body><div id="root"></div></body></html>';
 }
 
-function renderSeoDocument(template: string, input: { title: string; description: string; canonical: string; type?: string; image?: string; keywords?: string[]; jsonLd: unknown; content: string; status?: number }) {
+function renderSeoDocument(template: string, input: { title: string; description: string; canonical: string; type?: string; image?: string; preloadImage?: string; paintHtml?: string; keywords?: string[]; jsonLd: unknown; content: string; status?: number }) {
   const keywords = input.keywords?.length ? `<meta name="keywords" content="${htmlEscape(input.keywords.join(', '))}">` : '';
-  const head = `<title>${htmlEscape(input.title)}</title><meta name="description" content="${htmlEscape(input.description)}"><meta name="robots" content="index,follow">${keywords}<link rel="canonical" href="${htmlEscape(input.canonical)}"><meta property="og:type" content="${htmlEscape(input.type ?? 'website')}"><meta property="og:title" content="${htmlEscape(input.title)}"><meta property="og:description" content="${htmlEscape(input.description)}"><meta property="og:url" content="${htmlEscape(input.canonical)}">${input.image ? `<meta property="og:image" content="${htmlEscape(input.image)}">` : ''}<script type="application/ld+json">${JSON.stringify(input.jsonLd).replace(/</g, '\\u003c')}</script>`;
+  const preload = input.preloadImage ? `<link rel="preload" as="image" href="${htmlEscape(input.preloadImage)}" fetchpriority="high">` : '';
+  const head = `${preload}<title>${htmlEscape(input.title)}</title><meta name="description" content="${htmlEscape(input.description)}"><meta name="robots" content="index,follow">${keywords}<link rel="canonical" href="${htmlEscape(input.canonical)}"><meta property="og:type" content="${htmlEscape(input.type ?? 'website')}"><meta property="og:title" content="${htmlEscape(input.title)}"><meta property="og:description" content="${htmlEscape(input.description)}"><meta property="og:url" content="${htmlEscape(input.canonical)}">${input.image ? `<meta property="og:image" content="${htmlEscape(input.image)}">` : ''}<script type="application/ld+json">${JSON.stringify(input.jsonLd).replace(/</g, '\\u003c')}</script>`;
   const cleanTemplate = template
     .replace(/<title>[\s\S]*?<\/title>/gi, '')
     .replace(/<meta[^>]+(?:name|property)=["'](?:description|robots|keywords|twitter:[^"']+|og:[^"']+)["'][^>]*>/gi, '')
     .replace(/<link[^>]+rel=["']canonical["'][^>]*>/gi, '')
     .replace(/<script[^>]+type=["']application\/ld\+json["'][\s\S]*?<\/script>/gi, '');
-  const withContent = cleanTemplate.replace('</head>', `${head}</head>`).replace('<div id="root"></div>', `<div id="root">${input.content}</div>`);
+  const withContent = cleanTemplate.replace('</head>', `${head}</head>`).replace('<div id="root"></div>', `${input.paintHtml || ''}<div id="root">${input.content}</div>`);
   return { html: withContent, status: input.status ?? 200 };
+}
+
+
+/* SSR_PAINT_ISLAND — LCP-safe cover URLs for SSR */
+function optimizeCoverUrl(src: string | null | undefined, width = 400): string {
+  if (!src) return `${SITE_URL}/e7ketha-cover-wide.png`;
+  try {
+    if (src.includes("res.cloudinary.com") && src.includes("/upload/")) {
+      if (/\/upload\/[^/]*f_auto/.test(src) || src.includes("w_" + width)) return src;
+      return src.replace("/upload/", `/upload/f_auto,q_auto,w_${width},c_limit/`);
+    }
+    if (src.startsWith("http") && !src.includes("wsrv.nl")) {
+      return `https://wsrv.nl/?url=${encodeURIComponent(src)}&w=${width}&q=80&output=webp&we`;
+    }
+  } catch { /* fallthrough */ }
+  return src;
+}
+
+function buildHomePaintIsland(novels: Array<{ slug: string; title: string; coverUrl?: string | null }>) {
+  const top = novels.slice(0, 4);
+  const covers = top.map((novel, i) => {
+    const src = optimizeCoverUrl(novel.coverUrl, i === 0 ? 400 : 200);
+    const w = i === 0 ? 200 : 148;
+    const h = i === 0 ? 300 : 222;
+    const pri = i === 0 ? ' fetchpriority="high"' : ' loading="lazy"';
+    return `<a href="${SITE_URL}/books/${htmlEscape(novel.slug)}" style="display:block;flex:0 0 auto"><img src="${htmlEscape(src)}" alt="غلاف ${htmlEscape(novel.title)}" width="${w}" height="${h}" decoding="async"${pri} style="border-radius:14px;object-fit:cover;background:#1a2140;width:${w}px;height:${h}px" /></a>`;
+  }).join("");
+  const boot = JSON.stringify(novels.slice(0, 12)).replace(/</g, "\u003c");
+  // Outside #root so createRoot/replaceChildren cannot destroy LCP (industry hybrid pattern).
+  return `<div id="ssr-paint" data-ssr-paint style="direction:rtl;padding:12px 16px 8px;background:#091027"><div style="max-width:1100px;margin:0 auto"><div style="display:flex;gap:12px;flex-wrap:wrap;margin:8px 0 4px">${covers}</div></div></div><script type="application/json" id="__E7K_HOME_BOOT__">${boot}</script>`;
 }
 
 function renderHomepageShell(novels: Array<{ slug: string; title: string; author?: string | null }>) {
@@ -115,9 +136,27 @@ async function renderPublicSeo(pathname: string) {
   const normalized = pathname.replace(/\/$/, '') || '/';
   const origin = SITE_URL;
   if (normalized === '/') {
-    const novels = await listNovels(10);
-    const novelLinks = novels.map((novel) => `<li><a href="${origin}/books/${htmlEscape(novel.slug)}">${htmlEscape(novel.title)}</a>${novel.author ? ` — ${htmlEscape(novel.author)}` : ''}</li>`).join('');
-    return renderSeoDocument(readClientTemplate(), { title: '𝐄𝟳𝐤𝐞𝐭𝐡𝐚 📖 | كُـل رِوَايـة لَهـا حِڪَايـة ✍︎', description: '𝐄𝟳𝐤𝐞𝐭𝐡𝐚 — منصة اكتشاف الروايات العربية. ابحث عن روايتك القادمة واستكشف المؤلفين والتصنيفات والاقتباسات.', canonical: `${origin}/`, image: `${origin}/e7ketha-cover-wide.png`, jsonLd: { '@context': 'https://schema.org', '@type': 'WebSite', name: '𝐄𝟳𝐤𝐞𝐭𝐡𝐚', url: `${origin}/`, description: 'منصة اكتشاف الروايات العربية', inLanguage: 'ar', potentialAction: { '@type': 'SearchAction', target: `${origin}/search?q={search_term_string}`, 'query-input': 'required name=search_term_string' } }, content: renderHomepageShell(novels) });
+    const novels = await searchNovels({ sort: 'popular', limit: 12 });
+    const lcpCover = optimizeCoverUrl(novels[0]?.coverUrl, 400);
+    return renderSeoDocument(readClientTemplate(), { title: '𝐄𝟳𝐤𝐞𝐭𝐡𝐚 📖 | كُـل رِوَايـة لَهـا حِڪَايـة ✍︎', description: '𝐄𝟳𝐤𝐞𝐭𝐡𝐚 — منصة اكتشاف الروايات العربية. ابحث عن روايتك القادمة واستكشف المؤلفين والتصنيفات والاقتباسات.', canonical: `${origin}/`, image: optimizeCoverUrl(novels[0]?.coverUrl, 1200) || `${origin}/e7ketha-cover-wide.png`, preloadImage: lcpCover, paintHtml: buildHomePaintIsland(novels), jsonLd: { '@context': 'https://schema.org', '@type': 'WebSite', name: '𝐄𝟳𝐤𝐞𝐭𝐡𝐚', url: `${origin}/`, description: 'منصة اكتشاف الروايات العربية', inLanguage: 'ar', potentialAction: { '@type': 'SearchAction', target: `${origin}/search?q={search_term_string}`, 'query-input': 'required name=search_term_string' } }, content: renderRichHomepageShell(origin, novels) });
+  }
+
+  const richList = await tryRichListSeo(normalized, origin);
+  if (richList) {
+    return renderSeoDocument(readClientTemplate(), richList);
+  }
+
+  if (normalized === '/search') {
+    const description = 'ابحث في روايات ومؤلفين وتصنيفات 𝐄𝟳𝐤𝐞𝐭𝐡𝐚. اكتب اسم الرواية أو الكاتب أو النوع.';
+    const canonical = `${origin}/search`;
+    return renderSeoDocument(readClientTemplate(), {
+      title: 'بحث الروايات | 𝐄𝟳𝐤𝐞𝐭𝐡𝐚',
+      description,
+      canonical,
+      type: 'website',
+      jsonLd: { '@context': 'https://schema.org', '@type': 'WebSite', url: origin, potentialAction: { '@type': 'SearchAction', target: `${origin}/search?q={search_term_string}`, 'query-input': 'required name=search_term_string' } },
+      content: `<main lang="ar" dir="rtl"><nav><a href="${origin}/">الرئيسية</a></nav><article><h1>البحث في المكتبة</h1><p>${description}</p><p><a href="${origin}/explore">استكشف كل الروايات</a> · <a href="${origin}/quotes">الاقتباسات</a></p></article></main>`,
+    });
   }
 
   if (normalized === '/topics' || /^\/topics\/[^/]+$/.test(normalized)) {
@@ -143,8 +182,8 @@ async function renderPublicSeo(pathname: string) {
       console.warn('[SEO] novel details unavailable', novel.slug, error);
     }
     const description = `${novel.title} للكاتب ${novel.author}. ${stripHtml(novel.description || 'اكتشف تفاصيل الرواية وتقييم القراء على منصة 𝐄𝟳𝐤𝐞𝐭𝐡𝐚.')}`;
-    const canonical = `${origin}/books/${encodeURIComponent(String(novel.slug))}`;
     const richDetailsHtml = renderNovelDetailsHtml(novelDetails);
+    const canonical = `${origin}/books/${encodeURIComponent(String(novel.slug))}`;
     const authorUrl = `${origin}/authors/${encodeURIComponent(String(novel.authorSlug))}`;
     return renderSeoDocument(readClientTemplate(), {
       title: `${novel.title} — ${novel.author} | 𝐄𝟳𝐤𝐞𝐭𝐡𝐚`, description, canonical, type: 'book', image: novel.coverUrl ?? undefined,
@@ -226,22 +265,48 @@ async function renderPublicSeo(pathname: string) {
 
 export function createApp() {
   const app = express();
+  /* SEC_HARDENING */
+  app.disable("x-powered-by");
+  app.use((req, res, next) => {
+    const p = String(req.path || "");
+    if (
+      p === "/.env" ||
+      p.startsWith("/.env.") ||
+      p === "/.git" ||
+      p.startsWith("/.git/") ||
+      p === "/package.json" ||
+      p === "/package-lock.json" ||
+      p === "/pnpm-lock.yaml" ||
+      p === "/yarn.lock" ||
+      p === "/.npmrc" ||
+      p === "/tsconfig.json" ||
+      p === "/vite.config.ts" ||
+      p.startsWith("/server/") ||
+      p.startsWith("/scripts/")
+    ) {
+      res.status(404).type("text/plain").send("Not Found");
+      return;
+    }
+    next();
+  });
+  app.use("/api/auth", authRateLimit);
+  app.use("/api/trpc", apiRateLimit);
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   registerStorageProxy(app);
   registerOAuthRoutes(app);
   const sitemapHandler = async (_req: express.Request, res: express.Response) => {
     try {
-      const [novels, authors, genres, seriesList, quotes, articles] = await Promise.all([listNovels(10000), listAuthors(), listGenres(), listSeries(), listQuotes(true), listPublishedArticles(5000, 0)]);
+      const [novels, authors, genres, seriesList, quotes] = await Promise.all([listNovels(10000), listAuthors(), listGenres(), listSeries(), listQuotes(true)]);
       const quoteCategories = Array.from(new Set(quotes.map((item) => item.category).filter((category): category is string => Boolean(category?.trim()))));
       const authorQuotePaths = authors.map((item) => `/authors/${item.slug}/quotes`);
       const bookQuotePaths = novels.map((item) => `/books/${item.slug}/quotes`);
       const categoryQuotePaths = quoteCategories.map((category) => `/quotes/category/${quoteCategorySlug(category)}`);
       const topicPaths = ['/topics', ...topicalPages.map((item) => `/topics/${item.slug}`)];
       const staticPaths = ["/", "/explore", "/quotes", "/quotes/categories", "/discover", "/about", "/how-it-works", "/faq", "/contact", "/privacy", "/terms", ...topicPaths];
-      const urls = [...staticPaths, ...novels.map((item) => `/books/${item.slug}`), ...bookQuotePaths, ...authors.map((item) => `/authors/${item.slug}`), ...authorQuotePaths, ...genres.map((item) => `/genres/${item.slug}`), ...seriesList.map((item) => `/series/${item.slug}`), ...categoryQuotePaths, ...quotes.map((item) => `/quotes/${item.id}`), ...articles.map((item) => `/articles/${item.slug}`)];
+      const urls = [...staticPaths, ...novels.map((item) => `/books/${item.slug}`), ...bookQuotePaths, ...authors.map((item) => `/authors/${item.slug}`), ...authorQuotePaths, ...genres.map((item) => `/genres/${item.slug}`), ...seriesList.map((item) => `/series/${item.slug}`), ...categoryQuotePaths, ...quotes.map((item) => `/quotes/${item.id}`)];
       const resource = String(_req.query.resource ?? "");
-      const sitemap = resource === "index" || resource === "sitemap" ? renderSitemapIndex() : resource === "novels" ? renderUrlset([...novels.map((item) => `/books/${item.slug}`), ...bookQuotePaths]) : resource === "authors" ? renderUrlset([...authors.map((item) => `/authors/${item.slug}`), ...authorQuotePaths]) : resource === "genres" ? renderUrlset(genres.map((item) => `/genres/${item.slug}`)) : resource === "series" ? renderUrlset(seriesList.map((item) => `/series/${item.slug}`)) : resource === "quotes" ? renderUrlset(["/quotes", "/quotes/categories", ...categoryQuotePaths, ...quotes.map((item) => `/quotes/${item.id}`)]) : resource === "articles" ? renderUrlset(["/articles", ...articles.map((item) => `/articles/${item.slug}`)]) : renderUrlset(urls);
+      const sitemap = resource === "index" || resource === "sitemap" ? renderSitemapIndex() : resource === "novels" ? renderUrlset([...novels.map((item) => `/books/${item.slug}`), ...bookQuotePaths]) : resource === "authors" ? renderUrlset([...authors.map((item) => `/authors/${item.slug}`), ...authorQuotePaths]) : resource === "genres" ? renderUrlset(genres.map((item) => `/genres/${item.slug}`)) : resource === "series" ? renderUrlset(seriesList.map((item) => `/series/${item.slug}`)) : resource === "quotes" ? renderUrlset(["/quotes", "/quotes/categories", ...categoryQuotePaths, ...quotes.map((item) => `/quotes/${item.id}`)]) : renderUrlset(urls);
       res.type("application/xml").set("Cache-Control", "public, max-age=0, s-maxage=0, must-revalidate").send(sitemap);
     } catch (error) {
       console.error("[SEO] sitemap generation failed", error);
@@ -257,7 +322,7 @@ export function createApp() {
     try {
       const result = await renderPublicSeo(pathname);
       if (!result) return next();
-      return res.status(result.status).type('html').set('Cache-Control', 'public, max-age=0, s-maxage=300, stale-while-revalidate=600').send(result.html);
+      return res.status(result.status).type('html').set('Cache-Control', 'public, max-age=0, s-maxage=900, stale-while-revalidate=1800').send(result.html);
     } catch (error) {
       console.error('[SEO] direct server HTML render failed', error);
       return next(error);
@@ -265,12 +330,13 @@ export function createApp() {
   };
   app.get(['/topics', '/topics/:slug', '/books/:slug', '/novel/:slug', '/novels/:slug', '/authors/:slug', '/genres/:slug', '/series/:slug', '/quotes/:id', '/quotes/category/:slug'], directSeoHandler);
   app.get(['/quotes', '/quotes/', '/quotes/categories'], directSeoHandler);
+  app.get(['/explore', '/articles', '/search'], directSeoHandler); /* SSR_RICH_LISTS_ROUTES_REG */
   app.get("/api", async (req, res, next) => {
     if (req.query.resource !== 'seo' || typeof req.query.path !== 'string') return next();
     try {
       const result = await renderPublicSeo(req.query.path);
       if (!result) return next();
-      return res.status(result.status).type('html').set('Cache-Control', 'public, max-age=0, s-maxage=300, stale-while-revalidate=600').send(result.html);
+      return res.status(result.status).type('html').set('Cache-Control', 'public, max-age=0, s-maxage=900, stale-while-revalidate=1800').send(result.html);
     } catch (error) {
       console.error('[SEO] server HTML render failed', error);
       return next(error);
@@ -284,5 +350,23 @@ export function createApp() {
       createContext,
     }),
   );
+  /* SPA_FALLBACK — client routes (login/profile/admin/…) must receive index.html */
+  app.get("*", (req, res, next) => {
+    const p = String(req.path || "");
+    if (p.startsWith("/api") || p.startsWith("/sitemap") || p.includes(".")) {
+      return next();
+    }
+    try {
+      const html = readClientTemplate();
+      res
+        .status(200)
+        .type("html")
+        .set("Cache-Control", "public, max-age=0, s-maxage=60, stale-while-revalidate=300")
+        .set("X-Robots-Tag", p === "/admin" || p.startsWith("/admin/") ? "noindex, nofollow" : "noindex")
+        .send(html);
+    } catch (err) {
+      next(err);
+    }
+  });
   return app;
 }

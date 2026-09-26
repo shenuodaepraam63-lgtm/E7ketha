@@ -64,12 +64,42 @@ const app = <trpc.Provider client={trpcClient} queryClient={queryClient}>
   </QueryClientProvider>
 </trpc.Provider>;
 
-// SSR public pages inject an SEO shell into #root (server/app.ts). That shell is
-// structurally aligned with SiteShell + Home but cannot reproduce lucide SVG
-// paths or auth/theme-dependent controls. Using hydrateRoot against it throws
-// React #418 and recovers via a full client re-render (double work).
-// Clear the shell once, then mount — crawlers still receive the SSR HTML.
+// /* SSR_PAINT_DISMISS */
+// SEO shell inside #root is not a React tree match → createRoot (not hydrateRoot).
+// Critical LCP lives in #ssr-paint OUTSIDE #root and must survive this mount.
 if (rootElement.childNodes.length > 0) {
   rootElement.replaceChildren();
 }
 createRoot(rootElement).render(app);
+
+// Dismiss static paint island only after React has painted real images (or timeout).
+(function dismissSsrPaintWhenReady() {
+  const paint = document.getElementById("ssr-paint");
+  if (!paint) return;
+  const root = document.getElementById("root");
+  let done = false;
+  const finish = () => {
+    if (done) return;
+    done = true;
+    paint.style.transition = "opacity .18s ease";
+    paint.style.opacity = "0";
+    paint.style.pointerEvents = "none";
+    window.setTimeout(() => paint.remove(), 220);
+  };
+  const hasClientImg = () => !!(root && root.querySelector("img[src]"));
+  if (hasClientImg()) {
+    requestAnimationFrame(() => requestAnimationFrame(finish));
+    return;
+  }
+  const obs = new MutationObserver(() => {
+    if (hasClientImg()) {
+      obs.disconnect();
+      requestAnimationFrame(() => requestAnimationFrame(finish));
+    }
+  });
+  if (root) obs.observe(root, { childList: true, subtree: true });
+  window.setTimeout(() => {
+    obs.disconnect();
+    finish();
+  }, 5000);
+})();
