@@ -83,4 +83,68 @@ if (fs.existsSync(seoPath)) {
   console.log('[patch-ssr-bot-html] expanded static SEO bodies');
 }
 
+const appSeoPath = 'server/app.ts';
+if (fs.existsSync(appSeoPath)) {
+  let app = fs.readFileSync(appSeoPath, 'utf8');
+
+  if (!app.includes("from './novelDetails'") && !app.includes('from "./novelDetails"')) {
+    app = app.replace(
+      "import { getQuote, listQuotes, listQuotesByCategory } from './quotes';",
+      "import { getQuote, listQuotes, listQuotesByCategory } from './quotes';\nimport { getNovelDetails } from './novelDetails';",
+    );
+    app = app.replace(
+      'import { getQuote, listQuotes, listQuotesByCategory } from "./quotes";',
+      'import { getQuote, listQuotes, listQuotesByCategory } from "./quotes";\nimport { getNovelDetails } from "./novelDetails";',
+    );
+  }
+
+  if (!app.includes('function renderNovelDetailsHtml(')) {
+    const needle = "function breadcrumbSchema(origin: string, items: Array<{ name: string; url: string }>) {";
+    const helper = [
+      "function renderNovelDetailsHtml(details) {",
+      "  if (!details || Number(details.wordCount || 0) <= 0) return '';",
+      "  const fields = [",
+      "    ['ملخص تفصيلي', 'detailedSummary'], ['ملخص بدون حرق', 'spoilerFreeSummary'],",
+      "    ['الموضوعات والثيمات', 'themes'], ['الشخصيات', 'characters'], ['المكان والزمان', 'setting'],",
+      "    ['أسلوب الكتابة', 'writingStyle'], ['التحليل الأدبي', 'literaryAnalysis'],",
+      "    ['ما يميز الرواية', 'whatMakesItDistinct'], ['لمن تناسب', 'recommendedFor'],",
+      "    ['تفاصيل جديرة بالملاحظة', 'notableDetails'],",
+      "  ];",
+      "  const sections = fields.map(([label, key]) => {",
+      "    const value = details[key];",
+      "    return typeof value === 'string' && value.trim() ? '<section><h2>' + htmlEscape(label) + '</h2><p>' + htmlEscape(value) + '</p></section>' : '';",
+      "  }).filter(Boolean).join('');",
+      "  const keywords = typeof details.keywords === 'string' && details.keywords.trim() ? '<p><strong>كلمات مفتاحية:</strong> ' + htmlEscape(details.keywords) + '</p>' : '';",
+      "  return '<section aria-label=\"دليل الرواية\"><h2>دليل الرواية</h2><p>بيانات موسعة للرواية (' + Number(details.wordCount).toLocaleString('ar-EG') + ' كلمة).</p>' + sections + keywords + '</section>';",
+      "}",
+      "",
+    ].join('\n');
+    if (app.includes(needle)) app = app.replace(needle, helper + needle);
+  }
+
+  if (!app.includes('const richDetailsHtml = renderNovelDetailsHtml(novelDetails);')) {
+    const needle = "    const description = `${novel.title} للكاتب ${novel.author}.";
+    const idx = app.indexOf(needle);
+    if (idx >= 0) {
+      const detailsBlock = [
+        "    let novelDetails = null;",
+        "    try {",
+        "      novelDetails = await getNovelDetails(Number(novel.id));",
+        "    } catch (error) {",
+        "      console.warn('[SEO] novel details unavailable', novel.slug, error);",
+        "    }",
+      ].join('\n') + '\n';
+      app = app.slice(0, idx) + detailsBlock + app.slice(idx);
+      const canonicalIdx = app.indexOf("    const canonical =", idx + detailsBlock.length);
+      if (canonicalIdx >= 0) app = app.slice(0, canonicalIdx) + "    const richDetailsHtml = renderNovelDetailsHtml(novelDetails);\n" + app.slice(canonicalIdx);
+    }
+  }
+
+  if (!app.includes('${richDetailsHtml}<p>اللغة:')) {
+    app = app.replace('<p>${htmlEscape(novel.description || \'\')}</p><p>اللغة:', '<p>${htmlEscape(novel.description || \'\')}</p>${richDetailsHtml}<p>اللغة:');
+  }
+
+  fs.writeFileSync(appSeoPath, app);
+  console.log('[patch-ssr-bot-html] novel rich details SSR');
+}
 console.log('[patch-ssr-bot-html] done');
