@@ -1,66 +1,60 @@
-import { ArrowUpLeft, ChevronLeft, Sparkles } from 'lucide-react';
 import { Link } from 'wouter';
-import { GlobalSearch } from '@/components/GlobalSearch';
+import { ArrowUpLeft, Sparkles } from 'lucide-react';
+import { SectionHeading, GenreCard, AuthorCard } from '@/components/ExploreCards';
 import { NovelCard } from '@/components/NovelCard';
-import { AuthorCard, GenreCard, SectionHeading } from '@/components/ExploreCards';
+import { BrowseRecommendations } from '@/components/BrowseRecommendations';
 import { toAuthor, toGenre, toNovel, coverFallback, optimizeCoverUrl } from '@/lib/data';
 import { trpc } from '@/lib/trpc';
-import { BrowseRecommendations } from '@/components/BrowseRecommendations';
-
-/* HOME_BOOT */
-function readHomeBoot(): unknown[] | undefined {
-  if (typeof document === "undefined") return undefined;
-  const el = document.getElementById("__E7K_HOME_BOOT__");
-  if (!el?.textContent) return undefined;
-  try {
-    const data = JSON.parse(el.textContent);
-    return Array.isArray(data) ? data : undefined;
-  } catch {
-    return undefined;
-  }
-}
 
 export default function Home() {
-  const homeBoot = readHomeBoot() as any[] | undefined;
-  // Fire all public lists immediately so httpBatchLink packs them in one round-trip.
-  const novelsQuery = trpc.novels.search.useQuery(
-    { sort: 'popular', limit: 12 },
-    { staleTime: 300_000, refetchOnMount: false },
-  );
-  const authorsQuery = trpc.authors.list.useQuery(undefined, { staleTime: 300_000, refetchOnMount: false });
-  const genresQuery = trpc.genres.list.useQuery(undefined, { staleTime: 300_000, refetchOnMount: false });
-  const seriesQuery = trpc.series.list.useQuery(undefined, { staleTime: 300_000, refetchOnMount: false });
+  const novelsQuery = trpc.novels.list.useQuery({ limit: 12 });
+  const genresQuery = trpc.genres.list.useQuery();
+  const authorsQuery = trpc.authors.list.useQuery();
+  const novelsLoading = novelsQuery.isLoading;
   const novels = (novelsQuery.data ?? []).map(toNovel);
-  const authors = (authorsQuery.data ?? []).slice(0, 5).map(toAuthor);
-  const genres = (genresQuery.data ?? [])
-    .map(toGenre)
-    .filter((g) => (g.count ?? 0) > 0)
-    .slice(0, 8);
-  const seriesItems = seriesQuery.data ?? [];
-  const novelsLoading = novelsQuery.isLoading && novels.length === 0;
+  const genres = (genresQuery.data ?? []).map(toGenre).slice(0, 8);
+  const authors = (authorsQuery.data ?? []).map(toAuthor).slice(0, 6);
+
   return (
     <div>
-      <section className="relative z-20 overflow-visible bg-[#091027] text-white">
-        <div className="absolute inset-0 overflow-hidden bg-[radial-gradient(circle_at_18%_30%,rgba(110,100,235,.28),transparent_42%),linear-gradient(110deg,#141d49_0%,#091027_70%)]" />
-        <div className="absolute inset-0 overflow-hidden bg-[linear-gradient(90deg,rgba(9,16,39,.08)_0%,rgba(9,16,39,.55)_47%,#091027_77%)]" />
-        <div className="container relative z-30 py-14 md:py-20">
-          <div className="max-w-[640px]">
-            <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/[.07] px-3 py-1.5 text-[11px] font-semibold text-[#d8d5ff]">
-              <Sparkles size={13} className="text-[#9f96ff]" /> محرك بحث للروايات العربية
-            </div>
-            <h1 className="max-w-[650px] text-[32px] font-extrabold leading-[1.18] sm:text-[43px] md:text-[58px]">
-              اكتشف روايتك<br />
-              <span className="bg-gradient-to-l from-[#c3bdff] via-[#8f86ff] to-[#ffcf9b] bg-clip-text text-transparent">القادمة.</span>
+      <section className="relative overflow-hidden border-b border-border/60 bg-[#0b1025] text-white">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,_rgba(103,93,232,0.35),_transparent_55%)]" />
+        <div className="container relative py-14 md:py-20">
+          <div className="max-w-2xl">
+            <div className="section-label mb-4 text-[#b7b1ff]">منصة اكتشاف الروايات العربية</div>
+            <h1 className="text-4xl font-extrabold tracking-[-0.06em] md:text-6xl">
+              كل رواية لها حكاية
             </h1>
-            <p className="mt-6 max-w-[490px] text-[13px] sm:text-[15px] leading-7 sm:leading-8 text-white/62">
-              رِواية تساعدك تفهم عالم الروايات العربية، وتلاقي ما يستحق وقتك — من الكلاسيكيات إلى الأعمال الحديثة.
+            <p className="mt-5 max-w-xl text-sm leading-8 text-white/70 md:text-base">
+              اكتشف روايات عربية تستحق وقتك: أغلفة، ملخصات، تصنيفات، اقتباسات، وتوصيات ذكية — بدون استضافة ملفات.
             </p>
-            <div className="relative z-40 mt-8">
-              <GlobalSearch variant="hero" />
+            <div className="mt-8 flex flex-wrap gap-3">
+              <Link
+                href="/explore"
+                className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-[#675de8] px-5 text-xs font-extrabold text-white transition hover:bg-[#5a50d6]"
+              >
+                استكشف الروايات <ArrowUpLeft size={15} />
+              </Link>
+              <Link
+                href="/quotes"
+                className="inline-flex h-12 items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/5 px-5 text-xs font-extrabold text-white/90 transition hover:bg-white/10"
+              >
+                اقتباسات مختارة
+              </Link>
             </div>
             <div className="mt-5 flex flex-wrap gap-2">
-              {[('رعب', '/explore?q=رعب'), ('فانتازيا', '/explore?q=فانتازيا'), ('أحمد خالد توفيق', '/explore?q=أحمد خالد توفيق')].map(([label, href]) => (
-                <Link key={label} href={href} className="rounded-full border border-white/12 bg-white/[.06] px-3 py-1.5 text-[11px] font-semibold text-white/75 transition hover:bg-white/10">
+              {(
+                [
+                  ['رعب', '/explore?q=رعب'],
+                  ['فانتازيا', '/explore?q=فانتازيا'],
+                  ['أحمد خالد توفيق', '/explore?q=أحمد خالد توفيق'],
+                ] as const
+              ).map(([label, href]) => (
+                <Link
+                  key={label}
+                  href={href}
+                  className="rounded-full border border-white/12 bg-white/[.06] px-3 py-1.5 text-[11px] font-semibold text-white/75 transition hover:bg-white/10"
+                >
                   {label}
                 </Link>
               ))}
@@ -71,7 +65,12 @@ export default function Home() {
 
       <main className="container py-14">
         <section>
-          <SectionHeading eyebrow="الأكثر بحثًا" title="الروايات التي يتكلم عنها القرّاء" subtitle="نتائج حية من مكتبة رِواية." href="/explore" />
+          <SectionHeading
+            eyebrow="الأكثر بحثًا"
+            title="الروايات التي يتكلم عنها القرّاء"
+            subtitle="نتائج حية من مكتبة رِواية."
+            href="/explore"
+          />
           <div className="scroll-rail -mx-1 px-1">
             {novelsLoading
               ? Array.from({ length: 6 }).map((_, i) => (
@@ -84,64 +83,89 @@ export default function Home() {
                     <div className="mt-1.5 h-2.5 w-1/2 rounded bg-muted/80" />
                   </div>
                 ))
-              : novels.map((novel, i) => <NovelCard key={novel.id} novel={novel} priority={i < 2} />)}
+              : novels.map((novel, i) => (
+                  <NovelCard key={novel.id} novel={novel} priority={i < 2} rail />
+                ))}
           </div>
         </section>
-        {genres.length > 0 && (
-        <section className="mt-20">
-          <SectionHeading eyebrow="حسب المزاج" title="استكشف حسب مزاجك" subtitle="تصنيفات تساعدك تختار بسرعة." href="/explore" />
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {genres.map((genre) => (
-              <GenreCard key={genre.id} genre={genre} />
-            ))}
-          </div>
-        </section>
-        )}
-        {authors.length > 0 && (
-        <section className="mt-20">
-          <SectionHeading eyebrow="أصوات مؤثرة" title="مؤلفون يستحقون المتابعة" subtitle="تعرّف على أسماء صنعت ذائقة جيل كامل." href="/explore" />
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-            {authors.map((author) => (
-              <AuthorCard key={author.id} author={author} />
-            ))}
-          </div>
-        </section>
-        )}
+
         <BrowseRecommendations />
-        <section className="relative mt-20 overflow-hidden rounded-[28px] border border-white/10 bg-[#0c1430] p-8 text-white md:p-12">
-          <div className="pointer-events-none absolute -left-20 top-0 h-64 w-64 rounded-full bg-[#675de8]/25 blur-3xl" />
+
+        {genres.length > 0 && (
+          <section className="mt-20">
+            <SectionHeading
+              eyebrow="حسب المزاج"
+              title="استكشف حسب مزاجك"
+              subtitle="تصنيفات تساعدك تختار بسرعة."
+              href="/explore"
+            />
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {genres.map((genre) => (
+                <GenreCard key={genre.id} genre={genre} />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {authors.length > 0 && (
+          <section className="mt-20">
+            <SectionHeading
+              eyebrow="كتّاب"
+              title="مؤلفون يستحقون المتابعة"
+              subtitle="تعرّف على أصوات مميزة في الرواية العربية."
+              href="/authors"
+            />
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+              {authors.map((author) => (
+                <AuthorCard key={author.id} author={author} />
+              ))}
+            </div>
+          </section>
+        )}
+
+        <section className="mt-20 overflow-hidden rounded-[28px] border border-border bg-gradient-to-br from-[#171e42] to-[#2a2460] p-8 text-white md:p-12">
           <div className="relative grid items-center gap-10 md:grid-cols-[1fr_auto]">
             <div>
-              <div className="section-label mb-3 text-[#9d95ff]">اكتشف أكثر</div>
-              <h2 className="max-w-xl text-3xl font-extrabold md:text-4xl">لم تجد ما يناسبك بعد؟</h2>
-              <p className="mt-3 text-sm leading-7 text-white/55">تصفّح التصنيفات أو ابحث بالاسم — وكل ما تفتحه يطوّر اقتراحاتك المحلية.</p>
-            </div>
-            <Link href="/discover" className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-[#eeeefe] px-5 text-xs font-extrabold text-[#171e42] transition hover:bg-white">
-              ابدأ الاكتشاف <ArrowUpLeft size={16} />
-            </Link>
-          </div>
-        </section>
-        {seriesItems.length > 0 && (
-        <section className="mt-20">
-          <SectionHeading eyebrow="رحلات من أكثر من جزء" title="السلاسل الأكثر متابعة" subtitle="رتّب قراءتك، جزءًا بعد جزء." />
-          <div className="grid gap-4 md:grid-cols-3">
-            {seriesItems.map((item) => (
-              <Link key={item.slug} href={`/series/${item.slug}`} className="interactive group flex items-center gap-4 rounded-[20px] border border-border bg-card p-4">
-                <img src={optimizeCoverUrl(item.coverUrl || coverFallback, 160)} alt={item.title} className="h-28 w-20 rounded-xl object-cover" />
-                <div className="min-w-0">
-                  <span className="text-[10px] font-bold text-[#7168e8]">سلسلة</span>
-                  <h3 className="mt-1 text-sm font-extrabold">{item.title}</h3>
-                  <div className="mt-4 flex items-center gap-2 text-[10px] text-muted-foreground">
-                    <span>{item.parts} أجزاء</span>
-                    <span className="size-1 rounded-full bg-emerald-400" />
-                    {item.status}
-                  </div>
-                </div>
-                <ChevronLeft size={17} className="mr-auto text-muted-foreground" />
+              <div className="mb-3 inline-flex items-center gap-2 text-[11px] font-bold text-[#c4bfff]">
+                <Sparkles size={14} /> اكتشف قراءتك
+              </div>
+              <h2 className="text-2xl font-extrabold md:text-3xl">حدّد مزاجك وابنِ قائمة تناسبك</h2>
+              <p className="mt-3 max-w-lg text-sm leading-7 text-white/70">
+                صفحة الاكتشاف الشخصية تجمع تفضيلاتك وتعرض روايات أقرب لذوقك.
+              </p>
+              <Link
+                href="/discover"
+                className="mt-6 inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-[#eeeefe] px-5 text-xs font-extrabold text-[#171e42] transition hover:bg-white"
+              >
+                ابدأ الاكتشاف <ArrowUpLeft size={15} />
               </Link>
-            ))}
+            </div>
           </div>
         </section>
+
+        {novels.length > 0 && (
+          <section className="mt-20">
+            <SectionHeading title="لمحات سريعة" subtitle="من المكتبة الحالية" href="/explore" />
+            <div className="grid gap-4 md:grid-cols-3">
+              {novels.slice(0, 3).map((item) => (
+                <Link
+                  key={item.id}
+                  href={`/books/${item.slug}`}
+                  className="flex items-center gap-4 rounded-2xl border border-border bg-card p-4 transition hover:border-[#675de8]/40"
+                >
+                  <img
+                    src={optimizeCoverUrl(item.coverUrl || item.cover || coverFallback, 160)}
+                    alt={item.title}
+                    className="h-28 w-20 rounded-xl object-cover"
+                  />
+                  <div className="min-w-0">
+                    <h3 className="line-clamp-2 text-sm font-extrabold">{item.title}</h3>
+                    <p className="mt-1 truncate text-xs text-muted-foreground">{item.author}</p>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </section>
         )}
       </main>
     </div>
