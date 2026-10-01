@@ -36,6 +36,7 @@ const FAQ: { label: string; answer: string; href?: string }[] = [
 const WELCOME =
   'أهلًا بك في رِواية 👋\nاختر موضوعًا من الأزرار بالأسفل وسأرشدك مباشرة — هذا مساعد ثابت بإجابات جاهزة (وليس ذكاءً اصطناعيًا).';
 
+/** Static FAQ helper — not AI */
 export function SupportAssistant() {
   const [location] = useLocation();
   const hidden = useMemo(
