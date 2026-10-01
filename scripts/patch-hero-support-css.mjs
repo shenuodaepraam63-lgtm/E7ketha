@@ -1,11 +1,10 @@
 import fs from 'fs';
+import { spawnSync } from 'child_process';
+
 const p = 'client/src/index.css';
 let s = fs.readFileSync(p, 'utf8');
-if (s.includes('cover-drift')) {
-  console.log('[hero-css] already present');
-  process.exit(0);
-}
-const inject = `
+if (!s.includes('cover-drift')) {
+  const inject = `
 @keyframes cover-drift {
   0% { transform: translateY(0) scale(1); }
   50% { transform: translateY(-10px) scale(1.02); }
@@ -25,15 +24,20 @@ const inject = `
   animation: cover-float 5.5s ease-in-out infinite;
 }
 `;
-const marker = '@media (prefers-reduced-motion: reduce)';
-if (s.includes(marker)) {
-  s = s.replace(marker, inject + '\n' + marker);
-  s = s.replace(
-    '.quote-card::after { animation: none; opacity: 0.45; }',
-    '.quote-card::after { animation: none; opacity: 0.45; }\n  .hero-cover-mosaic img, .hero-featured-float { animation: none !important; }',
-  );
+  const marker = '@media (prefers-reduced-motion: reduce)';
+  if (s.includes(marker)) {
+    s = s.replace(marker, inject + '\n' + marker);
+    s = s.replace(
+      '.quote-card::after { animation: none; opacity: 0.45; }',
+      '.quote-card::after { animation: none; opacity: 0.45; }\n  .hero-cover-mosaic img, .hero-featured-float { animation: none !important; }',
+    );
+  } else {
+    s += inject;
+  }
+  fs.writeFileSync(p, s);
+  console.log('[hero-css] injected');
 } else {
-  s += inject;
+  console.log('[hero-css] already present');
 }
-fs.writeFileSync(p, s);
-console.log('[hero-css] injected');
+
+spawnSync('node', ['scripts/patch-home-hero-mosaic.mjs'], { stdio: 'inherit' });
