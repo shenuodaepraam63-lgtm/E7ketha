@@ -1,4 +1,4 @@
-import "dotenv/config";
+import { registerTelegramWebhook } from "../telegram/webhook";
 import express from "express";
 import { createServer } from "http";
 import net from "net";
@@ -46,17 +46,14 @@ export function createApp() {
     });
     next();
   });
-  // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   registerStorageProxy(app);
   registerOAuthRoutes(app);
-  // Distributed rate limiting (Upstash Redis when configured; in-memory fallback)
   app.use("/api/auth", authRateLimit);
   app.use("/api/trpc", apiRateLimit);
   app.use("/api", apiRateLimit);
   app.get("/api/performance", (_req, res) => res.json({ generatedAt: new Date().toISOString(), routes: getPerformanceSnapshot() }));
-  // tRPC API
   app.use(
     "/api/trpc",
     createExpressMiddleware({
@@ -64,13 +61,13 @@ export function createApp() {
       createContext,
     })
   );
+  registerTelegramWebhook(app);
   return app;
 }
 
 async function startServer() {
   const app = createApp();
   const server = createServer(app);
-  // development mode uses Vite, production mode uses static files
   if (process.env.NODE_ENV === "development") {
     await setupVite(app, server);
   } else {
@@ -79,16 +76,12 @@ async function startServer() {
 
   const preferredPort = parseInt(process.env.PORT || "3000");
   const port = await findAvailablePort(preferredPort);
-
   if (port !== preferredPort) {
     console.log(`Port ${preferredPort} is busy, using port ${port} instead`);
   }
-
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);
   });
 }
 
-if (!process.env.VERCEL) {
-  startServer().catch(console.error);
-}
+startServer().catch(console.error);

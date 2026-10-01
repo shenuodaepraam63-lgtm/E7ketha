@@ -1,10 +1,12 @@
 import { createApp } from "../server/app.ts";
+import { registerTelegramWebhook } from "../server/telegram/webhook.ts";
 import { tryRenderStaticSeo } from "../server/seoPublicPages.ts";
 import { tryRenderArticleSeo } from "../server/seoArticlePages.ts";
 import { tryRenderExpandedSitemap } from "../server/sitemapExpanded.ts";
 import { listGenres } from "../server/db.ts";
 
 const app = createApp();
+registerTelegramWebhook(app);
 
 /** Origins allowed to call api.e7ketha.com from the browser */
 const ALLOWED_ORIGINS = new Set([
@@ -23,73 +25,28 @@ function applyCors(req: any, res: any) {
   if (origin && ALLOWED_ORIGINS.has(origin)) {
     res.setHeader("Access-Control-Allow-Origin", origin);
     res.setHeader("Access-Control-Allow-Credentials", "true");
-    res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS,PUT,PATCH,DELETE");
+    res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
     res.setHeader(
       "Access-Control-Allow-Headers",
-      "Content-Type, Authorization, trpc-accept, x-trpc-source, x-requested-with",
+      "Content-Type, Authorization, X-Requested-With, trpc-accept, x-trpc-source",
     );
-    res.setHeader("Access-Control-Max-Age", "86400");
-    res.setHeader("Vary", "Origin");
   }
 }
 
-export default async function handler(req: any, res: any) {
-  try {
-    applyCors(req, res);
-    if (String(req.method || "").toUpperCase() === "OPTIONS") {
-      res.statusCode = 204;
-      res.end();
-      return;
-    }
-
-    // Keep-warm + CDN-friendly cache on public tRPC GETs (no Authorization)
-    const pathOnly = String(req.url || "/").split("?")[0];
-    const method = String(req.method || "GET").toUpperCase();
-    const auth = String(req.headers?.authorization || req.headers?.Authorization || "");
-    if (method === "GET" && pathOnly.includes("/api/trpc") && !auth) {
-      res.setHeader("Cache-Control", "public, s-maxage=30, stale-while-revalidate=120");
-      res.setHeader("CDN-Cache-Control", "public, s-maxage=30, stale-while-revalidate=120");
-    }
-    if (pathOnly === "/api/warm" || pathOnly === "/warm") {
-      try {
-        await listGenres();
-      } catch (e) {
-        console.warn("[warm]", e);
-      }
-      res.statusCode = 200;
-      res.setHeader("Content-Type", "application/json; charset=utf-8");
-      res.setHeader("Cache-Control", "no-store");
-      res.end(JSON.stringify({ ok: true, at: new Date().toISOString() }));
-      return;
-    }
-
-    // API host: never serve indexable HTML at /
-    const host = String(req.headers?.host || req.headers?.Host || "")
-      .split(":")[0]
-      .toLowerCase();
-    if (host === "api.e7ketha.com") {
-      const path = String(req.url || "/").split("?")[0];
-      if (path === "/" || path === "") {
-        res.statusCode = 200;
-        res.setHeader("Content-Type", "application/json; charset=utf-8");
-        res.setHeader("X-Robots-Tag", "noindex, nofollow");
-        res.end(
-          JSON.stringify({
-            name: "E7ketha API",
-            description: "واجهة البيانات الرسمية — الطلبات عبر tRPC/JSON فقط",
-            site: "https://e7ketha.com",
-          }),
-        );
-        return;
-      }
-    }
-
-    if (await tryRenderExpandedSitemap(req, res)) return;
-    if (await tryRenderArticleSeo(req, res)) return;
-    if (tryRenderStaticSeo(req, res)) return;
-    return app(req, res);
-  } catch (error) {
-    console.error("[Vercel API] handler failed", error);
-    if (!res.headersSent) res.status(500).json({ error: "API handler failed" });
+app.use((req, res, next) => {
+  applyCors(req, res);
+  if (req.method === "OPTIONS") {
+    res.status(204).end();
+    return;
   }
+  next();
+});
+
+// Lightweight health for probes
+app.get("/api/health", (_req, res) => {
+  res.json({ ok: true, ts: new Date().toISOString() });
+});
+
+export default async function handler(req: any, res: any) {
+  return app(req, res);
 }
