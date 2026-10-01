@@ -1,66 +1,84 @@
 /**
- * Transform Home hero into Abjjad-style animated cover mosaic + featured float card.
+ * Home hero: single atmospheric wallpaper (user-chosen image) + optional featured novel card.
+ * Replaces any previous cover-mosaic grid.
  */
 import fs from 'fs';
 
 const path = 'client/src/pages/Home.tsx';
 if (!fs.existsSync(path)) {
-  console.log('[home-mosaic] no Home.tsx');
+  console.log('[home-hero] no Home.tsx');
   process.exit(0);
 }
 let s = fs.readFileSync(path, 'utf8');
-if (s.includes('hero-cover-mosaic')) {
-  console.log('[home-mosaic] already applied');
+
+const HERO_BG =
+  'https://elabasi.com/wp-content/uploads/2026/01/%D8%B1%D9%88%D8%A7%D9%8A%D8%A7%D8%AA-%D8%B9%D8%A7%D9%84%D9%85%D9%8A%D8%A9.jpeg';
+
+// Already on wallpaper style
+if (s.includes('hero-wallpaper') && s.includes(HERO_BG)) {
+  console.log('[home-hero] wallpaper already applied');
   process.exit(0);
 }
 
+// Ensure list limit for featured card
 s = s.replace(
+  /trpc\.novels\.list\.useQuery\(\{\s*limit:\s*\d+\s*\}\)/,
   'trpc.novels.list.useQuery({ limit: 12 })',
-  'trpc.novels.list.useQuery({ limit: 24 })',
 );
 
-if (!s.includes('const mosaic =')) {
+// Normalize featured var (drop mosaic)
+if (s.includes('const mosaic =')) {
+  s = s.replace(
+    /const mosaic = novels\.length \? \[\.\.\.novels, \.\.\.novels, \.\.\.novels\]\.slice\(0, 36\) : \[\];\n\s*const featured = novels\[0\];/,
+    'const featured = novels[0];',
+  );
+} else if (!s.includes('const featured =')) {
   s = s.replace(
     'const authors = (authorsQuery.data ?? []).map(toAuthor).slice(0, 6);',
     `const authors = (authorsQuery.data ?? []).map(toAuthor).slice(0, 6);
-  const mosaic = novels.length ? [...novels, ...novels, ...novels].slice(0, 36) : [];
   const featured = novels[0];`,
   );
 }
 
-const oldHeroStart = `<section className="relative overflow-hidden border-b border-border/60 bg-[#0b1025] text-white">
+const wallpaperBlock = `<section className="relative min-h-[min(88vh,720px)] overflow-hidden border-b border-border/60 bg-[#070a16] text-white">
+        <div className="hero-wallpaper pointer-events-none absolute inset-0">
+          <img
+            src="${HERO_BG}"
+            alt=""
+            className="hero-wallpaper-img h-full w-full object-cover"
+            fetchPriority="high"
+            decoding="async"
+          />
+        </div>
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-[#070a16]/50 via-[#070a16]/72 to-[#070a16]" />
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,_rgba(103,93,232,0.18),_transparent_60%)]" />
+        <div className="container relative grid items-center gap-10 py-14 md:grid-cols-[1.1fr_0.9fr] md:py-20">
+          <div className="max-w-xl">`;
+
+// Replace mosaic hero start if present
+const mosaicStartRe =
+  /<section className="relative min-h-\[min\(92vh,780px\)\][\s\S]*?<div className="max-w-xl">/;
+const oldSimpleStart = `<section className="relative overflow-hidden border-b border-border/60 bg-[#0b1025] text-white">
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,_rgba(103,93,232,0.35),_transparent_55%)]" />
         <div className="container relative py-14 md:py-20">
           <div className="max-w-2xl">`;
 
-const newHeroStart = `<section className="relative min-h-[min(92vh,780px)] overflow-hidden border-b border-border/60 bg-[#070a16] text-white">
-        <div className="hero-cover-mosaic pointer-events-none absolute inset-0 opacity-[0.45]">
-          <div className="absolute inset-0 grid grid-cols-4 gap-2 p-2 sm:grid-cols-6 md:grid-cols-8 md:gap-3 md:p-3">
-            {(mosaic.length ? mosaic : Array.from({ length: 24 }).map((_, i) => ({ id: \`p-\${i}\`, coverUrl: coverFallback, title: '' }))).map((n, i) => (
-              <div key={\`\${(n as any).id}-\${i}\`} className="aspect-[2/3] overflow-hidden rounded-lg md:rounded-xl">
-                <img src={optimizeCoverUrl((n as any).coverUrl || (n as any).cover || coverFallback, 200)} alt="" className="h-full w-full object-cover" loading={i < 8 ? 'eager' : 'lazy'} decoding="async" />
-              </div>
-            ))}
-          </div>
-        </div>
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-[#070a16]/55 via-[#070a16]/78 to-[#070a16]" />
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,_rgba(103,93,232,0.22),_transparent_60%)]" />
-        <div className="container relative grid items-center gap-10 py-14 md:grid-cols-[1.1fr_0.9fr] md:py-20">
-          <div className="max-w-xl">`;
-
-if (s.includes(oldHeroStart)) {
-  s = s.replace(oldHeroStart, newHeroStart);
-} else {
-  console.warn('[home-mosaic] hero start pattern not found');
+if (mosaicStartRe.test(s)) {
+  s = s.replace(mosaicStartRe, wallpaperBlock);
+} else if (s.includes(oldSimpleStart)) {
+  s = s.replace(oldSimpleStart, wallpaperBlock);
+} else if (!s.includes('hero-wallpaper')) {
+  console.warn('[home-hero] could not find hero start to replace');
 }
 
-const tagsEnd = `              ))}
+// Ensure featured card after tags (if missing)
+if (!s.includes('hero-featured-float') && s.includes('featured')) {
+  const tagsEnd = `              ))}
             </div>
           </div>
         </div>
       </section>`;
-
-const tagsEndNew = `              ))}
+  const tagsEndNew = `              ))}
             </div>
           </div>
           {featured ? (
@@ -80,12 +98,8 @@ const tagsEndNew = `              ))}
           ) : null}
         </div>
       </section>`;
-
-if (s.includes(tagsEnd)) {
-  s = s.replace(tagsEnd, tagsEndNew);
-} else {
-  console.warn('[home-mosaic] tags end pattern not found');
+  if (s.includes(tagsEnd)) s = s.replace(tagsEnd, tagsEndNew);
 }
 
 fs.writeFileSync(path, s);
-console.log('[home-mosaic] applied');
+console.log('[home-hero] wallpaper applied');
