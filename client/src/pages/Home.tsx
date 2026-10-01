@@ -14,27 +14,30 @@ export default function Home() {
   const novels = (novelsQuery.data ?? []).map(toNovel);
   const genres = (genresQuery.data ?? []).map(toGenre).slice(0, 8);
   const authors = (authorsQuery.data ?? []).map(toAuthor).slice(0, 6);
-  const featured = novels[0];
+  const backgroundNovels = novels.filter((novel) => novel.cover || novel.coverUrl).slice(0, 18);
+  const backgroundColumns = [0, 1, 2].map((column) => {
+    const items = backgroundNovels.filter((_, index) => index % 3 === column);
+    return items.length ? items : [novels[column % Math.max(novels.length, 1)]].filter(Boolean);
+  });
 
   return (
     <div>
       <section className="relative min-h-[min(88vh,720px)] overflow-hidden border-b border-border/60 bg-[#070a16] text-white">
-        <div className="hero-wallpaper pointer-events-none absolute inset-0">
-          <picture>
-            <source media="(max-width: 767px)" srcSet="https://files.manuscdn.com/user_upload_by_module/session_file/310519663961203840/EOMzsCxgoggbSFuS.jpg" />
-            <img
-              src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663961203840/avdJPpHUoodsoAYR.jpg"
-              alt=""
-              className="hero-wallpaper-img h-full w-full object-cover"
-              fetchPriority="high"
-              decoding="async"
-            />
-          </picture>
+        <div className="hero-wallpaper pointer-events-none absolute inset-0" aria-hidden="true">
+          <div className="hero-wallpaper-grid">
+            {backgroundColumns.map((column, columnIndex) => (
+              <div key={columnIndex} className="hero-wallpaper-column" style={{ animationDelay: `${columnIndex * -4}s`, animationDuration: `${34 + columnIndex * 6}s` }}>
+                {[...column, ...column].map((novel, index) => (
+                  <img key={`${novel.id}-${index}`} src={optimizeCoverUrl(novel.coverUrl || novel.cover || coverFallback, 280)} alt="" className="hero-wallpaper-cover" loading={index < 3 ? 'eager' : 'lazy'} />
+                ))}
+              </div>
+            ))}
+          </div>
         </div>
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-[#070a16]/50 via-[#070a16]/72 to-[#070a16]" />
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,_rgba(103,93,232,0.18),_transparent_60%)]" />
-        <div className="container relative grid items-center gap-10 py-14 md:grid-cols-[1.1fr_0.9fr] md:py-20">
-          <div className="max-w-xl">
+        <div className="container relative grid items-center gap-10 py-14 md:py-20">
+          <div className="mx-auto max-w-2xl text-center">
             <div className="section-label mb-4 text-[#b7b1ff]">منصة اكتشاف الروايات العربية</div>
             <h1 className="text-4xl font-extrabold tracking-[-0.06em] md:text-6xl">
               كل رواية لها حكاية
