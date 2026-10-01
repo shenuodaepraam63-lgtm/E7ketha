@@ -48,18 +48,11 @@ export function createApp() {
   });
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
-
-  // Telegram before rate-limit so Bot API is never throttled
-  registerTelegramWebhook(app);
-
   registerStorageProxy(app);
   registerOAuthRoutes(app);
   app.use("/api/auth", authRateLimit);
   app.use("/api/trpc", apiRateLimit);
-  app.use("/api", (req, res, next) => {
-    if (req.path.startsWith("/telegram")) return next();
-    return apiRateLimit(req, res, next);
-  });
+  app.use("/api", apiRateLimit);
   app.get("/api/performance", (_req, res) => res.json({ generatedAt: new Date().toISOString(), routes: getPerformanceSnapshot() }));
   app.use(
     "/api/trpc",
@@ -68,6 +61,7 @@ export function createApp() {
       createContext,
     })
   );
+  registerTelegramWebhook(app);
   return app;
 }
 
@@ -90,7 +84,7 @@ async function startServer() {
   });
 }
 
-// On Vercel, api/index.js imports createApp only — do not listen.
+// On Vercel serverless, api/index.js imports createApp only — do not listen.
 if (!process.env.VERCEL && !process.env.VERCEL_ENV) {
   startServer().catch(console.error);
 }
