@@ -57,7 +57,7 @@ export function ExplorePage() {
   const query = trpc.novels.search.useQuery(searchInput);
   const result = (query.data ?? []).map(toNovel);
   return (
-    <div className="container py-10 md:py-16">
+    <div className="novel-catalog-page container py-10 md:py-16">
       <Breadcrumbs items={['استكشف']} />
       <PageIntro
         eyebrow="اكتشف أكثر"
@@ -162,7 +162,7 @@ export function SearchPage() {
   ];
 
   return (
-    <div className="container py-10 md:py-16">
+    <div className="novel-catalog-page container py-10 md:py-16">
       <Breadcrumbs items={['محرك البحث']} />
 
       <div className="mb-10 rounded-[28px] border border-border bg-gradient-to-b from-[#f7f6ff] to-card p-6 shadow-[0_20px_50px_-40px_rgba(22,30,70,.45)] dark:from-[#1a1c38] dark:to-card md:p-10">

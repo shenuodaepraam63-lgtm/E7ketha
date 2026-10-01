@@ -9,7 +9,7 @@ export function SiteShell({ children, theme, onThemeToggle, footer = true }: { c
   return (
     <div
       dir="rtl"
-      className="min-h-screen overflow-x-hidden pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:pb-0"
+      className="site-shell min-h-screen overflow-x-hidden pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:pb-0"
       suppressHydrationWarning
     >
       <SiteHeader theme={theme} onThemeToggle={onThemeToggle} />

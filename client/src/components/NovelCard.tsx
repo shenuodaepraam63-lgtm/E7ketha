@@ -2,7 +2,7 @@ import { Heart, Star, ArrowUpLeft } from 'lucide-react';
 import { Link } from 'wouter';
 import type { Novel } from '@/lib/data';
 import { coverFallback, optimizeCoverUrl, statusStyles } from '@/lib/data';
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { trpc } from '@/lib/trpc';
 import { toast } from 'sonner';
 
@@ -25,31 +25,13 @@ export function NovelCard({ novel, compact = false, priority = false }: { novel:
     },
     onError: () => toast.error('تعذر تحديث قائمتك الآن'),
   });
-  const cardRef = useRef<HTMLElement>(null);
   const bookHref = `/books/${novel.slug}`;
-  const handlePointerMove = (event: React.PointerEvent<HTMLElement>) => {
-    const card = cardRef.current;
-    if (!card || event.pointerType === 'touch') return;
-    const bounds = card.getBoundingClientRect();
-    const x = event.clientX - bounds.left;
-    const y = event.clientY - bounds.top;
-    card.style.setProperty('--pointer-x', `${x}px`);
-    card.style.setProperty('--pointer-y', `${y}px`);
-    card.style.setProperty('--rotate-x', `${((y / bounds.height) - 0.5) * -4}deg`);
-    card.style.setProperty('--rotate-y', `${((x / bounds.width) - 0.5) * 5}deg`);
-  };
-  const handlePointerLeave = () => {
-    const card = cardRef.current;
-    if (!card) return;
-    card.style.setProperty('--rotate-x', '0deg');
-    card.style.setProperty('--rotate-y', '0deg');
-  };
   return (
-    <article ref={cardRef} onPointerMove={handlePointerMove} onPointerLeave={handlePointerLeave} className={`novel-card group relative ${compact ? 'min-w-[160px] max-w-[160px] sm:min-w-[178px] sm:max-w-[178px]' : 'min-w-[160px] max-w-[160px] sm:min-w-[200px] sm:max-w-[200px] md:min-w-[220px] md:max-w-[220px]'}`}>
+    <article className={`novel-card group relative w-full min-w-0 max-w-none`}>
       <div className="novel-card__visual relative overflow-hidden rounded-[18px] bg-slate-200 dark:bg-slate-800">
         <Link href={bookHref} className="block" aria-label={`استكشف رواية ${novel.title}`}>
-          <div className={`relative overflow-hidden ${compact ? 'aspect-[3/4.3]' : 'aspect-[3/4.35]'}`}>
-            <img src={optimizeCoverUrl(novel.cover, 400)} alt={`غلاف رواية ${novel.title}`} width="300" height="435" loading={priority ? "eager" : "lazy"} fetchPriority={priority ? "high" : "auto"} decoding="async" className="h-full w-full object-cover transition duration-500 ease-out group-hover:scale-[1.06]" onError={(event) => { if (event.currentTarget.src !== coverFallback) event.currentTarget.src = coverFallback; }} />
+          <div className={`novel-card__cover relative overflow-hidden ${compact ? 'aspect-[3/4.3]' : 'aspect-[3/4.35]'}`}>
+            <img src={optimizeCoverUrl(novel.cover, 400)} alt={`غلاف رواية ${novel.title}`} width="300" height="435" loading={priority ? "eager" : "lazy"} fetchPriority={priority ? "high" : "auto"} decoding="async" className="novel-card__img absolute inset-0 h-full w-full object-cover transition duration-500 ease-out group-hover:scale-[1.06]" onError={(event) => { if (event.currentTarget.src !== coverFallback) event.currentTarget.src = coverFallback; }} />
             <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-black/0 to-transparent opacity-80" />
             <div className="novel-card__shine pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
             <span className="absolute bottom-3 right-3 text-[10px] font-semibold text-white/85">{novel.parts === 1 ? 'رواية منفردة' : `${novel.parts} أجزاء`}</span>
@@ -59,9 +41,9 @@ export function NovelCard({ novel, compact = false, priority = false }: { novel:
           <Heart size={16} fill={saved ? 'currentColor' : 'none'} />
         </button>
       </div>
-      <div className="pt-3">
+      <div className="min-w-0 pt-3">
         <div className="mb-1 flex items-center justify-between gap-2">
-          <Link href={bookHref} className="line-clamp-1 text-[15px] font-extrabold tracking-[-.03em] hover:text-[#675de8]">{novel.title}</Link>
+          <Link href={bookHref} className="line-clamp-2 min-w-0 flex-1 text-[13px] font-extrabold leading-snug tracking-[-.03em] hover:text-[#675de8] sm:text-[15px] sm:line-clamp-1">{novel.title}</Link>
           <span className="flex shrink-0 items-center gap-1 text-[11px] font-bold text-[#bc7a25]"><Star size={12} fill="currentColor" />{novel.rating}</span>
         </div>
         <Link href={`/authors/${novel.authorSlug}`} className="block text-xs text-muted-foreground hover:text-[#675de8]">{novel.author}</Link>
