@@ -12,7 +12,9 @@ if (!fs.existsSync(path)) {
 let s = fs.readFileSync(path, 'utf8');
 
 const HERO_BG =
-  'https://elabasi.com/wp-content/uploads/2026/01/%D8%B1%D9%88%D8%A7%D9%8A%D8%A7%D8%AA-%D8%B9%D8%A7%D9%84%D9%85%D9%8A%D8%A9.jpeg';
+  'https://files.manuscdn.com/user_upload_by_module/session_file/310519663961203840/avdJPpHUoodsoAYR.jpg';
+const HERO_BG_MOBILE =
+  'https://files.manuscdn.com/user_upload_by_module/session_file/310519663961203840/EOMzsCxgoggbSFuS.jpg';
 
 // Already on wallpaper style
 if (s.includes('hero-wallpaper') && s.includes(HERO_BG)) {
@@ -42,13 +44,16 @@ if (s.includes('const mosaic =')) {
 
 const wallpaperBlock = `<section className="relative min-h-[min(88vh,720px)] overflow-hidden border-b border-border/60 bg-[#070a16] text-white">
         <div className="hero-wallpaper pointer-events-none absolute inset-0">
-          <img
-            src="${HERO_BG}"
-            alt=""
-            className="hero-wallpaper-img h-full w-full object-cover"
-            fetchPriority="high"
-            decoding="async"
-          />
+          <picture>
+            <source media="(max-width: 767px)" srcSet="${HERO_BG_MOBILE}" />
+            <img
+              src="${HERO_BG}"
+              alt=""
+              className="hero-wallpaper-img h-full w-full object-cover"
+              fetchPriority="high"
+              decoding="async"
+            />
+          </picture>
         </div>
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-[#070a16]/50 via-[#070a16]/72 to-[#070a16]" />
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,_rgba(103,93,232,0.18),_transparent_60%)]" />

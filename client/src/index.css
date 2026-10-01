@@ -1,5 +1,4 @@
 @import "tailwindcss";
-@import "tw-animate-css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -60,6 +59,7 @@
   }
   body {
     @apply bg-background text-foreground;
+    overflow-x: clip;
     margin: 0;
     font-family: 'Cairo', system-ui, sans-serif;
     text-rendering: optimizeLegibility;
@@ -74,6 +74,13 @@
     outline-offset: 3px;
   }
   img { max-width: 100%; height: auto; }
+  img.novel-card__img,
+  img.object-cover {
+    max-width: none;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
 }
 
 @layer components {
@@ -151,6 +158,31 @@
   .novel-card:hover {
     transform: perspective(900px) rotateX(var(--rotate-x)) rotateY(var(--rotate-y)) translateY(-7px);
     filter: drop-shadow(0 20px 22px rgba(38, 36, 104, 0.12));
+  }
+  @media (hover: none), (pointer: coarse) {
+    .novel-card:hover { transform: none; filter: none; }
+    .novel-card:active { transform: scale(0.98); }
+  }
+  .novel-card__cover { isolation: isolate; }
+  .novel-card__img {
+    position: absolute;
+    inset: 0;
+    width: 100% !important;
+    height: 100% !important;
+    max-width: none !important;
+    object-fit: cover;
+  }
+  .scroll-rail .novel-card {
+    width: 160px;
+    min-width: 160px;
+    max-width: 160px;
+  }
+  @media (min-width: 640px) {
+    .scroll-rail .novel-card {
+      width: 200px;
+      min-width: 200px;
+      max-width: 200px;
+    }
   }
   .novel-card__visual {
     transform: translateZ(0);
@@ -332,6 +364,27 @@
   .container { max-width: 1440px; }
 }
 
+
+@keyframes hero-kenburns {
+  0% { transform: scale(1) translate(0, 0); }
+  50% { transform: scale(1.08) translate(-1.5%, -1%); }
+  100% { transform: scale(1) translate(0, 0); }
+}
+@keyframes cover-float {
+  0%, 100% { transform: translateY(0) rotate(-2deg); }
+  50% { transform: translateY(-14px) rotate(2deg); }
+}
+.hero-wallpaper {
+  overflow: hidden;
+}
+.hero-wallpaper-img {
+  animation: hero-kenburns 22s ease-in-out infinite;
+  will-change: transform;
+}
+.hero-featured-float {
+  animation: cover-float 5.5s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
@@ -342,4 +395,5 @@
   .novel-card:hover { transform: none; filter: none; }
   .genre-card:hover { transform: none; }
   .quote-card::after { animation: none; opacity: 0.45; }
+  .hero-wallpaper-img, .hero-featured-float, .hero-cover-mosaic img { animation: none !important; }
 }

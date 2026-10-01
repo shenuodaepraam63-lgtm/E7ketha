@@ -14,13 +14,27 @@ export default function Home() {
   const novels = (novelsQuery.data ?? []).map(toNovel);
   const genres = (genresQuery.data ?? []).map(toGenre).slice(0, 8);
   const authors = (authorsQuery.data ?? []).map(toAuthor).slice(0, 6);
+  const featured = novels[0];
 
   return (
     <div>
-      <section className="relative overflow-hidden border-b border-border/60 bg-[#0b1025] text-white">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,_rgba(103,93,232,0.35),_transparent_55%)]" />
-        <div className="container relative py-14 md:py-20">
-          <div className="max-w-2xl">
+      <section className="relative min-h-[min(88vh,720px)] overflow-hidden border-b border-border/60 bg-[#070a16] text-white">
+        <div className="hero-wallpaper pointer-events-none absolute inset-0">
+          <picture>
+            <source media="(max-width: 767px)" srcSet="https://files.manuscdn.com/user_upload_by_module/session_file/310519663961203840/EOMzsCxgoggbSFuS.jpg" />
+            <img
+              src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663961203840/avdJPpHUoodsoAYR.jpg"
+              alt=""
+              className="hero-wallpaper-img h-full w-full object-cover"
+              fetchPriority="high"
+              decoding="async"
+            />
+          </picture>
+        </div>
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-[#070a16]/50 via-[#070a16]/72 to-[#070a16]" />
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,_rgba(103,93,232,0.18),_transparent_60%)]" />
+        <div className="container relative grid items-center gap-10 py-14 md:grid-cols-[1.1fr_0.9fr] md:py-20">
+          <div className="max-w-xl">
             <div className="section-label mb-4 text-[#b7b1ff]">منصة اكتشاف الروايات العربية</div>
             <h1 className="text-4xl font-extrabold tracking-[-0.06em] md:text-6xl">
               كل رواية لها حكاية
@@ -60,6 +74,21 @@ export default function Home() {
               ))}
             </div>
           </div>
+          {featured ? (
+            <div className="relative mx-auto flex w-full max-w-[280px] justify-center md:max-w-[320px]">
+              <Link href={`/books/${featured.slug}`} className="hero-featured-float group relative block w-[72%]">
+                <div className="absolute -inset-6 rounded-[2rem] bg-[#675de8]/25 blur-2xl" />
+                <div className="relative overflow-hidden rounded-[1.35rem] border border-white/15 bg-[#12172e] shadow-[0_30px_80px_-20px_rgba(0,0,0,0.75)]">
+                  <div className="absolute start-3 top-3 z-10 rounded-full bg-[#675de8] px-2.5 py-1 text-[10px] font-extrabold">مميزة اليوم</div>
+                  <img src={optimizeCoverUrl(featured.coverUrl || featured.cover || coverFallback, 480)} alt={featured.title} className="aspect-[2/3] w-full object-cover transition duration-500 group-hover:scale-[1.03]" />
+                  <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent p-4 pt-16">
+                    <div className="line-clamp-2 text-sm font-extrabold">{featured.title}</div>
+                    <div className="mt-1 truncate text-xs text-white/65">{featured.author}</div>
+                  </div>
+                </div>
+              </Link>
+            </div>
+          ) : null}
         </div>
       </section>
 
@@ -84,7 +113,7 @@ export default function Home() {
                   </div>
                 ))
               : novels.map((novel, i) => (
-                  <NovelCard key={novel.id} novel={novel} priority={i < 2} rail />
+                  <NovelCard key={novel.id} novel={novel} priority={i < 2} />
                 ))}
           </div>
         </section>
