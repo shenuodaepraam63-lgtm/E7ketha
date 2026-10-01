@@ -30,7 +30,6 @@ export function registerTelegramWebhook(app: Express): void {
       res.status(200).json({ ok: true });
     } catch (err) {
       console.error('[telegram] handle update failed', err);
-      // Still 200 so Telegram does not retry endlessly for application errors
       res.status(200).json({ ok: true, handled: false });
     }
   });
@@ -40,6 +39,7 @@ export function registerTelegramWebhook(app: Express): void {
       ok: true,
       configured: isTelegramConfigured(),
       secretConfigured: Boolean(getTelegramWebhookSecret()),
+      version: 'tg-await-v2',
     });
   });
 }

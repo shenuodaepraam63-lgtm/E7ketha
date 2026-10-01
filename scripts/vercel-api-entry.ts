@@ -1,12 +1,11 @@
-import { createApp } from "../server/app.ts";
-import { registerTelegramWebhook } from "../server/telegram/webhook.ts";
+import { createApp } from "../server/_core/index.ts";
+// Telegram is registered inside createApp(); do not double-register
 import { tryRenderStaticSeo } from "../server/seoPublicPages.ts";
 import { tryRenderArticleSeo } from "../server/seoArticlePages.ts";
 import { tryRenderExpandedSitemap } from "../server/sitemapExpanded.ts";
 import { listGenres } from "../server/db.ts";
 
 const app = createApp();
-registerTelegramWebhook(app);
 
 /** Origins allowed to call api.e7ketha.com from the browser */
 const ALLOWED_ORIGINS = new Set([
