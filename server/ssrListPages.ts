@@ -141,15 +141,13 @@ export function renderRichHomepageShell(
       return "<li><a href=" + JSON.stringify(siteUrl + "/books/" + String(n.slug ?? "")) + ">" + esc(n.title) + "</a>" + a + "</li>";
     })
     .join("");
+  const desktopBg = "https://files.manuscdn.com/user_upload_by_module/session_file/310519663961203840/avdJPpHUoodsoAYR.jpg";
+  const mobileBg = "https://files.manuscdn.com/user_upload_by_module/session_file/310519663961203840/EOMzsCxgoggbSFuS.jpg";
   return (
-    "<div dir=\"rtl\" lang=\"ar\"><header><a href=\"/\">E7ketha</a> · <a href=\"/explore\">Explore</a> · <a href=\"/quotes\">Quotes</a> · <a href=\"/articles\">Articles</a> · <a href=\"/search\">Search</a></header>" +
-    "<main><section><h1>Discover your next novel</h1>" +
-    "<p>E7ketha is an Arabic novel discovery platform. We help you find what is worth your time via genres, authors, series, quotes, and articles. Discovery only — we do not host book files.</p>" +
-    "<p>Start from search or the novel list, then open a book page for summary, author, genre, and related quotes.</p></section>" +
-    "<section><h2>Selected novels</h2><ul>" +
+    "<div dir=\"rtl\" lang=\"ar\" style=\"background:#080b18;color:#fff;min-height:100vh;font-family:Arial,sans-serif\"><header style=\"padding:18px 5%;position:relative;z-index:2\"><a href=\"/\" style=\"color:#fff;font-weight:800;text-decoration:none\">𝐄𝟳𝐤𝐞𝐭𝐡𝐚</a> · <a href=\"/explore\" style=\"color:#ddd\">استكشف</a> · <a href=\"/quotes\" style=\"color:#ddd\">الاقتباسات</a> · <a href=\"/articles\" style=\"color:#ddd\">المقالات</a></header>" +
+    "<main><section style=\"position:relative;overflow:hidden;min-height:620px;padding:72px 5%;background:#080b18\"><picture style=\"position:absolute;inset:0;z-index:0\"><source media=\"(max-width:767px)\" srcset=\"" + mobileBg + "\"><img src=\"" + desktopBg + "\" alt=\"\" style=\"width:100%;height:100%;object-fit:cover;opacity:.34\"></picture><div style=\"position:absolute;inset:0;background:linear-gradient(180deg,rgba(8,11,24,.45),rgba(8,11,24,.94))\"></div><div style=\"position:relative;z-index:1;max-width:680px;padding-top:110px\"><p style=\"color:#bbb5ff;font-weight:700\">منصة اكتشاف الروايات العربية</p><h1 style=\"font-size:clamp(40px,7vw,78px);line-height:1.15;margin:18px 0;font-weight:900\">اكتشف روايتك القادمة.</h1><p style=\"color:rgba(255,255,255,.78);font-size:18px;line-height:2\">اكتشف الروايات العربية التي تستحق وقتك، وتعرّف على المؤلفين والتصنيفات والاقتباسات في مكان واحد.</p><p style=\"margin-top:28px\"><a href=\"/explore\" style=\"display:inline-block;background:#675de8;color:#fff;padding:14px 22px;border-radius:12px;text-decoration:none;font-weight:800\">استكشف الروايات</a></p></div></section>" +
+    "<section style=\"padding:42px 5%;color:#18203d;background:#f7f8fc\"><h2>روايات مختارة</h2><ul>" +
     novelItems +
-    "</ul><p><a href=\"/explore\">All novels</a> · <a href=\"/quotes\">Quotes</a> · <a href=\"/articles\">Articles</a></p></section>" +
-    "<section><h2>How it works</h2>" +
-    "<p>Pick a genre, follow an author, or read a quote that leads to a new book. After signup you can save quotes and build interests on Discover.</p></section></main></div>"
+    "</ul><p><a href=\"/explore\">كل الروايات</a> · <a href=\"/quotes\">الاقتباسات</a> · <a href=\"/articles\">المقالات</a></p></section></main></div>"
   );
 }
