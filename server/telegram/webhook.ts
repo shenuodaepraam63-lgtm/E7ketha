@@ -6,6 +6,7 @@ import type { TelegramUpdate } from './api';
 /**
  * POST /api/telegram/webhook
  * Validates X-Telegram-Bot-Api-Secret-Token when TELEGRAM_WEBHOOK_SECRET is set.
+ * Must await processing BEFORE responding — Vercel freezes the lambda after the response.
  */
 export function registerTelegramWebhook(app: Express): void {
   app.post('/api/telegram/webhook', async (req: Request, res: Response) => {
@@ -23,13 +24,14 @@ export function registerTelegramWebhook(app: Express): void {
       }
     }
 
-    res.status(200).json({ ok: true });
-
-    const update = req.body as TelegramUpdate;
+    const update = (req.body || {}) as TelegramUpdate;
     try {
       await handleTelegramUpdate(update);
+      res.status(200).json({ ok: true });
     } catch (err) {
       console.error('[telegram] handle update failed', err);
+      // Still 200 so Telegram does not retry endlessly for application errors
+      res.status(200).json({ ok: true, handled: false });
     }
   });
 
