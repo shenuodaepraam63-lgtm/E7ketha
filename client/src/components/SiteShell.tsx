@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { SiteHeader, MobileBottomNav } from './SiteHeader';
 import { SiteFooter } from './SiteFooter';
 import { Link, useLocation } from 'wouter';
+import { SupportAssistant } from './SupportAssistant';
 
 export function SiteShell({ children, theme, onThemeToggle, footer = true }: { children: ReactNode; theme: 'light' | 'dark'; onThemeToggle: () => void; footer?: boolean }) {
   const [location] = useLocation();
@@ -15,6 +16,7 @@ export function SiteShell({ children, theme, onThemeToggle, footer = true }: { c
       <main className="page-transition">{children}</main>
       {footer && <SiteFooter />}
       <MobileBottomNav />
+      <SupportAssistant />
     </div>
   );
 }
