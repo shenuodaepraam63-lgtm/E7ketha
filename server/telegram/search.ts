@@ -8,45 +8,49 @@ export type SearchHit =
   | { kind: 'genre'; name: string; slug: string; url: string }
   | { kind: 'article'; title: string; slug: string; url: string };
 
-function stripIntent(q: string): string {
-  return q
-    .replace(/^(ابحث|دور|هات|وريني|عايز|أريد|ابغى|فين|عن)\s+/gi, '')
-    .replace(/\s+(من فضلك|لو سمحت)$/gi, '')
-    .trim();
-}
+export type Intent =
+  | { type: 'novels'; q: string }
+  | { type: 'authors'; q: string }
+  | { type: 'genres'; q: string }
+  | { type: 'articles'; q: string }
+  | { type: 'help' };
 
-export function detectIntent(text: string): {
-  type: 'start' | 'help' | 'novels' | 'authors' | 'genres' | 'articles' | 'unknown';
-  query: string;
-} {
+/** Lightweight Arabic-friendly intent detection (no external AI in V1). */
+export function detectIntent(text: string): Intent {
   const t = text.trim();
-  if (/^\/start(?:\s|$)/i.test(t)) return { type: 'start', query: t.replace(/^\/start\s*/i, '').trim() };
-  if (/^\/help\b/i.test(t) || /^(مساعدة|help)$/i.test(t)) return { type: 'help', query: '' };
-
   const lower = t.toLowerCase();
-  if (/مؤلف|كاتب|authors?/.test(lower)) {
-    return { type: 'authors', query: stripIntent(t.replace(/مؤلفين?|كتاب|كاتب|authors?/gi, ' ').replace(/\s+/g, ' ').trim()) };
+
+  if (/^(مساعدة|help|\/help)\b/i.test(t)) return { type: 'help', q: '' } as any;
+
+  if (/(مؤلف|مؤلفين|كاتب|كتّاب|كتاب)/.test(t) || /^\/authors\b/i.test(t)) {
+    const q = t
+      .replace(/^\/authors\b/i, '')
+      .replace(/مؤلفين?|كاتب|كتّاب|كتاب/g, '')
+      .trim();
+    return { type: 'authors', q };
   }
-  if (/تصنيف|نوع|أنواع|genres?/.test(lower)) {
-    return { type: 'genres', query: stripIntent(t.replace(/تصنيفات?|أنواع|نوع|genres?/gi, ' ').replace(/\s+/g, ' ').trim()) };
+  if (/(تصنيف|تصنيفات|نوع|أنواع|جنس أدبي)/.test(t) || /^\/genres\b/i.test(t)) {
+    const q = t
+      .replace(/^\/genres\b/i, '')
+      .replace(/تصنيفات?|أنواع?|جنس أدبي/g, '')
+      .trim();
+    return { type: 'genres', q };
   }
-  if (/مقال|مقالة|articles?/.test(lower)) {
-    return { type: 'articles', query: stripIntent(t.replace(/مقالات?|مقالة|articles?/gi, ' ').replace(/\s+/g, ' ').trim()) };
+  if (/(مقال|مقالات|مقالة)/.test(t) || /^\/articles\b/i.test(t)) {
+    const q = t
+      .replace(/^\/articles\b/i, '')
+      .replace(/مقالات?|مقالة/g, '')
+      .trim();
+    return { type: 'articles', q };
   }
-  if (/رواية|روايات|كتاب|novels?|books?/.test(lower) || t.length >= 2) {
-    const q = stripIntent(
-      t
-        .replace(/روايات?|رواية|كتب|كتاب|novels?|books?/gi, ' ')
-        .replace(/\s+/g, ' ')
-        .trim(),
-    );
-    return { type: 'novels', query: q || stripIntent(t) };
+  if (/^\/novels\b/i.test(t)) {
+    return { type: 'novels', q: t.replace(/^\/novels\b/i, '').trim() };
   }
-  return { type: 'unknown', query: t };
+  // default: novels search
+  return { type: 'novels', q: t.replace(/روايات?|كتب|كتاب/g, '').trim() || t };
 }
 
-export async function searchE7ketha(type: 'novels' | 'authors' | 'genres' | 'articles', query: string): Promise<SearchHit[]> {
-  const q = query.trim();
+export async function searchE7ketha(type: Intent['type'], q: string): Promise<SearchHit[]> {
   if (type === 'novels') {
     const rows = await searchNovels({ q: q || undefined, limit: 8, sort: 'popular' });
     return (rows as any[]).slice(0, 8).map((n) => ({
@@ -54,7 +58,7 @@ export async function searchE7ketha(type: 'novels' | 'authors' | 'genres' | 'art
       title: String(n.title || ''),
       author: n.authorName || n.author || undefined,
       slug: String(n.slug || ''),
-      url: `${SITE_ORIGIN}/novels/${encodeURIComponent(String(n.slug || ''))}`,
+      url: `${SITE_ORIGIN}/books/${encodeURIComponent(String(n.slug || ''))}`,
     }));
   }
   if (type === 'authors') {
@@ -100,9 +104,11 @@ export function formatHits(hits: SearchHit[]): { text: string; keyboard: { text:
       keyboard: [[{ text: '🌐 فتح E7ketha', url: SITE_ORIGIN }]],
     };
   }
+
   const lines: string[] = [];
   const keyboard: { text: string; url: string }[][] = [];
-  for (const h of hits) {
+
+  for (const h of hits.slice(0, 8)) {
     if (h.kind === 'novel') {
       lines.push(`📖 <b>${escapeHtml(h.title)}</b>${h.author ? `\n✍️ ${escapeHtml(h.author)}` : ''}`);
       keyboard.push([{ text: `📚 ${truncate(h.title, 28)}`, url: h.url }]);
@@ -117,15 +123,20 @@ export function formatHits(hits: SearchHit[]): { text: string; keyboard: { text:
       keyboard.push([{ text: `📰 ${truncate(h.title, 28)}`, url: h.url }]);
     }
   }
+
   keyboard.push([{ text: '🌐 الموقع', url: SITE_ORIGIN }]);
   return { text: lines.join('\n\n'), keyboard };
 }
 
-function escapeHtml(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
-
-function truncate(s: string, n: number): string {
+function truncate(s: string, n: number) {
   const t = s.trim();
   return t.length <= n ? t : t.slice(0, n - 1) + '…';
+}
+
+function escapeHtml(s: string) {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }
