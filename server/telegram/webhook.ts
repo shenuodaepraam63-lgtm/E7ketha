@@ -39,7 +39,7 @@ export function registerTelegramWebhook(app: Express): void {
       ok: true,
       configured: isTelegramConfigured(),
       secretConfigured: Boolean(getTelegramWebhookSecret()),
-      version: 'tg-await-v3',
+      version: 'tg-bot-v4',
     });
   });
 }

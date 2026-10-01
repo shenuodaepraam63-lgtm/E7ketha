@@ -19,13 +19,31 @@ async function rest<T>(pathAndQuery: string, init?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     const body = await res.text();
-    throw new Error(`telegram_users REST ${res.status}: ${body}`);
+    throw new Error(`telegram REST ${res.status}: ${body}`);
   }
   const text = await res.text();
   return (text ? JSON.parse(text) : []) as T;
 }
 
-/** Upsert Telegram identity; does not require linked E7ketha account. */
+async function restCount(table: string, filter = ''): Promise<number> {
+  if (!ENV.supabaseUrl || !(ENV.supabaseSecretKey || ENV.supabasePublishableKey)) return 0;
+  const key = ENV.supabaseSecretKey || ENV.supabasePublishableKey!;
+  const q = filter ? `?${filter}` : '';
+  const res = await fetch(`${ENV.supabaseUrl}/rest/v1/${table}${q}`, {
+    method: 'HEAD',
+    signal: AbortSignal.timeout(8000),
+    headers: {
+      apikey: key,
+      Authorization: `Bearer ${key}`,
+      Prefer: 'count=exact',
+      Range: '0-0',
+    },
+  });
+  const cr = res.headers.get('content-range') || res.headers.get('Content-Range') || '';
+  const m = cr.match(/\/(\d+)\s*$/);
+  return m ? Number(m[1]) : 0;
+}
+
 export async function upsertTelegramUser(from: TelegramUser): Promise<void> {
   try {
     const payload = {
@@ -47,4 +65,29 @@ export async function upsertTelegramUser(from: TelegramUser): Promise<void> {
   } catch (err) {
     console.warn('[telegram] upsert user failed', err);
   }
+}
+
+export async function countTelegramUsers(): Promise<number> {
+  try {
+    return await restCount('telegram_users');
+  } catch {
+    return 0;
+  }
+}
+
+export async function getPlatformStats(): Promise<{
+  botUsers: number;
+  novels: number;
+  authors: number;
+  genres: number;
+  articles: number;
+}> {
+  const [botUsers, novels, authors, genres, articles] = await Promise.all([
+    countTelegramUsers(),
+    restCount('novels').catch(() => 0),
+    restCount('authors').catch(() => 0),
+    restCount('genres').catch(() => 0),
+    restCount('articles').catch(() => 0),
+  ]);
+  return { botUsers, novels, authors, genres, articles };
 }

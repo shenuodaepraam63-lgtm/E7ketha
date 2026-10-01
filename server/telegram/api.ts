@@ -46,6 +46,8 @@ export type InlineKeyboardButton = {
   callback_data?: string;
 };
 
+export type ReplyKeyboardButton = { text: string };
+
 async function tgCall<T = unknown>(method: string, body: Record<string, unknown>): Promise<T> {
   const token = getTelegramBotToken();
   if (!token) throw new Error('TELEGRAM_BOT_TOKEN is not set');
@@ -67,7 +69,9 @@ export async function sendMessage(
   text: string,
   options?: {
     parse_mode?: 'HTML' | 'Markdown' | 'MarkdownV2';
-    reply_markup?: { inline_keyboard: InlineKeyboardButton[][] };
+    reply_markup?:
+      | { inline_keyboard: InlineKeyboardButton[][] }
+      | { keyboard: ReplyKeyboardButton[][]; resize_keyboard?: boolean; is_persistent?: boolean };
     disable_web_page_preview?: boolean;
   },
 ) {
@@ -76,7 +80,26 @@ export async function sendMessage(
     text,
     parse_mode: options?.parse_mode ?? 'HTML',
     reply_markup: options?.reply_markup,
-    disable_web_page_preview: options?.disable_web_page_preview ?? false,
+    disable_web_page_preview: options?.disable_web_page_preview ?? true,
+  });
+}
+
+export async function editMessageText(
+  chatId: number,
+  messageId: number,
+  text: string,
+  options?: {
+    parse_mode?: 'HTML' | 'Markdown' | 'MarkdownV2';
+    reply_markup?: { inline_keyboard: InlineKeyboardButton[][] };
+  },
+) {
+  return tgCall('editMessageText', {
+    chat_id: chatId,
+    message_id: messageId,
+    text,
+    parse_mode: options?.parse_mode ?? 'HTML',
+    reply_markup: options?.reply_markup,
+    disable_web_page_preview: true,
   });
 }
 
@@ -96,6 +119,6 @@ export async function setWebhook(url: string, secretToken: string) {
   });
 }
 
-export async function getWebhookInfo() {
-  return tgCall<{ url: string; pending_update_count: number; last_error_message?: string }>('getWebhookInfo', {});
+export async function setMyCommands(commands: Array<{ command: string; description: string }>) {
+  return tgCall('setMyCommands', { commands });
 }

@@ -1,139 +1,249 @@
-import { getTelegramAdminIds, SITE_ORIGIN } from './config';
-import { sendMessage, type TelegramMessage, type TelegramUpdate } from './api';
-import { upsertTelegramUser } from './users';
-import { detectIntent, searchE7ketha, formatHits } from './search';
+import { SITE_ORIGIN } from './config';
+import {
+  sendMessage,
+  editMessageText,
+  answerCallbackQuery,
+  setMyCommands,
+  type TelegramUpdate,
+} from './api';
+import { upsertTelegramUser, getPlatformStats } from './users';
+import {
+  detectIntent,
+  searchE7ketha,
+  megaSearch,
+  formatHits,
+  listNovelsPage,
+  mainReplyKeyboard,
+} from './search';
 
-const HELP = `🤖 <b>مساعد 𝐄𝟳𝐤𝐞𝐭𝐡𝐚</b>
+let commandsRegistered = false;
 
-ابحث طبيعيًا، مثل:
-• روايات رعب
-• مؤلف أحمد خالد توفيق
-• تصنيفات
-• مقالات
+async function ensureBotCommands() {
+  if (commandsRegistered) return;
+  try {
+    await setMyCommands([
+      { command: 'start', description: 'الرئيسية والإحصائيات' },
+      { command: 'novels', description: 'تصفح كل الروايات' },
+      { command: 'search', description: 'بحث في المكتبة' },
+      { command: 'authors', description: 'المؤلفون' },
+      { command: 'genres', description: 'التصنيفات' },
+      { command: 'articles', description: 'المقالات' },
+      { command: 'stats', description: 'أرقام المنصة' },
+      { command: 'help', description: 'قائمة الأوامر' },
+    ]);
+    commandsRegistered = true;
+  } catch (err) {
+    console.warn('[telegram] setMyCommands failed', err);
+  }
+}
 
-أوامر:
-/start — البداية
-/help — المساعدة
-/novels — أحدث/أشهر الروايات
+function commandsHelp(): string {
+  return `📋 <b>قائمة الأوامر</b>
+
+/start — الشاشة الرئيسية والإحصائيات
+/help — هذه القائمة
+/novels — تصفح كل الروايات (صفحات)
+/search كلمة — بحث قوي في الروايات والمؤلفين
 /authors — المؤلفون
 /genres — التصنيفات
 /articles — المقالات
+/stats — أرقام المنصة
 
-الموقع: ${SITE_ORIGIN}`;
+أو استخدم الأزرار أسفل الشاشة 👇`;
+}
 
-function deepLinkPayload(startArg: string): { kind: string; value: string } | null {
-  const a = startArg.trim();
-  if (!a) return null;
-  const m = a.match(/^(novel|author|genre|article)[_-](.+)$/i);
-  if (m) return { kind: m[1].toLowerCase(), value: m[2] };
-  return { kind: 'query', value: a };
+async function buildWelcome(firstName?: string): Promise<string> {
+  let statsLine = '';
+  try {
+    const s = await getPlatformStats();
+    statsLine = `━━━━━━━━━━━━━━
+👥 مستخدمو البوت: <b>${s.botUsers.toLocaleString('ar-EG')}</b>
+📖 الروايات: <b>${s.novels.toLocaleString('ar-EG')}</b>
+✍️ المؤلفون: <b>${s.authors.toLocaleString('ar-EG')}</b>
+🏷️ التصنيفات: <b>${s.genres.toLocaleString('ar-EG')}</b>
+━━━━━━━━━━━━━━
+`;
+  } catch {
+    statsLine = '';
+  }
+
+  const name = firstName ? ` ${firstName}` : '';
+  return `مرحبًا${name} 👋
+
+أنا مساعد <b>𝐄𝟳𝐤𝐞𝐭𝐡𝐚</b> لاكتشاف الروايات العربية.
+
+${statsLine}
+🔍 اكتب اسم رواية أو نوعًا (مثل: رعب)
+📚 أو اضغط «الروايات» لتصفح المكتبة كاملة
+
+${commandsHelp()}
+
+🌐 ${SITE_ORIGIN}`;
+}
+
+async function sendNovelsPage(chatId: number, page: number, edit?: { messageId: number }) {
+  const { hits, page: p, totalPages, total } = await listNovelsPage(page);
+  const fmt = formatHits(hits, {
+    title: '📚 مكتبة الروايات',
+    page: p,
+    totalPages,
+    total,
+  });
+  if (edit?.messageId) {
+    try {
+      await editMessageText(chatId, edit.messageId, fmt.text, {
+        reply_markup: { inline_keyboard: fmt.keyboard },
+      });
+      return;
+    } catch {
+      /* fall through */
+    }
+  }
+  await sendMessage(chatId, fmt.text, { reply_markup: { inline_keyboard: fmt.keyboard } });
 }
 
 export async function handleTelegramUpdate(update: TelegramUpdate): Promise<void> {
-  const message = update.message || update.edited_message;
-  if (!message?.chat?.id) {
-    if (update.callback_query) {
+  await ensureBotCommands();
+
+  if (update.callback_query) {
+    const cq = update.callback_query;
+    const data = (cq.data || '').trim();
+    const chatId = cq.message?.chat?.id;
+    const messageId = cq.message?.message_id;
+    if (cq.from) await upsertTelegramUser(cq.from);
+
+    if (data === 'noop') {
+      await answerCallbackQuery(cq.id);
       return;
     }
+    const m = data.match(/^novels:(\d+)$/);
+    if (m && chatId) {
+      const page = Number(m[1]);
+      await answerCallbackQuery(cq.id, `صفحة ${page + 1}`);
+      await sendNovelsPage(chatId, page, messageId ? { messageId } : undefined);
+      return;
+    }
+    await answerCallbackQuery(cq.id);
     return;
   }
 
+  const message = update.message || update.edited_message;
+  if (!message?.chat?.id) return;
+
   const chatId = message.chat.id;
-  if (message.from) {
-    await upsertTelegramUser(message.from);
-  }
+  if (message.from) await upsertTelegramUser(message.from);
 
   const text = (message.text || '').trim();
   if (!text) {
-    await sendMessage(chatId, 'أرسل نصًا للبحث عن رواية أو مؤلف أو تصنيف.\n/help للمساعدة.');
+    await sendMessage(chatId, 'أرسل نصًا للبحث، أو استخدم الأزرار بالأسفل.\n/help للمساعدة.', {
+      reply_markup: mainReplyKeyboard(),
+    });
     return;
   }
 
   if (/^\/start/i.test(text)) {
-    const arg = text.replace(/^\/start\s*/i, '').trim();
-    const payload = deepLinkPayload(arg);
-    if (payload?.kind === 'novel' && payload.value) {
-      const hits = await searchE7ketha('novels', payload.value.replace(/-/g, ' '));
-      const exact = hits.find((h) => h.kind === 'novel' && h.slug === payload.value);
-      if (exact && exact.kind === 'novel') {
-        await sendMessage(chatId, `📖 <b>${exact.title}</b>${exact.author ? `\n✍️ ${exact.author}` : ''}`, {
-          reply_markup: { inline_keyboard: [[{ text: '📚 فتح الرواية', url: exact.url }]] },
-        });
-        return;
-      }
-      if (hits.length) {
-        const fmt = formatHits(hits);
-        await sendMessage(chatId, fmt.text, { reply_markup: { inline_keyboard: fmt.keyboard } });
-        return;
+    const arg = text.replace(/^\/start(?:@\w+)?\s*/i, '').trim();
+    if (arg) {
+      const deep = arg.match(/^(novel|author|genre|article)[_-](.+)$/i);
+      if (deep) {
+        const kind = deep[1].toLowerCase();
+        const value = deep[2];
+        if (kind === 'novel') {
+          const hits = await searchE7ketha('novels', value.replace(/-/g, ' '));
+          const exact = hits.find((h) => h.kind === 'novel' && h.slug === value);
+          if (exact && exact.kind === 'novel') {
+            await sendMessage(
+              chatId,
+              `📖 <b>${exact.title}</b>${exact.author ? `\n✍️ ${exact.author}` : ''}`,
+              {
+                reply_markup: {
+                  inline_keyboard: [[{ text: '📚 فتح الرواية', url: exact.url }]],
+                },
+              },
+            );
+            return;
+          }
+        }
       }
     }
+    const welcome = await buildWelcome(message.from?.first_name);
+    await sendMessage(chatId, welcome, { reply_markup: mainReplyKeyboard() });
+    return;
+  }
+
+  if (/^\/help\b/i.test(text) || text === '❓ مساعدة') {
+    await sendMessage(chatId, commandsHelp(), { reply_markup: mainReplyKeyboard() });
+    return;
+  }
+
+  if (/^\/stats\b/i.test(text)) {
+    const s = await getPlatformStats();
     await sendMessage(
       chatId,
-      `مرحبًا${message.from?.first_name ? ` ${message.from.first_name}` : ''} 👋\n\nأنا مساعد <b>𝐄𝟳𝐤𝐞𝐭𝐡𝐚</b> لاكتشاف الروايات العربية.\nاكتب اسم رواية أو نوعًا (مثل: رعب) وسأبحث لك.\n\n${HELP}`,
+      `📊 <b>إحصائيات 𝐄𝟳𝐤𝐞𝐭𝐡𝐚</b>\n\n👥 مستخدمو البوت: <b>${s.botUsers.toLocaleString('ar-EG')}</b>\n📖 الروايات: <b>${s.novels.toLocaleString('ar-EG')}</b>\n✍️ المؤلفون: <b>${s.authors.toLocaleString('ar-EG')}</b>\n🏷️ التصنيفات: <b>${s.genres.toLocaleString('ar-EG')}</b>\n📰 المقالات: <b>${s.articles.toLocaleString('ar-EG')}</b>`,
+      { reply_markup: mainReplyKeyboard() },
     );
     return;
   }
 
-  if (/^\/help\b/i.test(text)) {
-    await sendMessage(chatId, HELP);
+  if (/^\/novels\b/i.test(text) || text === '📚 الروايات' || /^\/browse\b/i.test(text)) {
+    await sendNovelsPage(chatId, 0);
     return;
   }
 
-  if (/^\/novels\b/i.test(text)) {
-    const hits = await searchE7ketha('novels', '');
-    const fmt = formatHits(hits);
-    await sendMessage(chatId, fmt.text || 'لا توجد روايات.', { reply_markup: { inline_keyboard: fmt.keyboard } });
-    return;
-  }
-  if (/^\/authors\b/i.test(text)) {
-    const hits = await searchE7ketha('authors', '');
-    const fmt = formatHits(hits);
-    await sendMessage(chatId, fmt.text || 'لا يوجد مؤلفون.', { reply_markup: { inline_keyboard: fmt.keyboard } });
-    return;
-  }
-  if (/^\/genres\b/i.test(text)) {
-    const hits = await searchE7ketha('genres', '');
-    const fmt = formatHits(hits);
-    await sendMessage(chatId, fmt.text || 'لا توجد تصنيفات.', { reply_markup: { inline_keyboard: fmt.keyboard } });
-    return;
-  }
-  if (/^\/articles\b/i.test(text)) {
-    const hits = await searchE7ketha('articles', '');
-    const fmt = formatHits(hits);
-    await sendMessage(chatId, fmt.text || 'لا توجد مقالات منشورة.', { reply_markup: { inline_keyboard: fmt.keyboard } });
-    return;
-  }
-
-  if (/^\/admin\b/i.test(text)) {
-    const admins = getTelegramAdminIds();
-    const uid = message.from?.id;
-    if (uid && admins.has(uid)) {
-      await sendMessage(chatId, '👑 وضع المشرف مفعّل (V1).\nلاحقًا: إحصائيات وإدارة محتوى من هنا.');
-    } else {
-      await sendMessage(chatId, 'هذا الأمر للمشرفين فقط.');
+  if (/^\/search\b/i.test(text) || text === '🔍 بحث') {
+    const q = text.replace(/^\/search\b/i, '').replace(/🔍 بحث/g, '').trim();
+    if (!q) {
+      await sendMessage(
+        chatId,
+        '🔍 <b>البحث</b>\n\nاكتب بعد الأمر كلمة البحث، مثل:\n<code>/search رعب</code>\nأو مباشرة: <b>أحمد خالد توفيق</b>',
+        { reply_markup: mainReplyKeyboard() },
+      );
+      return;
     }
+    const hits = await megaSearch(q);
+    const fmt = formatHits(hits, { title: `نتائج البحث: ${q}` });
+    await sendMessage(chatId, fmt.text, { reply_markup: { inline_keyboard: fmt.keyboard } });
+    return;
+  }
+
+  if (/^\/authors\b/i.test(text) || text === '✍️ المؤلفون') {
+    const hits = await searchE7ketha('authors', '');
+    const fmt = formatHits(hits, { title: '✍️ المؤلفون' });
+    await sendMessage(chatId, fmt.text, { reply_markup: { inline_keyboard: fmt.keyboard } });
+    return;
+  }
+
+  if (/^\/genres\b/i.test(text) || text === '🏷️ التصنيفات') {
+    const hits = await searchE7ketha('genres', '');
+    const fmt = formatHits(hits, { title: '🏷️ التصنيفات' });
+    await sendMessage(chatId, fmt.text, { reply_markup: { inline_keyboard: fmt.keyboard } });
+    return;
+  }
+
+  if (/^\/articles\b/i.test(text) || text === '📰 مقالات') {
+    const hits = await searchE7ketha('articles', '');
+    const fmt = formatHits(hits, { title: '📰 المقالات' });
+    await sendMessage(chatId, fmt.text, { reply_markup: { inline_keyboard: fmt.keyboard } });
     return;
   }
 
   const intent = detectIntent(text);
-  if (intent.type === 'help') {
-    await sendMessage(chatId, HELP);
+  if (intent.type === 'browse') {
+    await sendNovelsPage(chatId, 0);
+    return;
+  }
+  if (intent.type === 'help' || intent.type === 'menu') {
+    await sendMessage(chatId, commandsHelp(), { reply_markup: mainReplyKeyboard() });
     return;
   }
 
-  const searchType =
-    intent.type === 'authors' || intent.type === 'genres' || intent.type === 'articles' || intent.type === 'novels'
-      ? intent.type
-      : 'novels';
-
-  try {
-    const hits = await searchE7ketha(searchType, intent.query);
-    const fmt = formatHits(hits);
-    await sendMessage(chatId, fmt.text, { reply_markup: { inline_keyboard: fmt.keyboard } });
-  } catch (err) {
-    console.error('[telegram] search failed', err);
-    await sendMessage(chatId, 'حدث خطأ أثناء البحث. حاول مرة أخرى بعد قليل.');
-  }
+  const hits =
+    intent.type === 'novels' && intent.q
+      ? await megaSearch(intent.q)
+      : await searchE7ketha(intent.type, 'q' in intent ? intent.q : '');
+  const fmt = formatHits(hits, {
+    title: intent.type === 'novels' ? (intent.q ? `نتائج: ${intent.q}` : 'روايات مقترحة') : undefined,
+  });
+  await sendMessage(chatId, fmt.text, { reply_markup: { inline_keyboard: fmt.keyboard } });
 }
-
-export type { TelegramMessage };
