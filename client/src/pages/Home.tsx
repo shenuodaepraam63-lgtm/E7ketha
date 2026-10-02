@@ -66,7 +66,7 @@ export default function Home() {
             subtitle="نتائج حية من مكتبة رِواية."
             href="/explore"
           />
-          <AutoMarquee className="-mx-1 px-1" speed={0.14} direction={1}>
+          <AutoMarquee className="-mx-1 px-1" speed={0.09} direction={1}>
             {novelsLoading
               ? Array.from({ length: 6 }).map((_, i) => (
                   <div
@@ -94,7 +94,7 @@ export default function Home() {
               subtitle="تصنيفات تساعدك تختار بسرعة."
               href="/explore"
             />
-            <AutoMarquee className="-mx-1 px-1 auto-marquee--genres" speed={0.12} direction={1}>
+            <AutoMarquee className="-mx-1 px-1 auto-marquee--genres" speed={0.08} direction={1}>
                 {[...genres, ...genres].map((genre, index) => (
                   <GenreCard key={`${genre.id}-${index}`} genre={genre} />
                 ))}
@@ -110,7 +110,7 @@ export default function Home() {
               subtitle="تعرّف على أصوات مميزة في الرواية العربية."
               href="/authors"
             />
-            <AutoMarquee className="-mx-1 px-1" speed={0.12} direction={-1}>
+            <AutoMarquee className="-mx-1 px-1" speed={0.08} direction={-1}>
               {[...authors, ...authors].map((author, index) => (
                 <AuthorCard key={`${author.id}-${index}`} author={author} />
               ))}
@@ -141,7 +141,7 @@ export default function Home() {
         {novels.length > 0 && (
           <section className="mt-20">
             <SectionHeading title="لمحات سريعة" subtitle="من المكتبة الحالية" href="/explore" />
-            <AutoMarquee className="-mx-1 px-1" speed={0.13} direction={1}>
+            <AutoMarquee className="-mx-1 px-1" speed={0.09} direction={1}>
               {[...novels.slice(0, 3), ...novels.slice(0, 3)].map((item, index) => (
                 <Link
                   key={`${item.id}-${index}`}

@@ -3,7 +3,7 @@ import { useEffect, useRef, type PointerEvent as ReactPointerEvent, type ReactNo
 const EDGE_PAUSE_MS = 1500;
 const DRAG_PAUSE_MS = 900;
 
-export function AutoMarquee({ children, className = '', speed = 0.14, direction = 1 }: { children: ReactNode; className?: string; speed?: number; direction?: 1 | -1 }) {
+export function AutoMarquee({ children, className = '', speed = 0.1, direction = 1 }: { children: ReactNode; className?: string; speed?: number; direction?: 1 | -1 }) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const draggingRef = useRef(false);
   const pausedRef = useRef(false);
