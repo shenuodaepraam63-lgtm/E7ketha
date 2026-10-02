@@ -377,51 +377,23 @@
 }
 
 
-@keyframes hero-scroll-up {
-  from { transform: translateY(0); }
-  to { transform: translateY(-50%); }
+
+@keyframes hero-kenburns {
+  0% { transform: scale(1) translate(0, 0); }
+  50% { transform: scale(1.08) translate(-1.5%, -1%); }
+  100% { transform: scale(1) translate(0, 0); }
+}
+@keyframes cover-float {
+  0%, 100% { transform: translateY(0) rotate(-2deg); }
+  50% { transform: translateY(-14px) rotate(2deg); }
 }
 .hero-wallpaper {
   overflow: hidden;
-  background: #070a16;
 }
-.hero-wallpaper-grid {
-  position: absolute;
-  inset: -18% -5%;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
-  transform: rotate(-7deg) scale(1.12);
-  opacity: .56;
-  filter: saturate(.78) contrast(.9);
-}
-.hero-wallpaper-column {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  animation: hero-scroll-up 38s linear infinite;
+.hero-wallpaper-img {
+  animation: hero-kenburns 22s ease-in-out infinite;
   will-change: transform;
 }
-.hero-wallpaper-column:nth-child(2) { animation-duration: 46s; }
-.hero-wallpaper-column:nth-child(3) { animation-duration: 34s; }
-.hero-wallpaper-cover {
-  display: block;
-  width: 100%;
-  aspect-ratio: 2 / 3;
-  flex: 0 0 auto;
-  border: 1px solid rgba(255, 255, 255, .12);
-  border-radius: 18px;
-  object-fit: cover;
-  box-shadow: 0 18px 40px rgba(0, 0, 0, .22);
-}
-@media (max-width: 767px) {
-  .hero-wallpaper-grid { inset: -14% -18%; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-  .hero-wallpaper-column { gap: 10px; }
-  .hero-wallpaper-column:nth-child(3) { display: none; }
-  .hero-wallpaper-cover { border-radius: 13px; }
-}
-
-
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
@@ -432,5 +404,5 @@
   .novel-card:hover { transform: none; filter: none; }
   .genre-card:hover { transform: none; }
   .quote-card::after { animation: none; opacity: 0.45; }
-  .hero-wallpaper-column { animation: none !important; }
+  .hero-wallpaper-img { animation: none !important; }
 }
