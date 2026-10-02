@@ -1,6 +1,6 @@
 import { useEffect, useRef, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 
-export function AutoMarquee({ children, className = '', speed = 0.42 }: { children: ReactNode; className?: string; speed?: number }) {
+export function AutoMarquee({ children, className = '', speed = 0.24, direction = 1 }: { children: ReactNode; className?: string; speed?: number; direction?: 1 | -1 }) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const draggingRef = useRef(false);
   const pausedRef = useRef(false);
@@ -10,6 +10,11 @@ export function AutoMarquee({ children, className = '', speed = 0.42 }: { childr
 
   useEffect(() => {
     let frame = 0;
+    directionRef.current = direction;
+    const startFrame = requestAnimationFrame(() => {
+      const viewport = viewportRef.current;
+      if (viewport && direction === -1) viewport.scrollLeft = viewport.scrollWidth - viewport.clientWidth;
+    });
     let last = performance.now();
     const tick = (now: number) => {
       const viewport = viewportRef.current;
@@ -33,9 +38,10 @@ export function AutoMarquee({ children, className = '', speed = 0.42 }: { childr
     frame = requestAnimationFrame(tick);
     return () => {
       cancelAnimationFrame(frame);
+      cancelAnimationFrame(startFrame);
       if (resumeTimerRef.current) window.clearTimeout(resumeTimerRef.current);
     };
-  }, [speed]);
+  }, [direction, speed]);
 
   const startDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
     const viewport = viewportRef.current;

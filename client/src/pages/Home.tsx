@@ -66,7 +66,7 @@ export default function Home() {
             subtitle="نتائج حية من مكتبة رِواية."
             href="/explore"
           />
-          <AutoMarquee className="-mx-1 px-1">
+          <AutoMarquee className="-mx-1 px-1" speed={0.24} direction={1}>
             {novelsLoading
               ? Array.from({ length: 6 }).map((_, i) => (
                   <div
@@ -94,7 +94,7 @@ export default function Home() {
               subtitle="تصنيفات تساعدك تختار بسرعة."
               href="/explore"
             />
-            <AutoMarquee className="-mx-1 px-1 auto-marquee--genres">
+            <AutoMarquee className="-mx-1 px-1 auto-marquee--genres" speed={0.2} direction={1}>
                 {[...genres, ...genres].map((genre, index) => (
                   <GenreCard key={`${genre.id}-${index}`} genre={genre} />
                 ))}
