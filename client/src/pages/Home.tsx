@@ -1,68 +1,11 @@
 import { Link } from 'wouter';
 import { ArrowUpLeft, Sparkles } from 'lucide-react';
-import { useEffect, useRef, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { SectionHeading, GenreCard, AuthorCard } from '@/components/ExploreCards';
 import { NovelCard } from '@/components/NovelCard';
 import { BrowseRecommendations } from '@/components/BrowseRecommendations';
+import { AutoMarquee } from '@/components/AutoMarquee';
 import { toAuthor, toGenre, toNovel, coverFallback, optimizeCoverUrl } from '@/lib/data';
 import { trpc } from '@/lib/trpc';
-
-function AutoMarquee({ children, className = '' }: { children: ReactNode; className?: string }) {
-  const viewportRef = useRef<HTMLDivElement>(null);
-  const draggingRef = useRef(false);
-  const dragStartRef = useRef({ x: 0, scrollLeft: 0 });
-  const speedRef = useRef(0.42);
-
-  useEffect(() => {
-    let frame = 0;
-    let last = performance.now();
-    let direction = 1;
-    const tick = (now: number) => {
-      const viewport = viewportRef.current;
-      const elapsed = Math.min(now - last, 40);
-      last = now;
-      if (viewport && !draggingRef.current) {
-        const max = viewport.scrollWidth - viewport.clientWidth;
-        if (max > 0) {
-          viewport.scrollLeft += direction * speedRef.current * elapsed;
-          if (viewport.scrollLeft >= max - 1) {
-            viewport.scrollLeft = max;
-            direction = -1;
-          } else if (viewport.scrollLeft <= 1) {
-            viewport.scrollLeft = 0;
-            direction = 1;
-          }
-        }
-      }
-      frame = requestAnimationFrame(tick);
-    };
-    frame = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(frame);
-  }, []);
-
-  const startDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
-    const viewport = viewportRef.current;
-    if (!viewport) return;
-    draggingRef.current = true;
-    dragStartRef.current = { x: event.clientX, scrollLeft: viewport.scrollLeft };
-    viewport.setPointerCapture(event.pointerId);
-  };
-  const moveDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
-    const viewport = viewportRef.current;
-    if (!viewport || !draggingRef.current) return;
-    viewport.scrollLeft = dragStartRef.current.scrollLeft - (event.clientX - dragStartRef.current.x);
-  };
-  const endDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
-    draggingRef.current = false;
-    viewportRef.current?.releasePointerCapture?.(event.pointerId);
-  };
-
-  return (
-    <div ref={viewportRef} className={`auto-marquee ${className}`} onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={endDrag}>
-      <div className="auto-marquee-track">{children}</div>
-    </div>
-  );
-}
 
 export default function Home() {
   const novelsQuery = trpc.novels.list.useQuery({ limit: 12 });

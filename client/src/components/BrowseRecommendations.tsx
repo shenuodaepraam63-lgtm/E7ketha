@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'wouter';
 import { ArrowUpLeft, Sparkles } from 'lucide-react';
 import { NovelCard } from '@/components/NovelCard';
+import { AutoMarquee } from '@/components/AutoMarquee';
 import { toNovel } from '@/lib/data';
 import { trpc } from '@/lib/trpc';
 import { hasBrowseSignal, topGenreSlugs, viewedNovelSlugs } from '@/lib/browseRecs';
@@ -104,11 +105,11 @@ export function BrowseRecommendations() {
           استكشف المزيد <ArrowUpLeft size={14} />
         </Link>
       </div>
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-        {items.map((novel) => (
-          <NovelCard key={novel.id} novel={novel} />
+      <AutoMarquee className="-mx-1 px-1" speed={0.36}>
+        {[...items, ...items].map((novel, index) => (
+          <NovelCard key={`${novel.id}-${index}`} novel={novel} />
         ))}
-      </div>
+      </AutoMarquee>
     </section>
   );
 }
