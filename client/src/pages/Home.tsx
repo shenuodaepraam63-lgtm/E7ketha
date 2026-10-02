@@ -12,7 +12,17 @@ export default function Home() {
   const authorsQuery = trpc.authors.list.useQuery();
   const novelsLoading = novelsQuery.isLoading;
   const novels = (novelsQuery.data ?? []).map(toNovel);
-  const genres = (genresQuery.data ?? []).map(toGenre).slice(0, 8);
+  const genreImages: Record<string, string> = {
+    fantasy: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=700&q=80',
+    horror: 'https://images.unsplash.com/photo-1509248961158-e54f6934749c?auto=format&fit=crop&w=700&q=80',
+    romance: 'https://images.unsplash.com/photo-1518199266791-5375a83190b7?auto=format&fit=crop&w=700&q=80',
+    philosophy: 'https://images.unsplash.com/photo-1495446815901-a7297e633e8d?auto=format&fit=crop&w=700&q=80',
+    adventure: 'https://images.unsplash.com/photo-1469474968028-56623f02e42e?auto=format&fit=crop&w=700&q=80',
+    mystery: 'https://images.unsplash.com/photo-1516979187457-637abb4f9353?auto=format&fit=crop&w=700&q=80',
+    drama: 'https://images.unsplash.com/photo-1519682337058-a94d519337bc?auto=format&fit=crop&w=700&q=80',
+    history: 'https://images.unsplash.com/photo-1524995997946-a1c2e315a42f?auto=format&fit=crop&w=700&q=80',
+  };
+  const genres = (genresQuery.data ?? []).map(toGenre).slice(0, 8).map((genre) => ({ ...genre, image: genreImages[genre.slug] ?? 'https://images.unsplash.com/photo-1507842217343-583bb7270b66?auto=format&fit=crop&w=700&q=80' }));
   const authors = (authorsQuery.data ?? []).map(toAuthor).slice(0, 6);
 
   return (
@@ -55,7 +65,8 @@ export default function Home() {
             subtitle="نتائج حية من مكتبة رِواية."
             href="/explore"
           />
-          <div className="scroll-rail -mx-1 px-1">
+          <div className="auto-marquee -mx-1 px-1">
+            <div className="auto-marquee-track">
             {novelsLoading
               ? Array.from({ length: 6 }).map((_, i) => (
                   <div
@@ -67,9 +78,10 @@ export default function Home() {
                     <div className="mt-1.5 h-2.5 w-1/2 rounded bg-muted/80" />
                   </div>
                 ))
-              : novels.map((novel, i) => (
-                  <NovelCard key={novel.id} novel={novel} priority={i < 2} />
+              : [...novels, ...novels].map((novel, i) => (
+                  <NovelCard key={`${novel.id}-${i}`} novel={novel} priority={i < 2} />
                 ))}
+            </div>
           </div>
         </section>
 
@@ -83,10 +95,12 @@ export default function Home() {
               subtitle="تصنيفات تساعدك تختار بسرعة."
               href="/explore"
             />
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              {genres.map((genre) => (
-                <GenreCard key={genre.id} genre={genre} />
-              ))}
+            <div className="auto-marquee -mx-1 px-1">
+              <div className="auto-marquee-track auto-marquee-track--genres">
+                {[...genres, ...genres].map((genre, index) => (
+                  <GenreCard key={`${genre.id}-${index}`} genre={genre} />
+                ))}
+              </div>
             </div>
           </section>
         )}

@@ -27,18 +27,22 @@ export function AuthorCard({ author }: { author: Author }) {
   );
 }
 
-export function GenreCard({ genre }: { genre: { name: string; slug: string; count: number; icon: string; description: string } }) {
+export function GenreCard({ genre }: { genre: { name: string; slug: string; count: number; icon: string; description: string; image?: string } }) {
   return (
-    <Link href={`/genres/${genre.slug}`} className="genre-card group relative overflow-hidden rounded-[20px] border border-border/80 bg-card p-5">
-      <span className="mb-7 grid size-10 place-items-center rounded-[14px] bg-[#f0eeff] text-lg text-[#5d52dd] transition-transform duration-200 group-hover:scale-110 dark:bg-[#24224c]">
-        {genre.icon}
-      </span>
-      <h3 className="text-base font-extrabold tracking-[-0.02em]">{genre.name}</h3>
-      <p className="mt-1 line-clamp-2 text-xs leading-6 text-muted-foreground">{genre.description}</p>
-      <span className="mt-4 flex items-center justify-between text-[11px] font-semibold text-muted-foreground">
-        <span>{genre.count} رواية</span>
-        <ArrowUpLeft size={15} className="text-[#7067ef] transition-transform group-hover:-translate-x-1" />
-      </span>
+    <Link href={`/genres/${genre.slug}`} className="genre-card group relative block w-[210px] min-w-[210px] overflow-hidden rounded-[22px] border border-border/80 bg-card sm:w-[250px] sm:min-w-[250px]">
+      <div className="genre-card__image relative aspect-[1.35/1] overflow-hidden bg-muted">
+        <img src={genre.image} alt={`تصنيف ${genre.name}`} loading="lazy" decoding="async" className="h-full w-full object-cover transition duration-700 group-hover:scale-105" />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#10152e]/90 via-[#10152e]/15 to-transparent" />
+        <span className="absolute start-3 top-3 grid size-9 place-items-center rounded-xl bg-white/90 text-base text-[#5d52dd] shadow-sm dark:bg-[#171b36]/90">{genre.icon}</span>
+        <div className="absolute inset-x-4 bottom-3 text-white">
+          <h3 className="text-base font-extrabold tracking-[-0.02em]">{genre.name}</h3>
+          <span className="mt-1 block text-[11px] font-semibold text-white/70">{genre.count} رواية</span>
+        </div>
+      </div>
+      <div className="flex items-center justify-between gap-3 p-3">
+        <p className="line-clamp-1 text-xs text-muted-foreground">{genre.description}</p>
+        <ArrowUpLeft size={15} className="shrink-0 text-[#7067ef] transition-transform group-hover:-translate-x-1" />
+      </div>
     </Link>
   );
 }
