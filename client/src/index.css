@@ -153,25 +153,27 @@
 
   .auto-marquee {
     position: relative;
-    overflow: hidden;
+    overflow-x: auto;
+    overflow-y: hidden;
+    cursor: grab;
+    touch-action: pan-y;
+    scrollbar-width: none;
     mask-image: linear-gradient(90deg, transparent, #000 3%, #000 97%, transparent);
     -webkit-mask-image: linear-gradient(90deg, transparent, #000 3%, #000 97%, transparent);
   }
+  .auto-marquee:active { cursor: grabbing; }
+  .auto-marquee::-webkit-scrollbar { display: none; }
   .auto-marquee-track {
     display: flex;
     width: max-content;
     align-items: stretch;
     gap: 1.25rem;
     padding-block: .35rem 1rem;
-    animation: marquee-bounce 34s ease-in-out infinite alternate;
-    will-change: transform;
+    direction: ltr;
+    user-select: none;
   }
-  .auto-marquee-track--genres { gap: 1rem; animation-duration: 42s; }
-  .auto-marquee:hover .auto-marquee-track { animation-play-state: paused; }
-  @keyframes marquee-bounce {
-    from { transform: translate3d(0, 0, 0); }
-    to { transform: translate3d(-50%, 0, 0); }
-  }
+  .auto-marquee--genres .auto-marquee-track { gap: 1rem; }
+  .auto-marquee-track > * { direction: rtl; }
 
   .novel-card {
     border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
