@@ -105,7 +105,7 @@ export function BrowseRecommendations() {
           استكشف المزيد <ArrowUpLeft size={14} />
         </Link>
       </div>
-      <AutoMarquee className="-mx-1 px-1" speed={0.22} direction={-1}>
+      <AutoMarquee className="-mx-1 px-1" speed={0.13} direction={-1}>
         {[...items, ...items].map((novel, index) => (
           <NovelCard key={`${novel.id}-${index}`} novel={novel} />
         ))}
