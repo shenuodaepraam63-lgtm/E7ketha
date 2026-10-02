@@ -110,11 +110,11 @@ export default function Home() {
               subtitle="تعرّف على أصوات مميزة في الرواية العربية."
               href="/authors"
             />
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-              {authors.map((author) => (
-                <AuthorCard key={author.id} author={author} />
+            <AutoMarquee className="-mx-1 px-1" speed={0.12} direction={-1}>
+              {[...authors, ...authors].map((author, index) => (
+                <AuthorCard key={`${author.id}-${index}`} author={author} />
               ))}
-            </div>
+            </AutoMarquee>
           </section>
         )}
 
@@ -141,12 +141,12 @@ export default function Home() {
         {novels.length > 0 && (
           <section className="mt-20">
             <SectionHeading title="لمحات سريعة" subtitle="من المكتبة الحالية" href="/explore" />
-            <div className="grid gap-4 md:grid-cols-3">
-              {novels.slice(0, 3).map((item) => (
+            <AutoMarquee className="-mx-1 px-1" speed={0.13} direction={1}>
+              {[...novels.slice(0, 3), ...novels.slice(0, 3)].map((item, index) => (
                 <Link
-                  key={item.id}
+                  key={`${item.id}-${index}`}
                   href={`/books/${item.slug}`}
-                  className="flex items-center gap-4 rounded-2xl border border-border bg-card p-4 transition hover:border-[#675de8]/40"
+                  className="flex min-w-[280px] items-center gap-4 rounded-2xl border border-border bg-card p-4 transition hover:border-[#675de8]/40 sm:min-w-[340px]"
                 >
                   <img
                     src={optimizeCoverUrl(item.coverUrl || item.cover || coverFallback, 160)}
@@ -159,7 +159,7 @@ export default function Home() {
                   </div>
                 </Link>
               ))}
-            </div>
+            </AutoMarquee>
           </section>
         )}
       </main>
