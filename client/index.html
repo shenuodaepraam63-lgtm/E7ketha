@@ -48,8 +48,9 @@
           const scripts = [
             ['https://www.googletagmanager.com/gtm.js?id=GTM-WHXK2GT3', 'tag-manager'],
             ['https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-1874360923595437', 'adsense'],
-            // Monetag MultiTag (zone 293519) — handles push / interstitial / vignette etc.
-            ['https://quge5.com/88/tag.min.js', 'monetag']
+            // Monetag zones provided for E7ketha
+            ['https://nap5k.com/tag.min.js', 'monetag-12002346'],
+            ['https://nap5k.com/tag.min.js', 'monetag-12002338']
           ];
           for (const [src, id] of scripts) {
             const script = document.createElement('script');
@@ -57,8 +58,8 @@
             script.src = src;
             script.dataset.riwayaThirdParty = id;
             if (id === 'adsense') script.crossOrigin = 'anonymous';
-            if (id === 'monetag') {
-              script.setAttribute('data-zone', '293519');
+            if (id.startsWith('monetag-')) {
+              script.dataset.zone = id.slice('monetag-'.length);
               script.setAttribute('data-cfasync', 'false');
             }
             document.head.appendChild(script);
